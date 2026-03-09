@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.0] — 2026-03-09
+
+### Added
+- **Web-Enhanced mode** — opt-in web search via DuckDuckGo Instant Answer API
+- 🌐 Toggle button in the input area to enable/disable web search
+- Web search setting with toggle switch in settings panel
+- Searching indicator shown while fetching web results
+- Search results injected into system prompt for grounded answers
+- Source citations displayed below AI responses with clickable links
+- Web search preference saved to localStorage
+
+### Notes
+- Web search is **off by default** — fully private mode
+- When enabled, search queries are sent to DuckDuckGo (they don't log)
+- AI still runs locally; only search queries leave the device
+
+
+
 ## [1.1.0] — 2026-03-09
 
 ### Added
