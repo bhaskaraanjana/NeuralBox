@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.3.0] — 2026-03-09
+
+### Added
+- **🎙️ Voice input** — local speech-to-text using OpenAI Whisper (tiny.en, ~40MB)
+- Microphone button in the input area with pulsing red recording indicator
+- Recording timer showing duration
+- Whisper model auto-downloads on first voice use, cached after
+- Transcribed text inserted into input field for editing before sending
+- Voice status bar showing recording/transcribing/complete states
+
+### Notes
+- Voice transcription runs **100% locally** via ONNX Runtime WASM
+- No audio is sent to any server
+- First use requires ~40MB model download (cached in browser)
+- English language only (whisper-tiny.en)
+
+
 ## [1.2.0] — 2026-03-09
 
 ### Added
