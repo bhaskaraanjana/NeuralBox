@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.1.0] — 2026-03-09
+
+### Added
+- **Multi-conversation sidebar** with conversation list
+- Create, switch between, and delete conversations
+- Auto-generated conversation titles from first user message
+- Relative timestamps (e.g. "5m ago", "2h ago")
+- Hamburger menu toggle for sidebar on mobile
+- Mobile-responsive sidebar with slide-in animation and overlay
+- Migration support for old single-conversation localStorage data
+- Sidebar shows "🔒 All stored locally" footer
+
+### Changed
+- Chat screen restructured to sidebar + main chat area layout
+- New chat button now creates a conversation entry in sidebar
+- Clear history in settings now clears all conversations
+
+
+
 ## [1.0.0] — 2026-03-09
 
 ### Added
