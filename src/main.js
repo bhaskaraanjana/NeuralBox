@@ -110,17 +110,94 @@ function toggleWebSearch(enabled) {
 
 async function webSearch(query) {
     try {
-        // Use DuckDuckGo via allorigins proxy to avoid CORS
+        // Strategy: try DuckDuckGo HTML lite (simpler, better for parsing)
+        const searchUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
+
+        const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error('Search failed');
+
+        const html = await response.text();
+        const results = parseDDGLite(html);
+
+        // If lite didn't get results, try the Instant Answer API as fallback
+        if (results.length === 0) {
+            return await webSearchFallback(query);
+        }
+
+        return results.slice(0, 6);
+    } catch (err) {
+        console.warn('Primary search failed, trying fallback:', err);
+        return await webSearchFallback(query);
+    }
+}
+
+function parseDDGLite(html) {
+    const results = [];
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // DuckDuckGo Lite uses a table layout with result links and snippets
+    const links = doc.querySelectorAll('a.result-link');
+    const snippets = doc.querySelectorAll('.result-snippet');
+
+    if (links.length > 0) {
+        for (let i = 0; i < Math.min(links.length, 6); i++) {
+            const link = links[i];
+            const snippet = snippets[i];
+            if (link && snippet) {
+                results.push({
+                    title: link.textContent.trim(),
+                    snippet: snippet.textContent.trim(),
+                    url: link.href || '',
+                });
+            }
+        }
+    }
+
+    // Alternative parsing: DDG lite sometimes uses different structure
+    if (results.length === 0) {
+        // Try parsing table rows
+        const rows = doc.querySelectorAll('tr');
+        let currentResult = null;
+
+        for (const row of rows) {
+            const linkEl = row.querySelector('a[href^="http"]');
+            if (linkEl && !linkEl.href.includes('duckduckgo.com')) {
+                if (currentResult && currentResult.snippet) {
+                    results.push(currentResult);
+                }
+                currentResult = {
+                    title: linkEl.textContent.trim(),
+                    snippet: '',
+                    url: linkEl.href,
+                };
+            } else if (currentResult) {
+                const text = row.textContent.trim();
+                if (text && text.length > 20 && !text.includes('duckduckgo.com')) {
+                    currentResult.snippet = text;
+                }
+            }
+        }
+        if (currentResult && currentResult.snippet) {
+            results.push(currentResult);
+        }
+    }
+
+    return results;
+}
+
+async function webSearchFallback(query) {
+    try {
         const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
 
         const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!response.ok) throw new Error('Search failed');
+        if (!response.ok) return [];
 
         const data = await response.json();
         const results = [];
 
-        // Abstract (main answer)
         if (data.Abstract) {
             results.push({
                 title: data.Heading || 'Summary',
@@ -129,7 +206,6 @@ async function webSearch(query) {
             });
         }
 
-        // Related topics
         if (data.RelatedTopics) {
             for (const topic of data.RelatedTopics.slice(0, 5)) {
                 if (topic.Text) {
@@ -139,44 +215,27 @@ async function webSearch(query) {
                         url: topic.FirstURL || '',
                     });
                 }
-                // Handle subtopics
-                if (topic.Topics) {
-                    for (const sub of topic.Topics.slice(0, 2)) {
-                        if (sub.Text) {
-                            results.push({
-                                title: sub.Text.split(' - ')[0]?.slice(0, 60) || '',
-                                snippet: sub.Text,
-                                url: sub.FirstURL || '',
-                            });
-                        }
-                    }
-                }
             }
         }
 
-        // Answer (quick facts)
         if (data.Answer) {
-            results.unshift({
-                title: 'Quick Answer',
-                snippet: data.Answer,
-                url: '',
-            });
+            results.unshift({ title: 'Quick Answer', snippet: data.Answer, url: '' });
         }
 
         return results.slice(0, 6);
     } catch (err) {
-        console.warn('Web search failed:', err);
+        console.warn('Fallback search also failed:', err);
         return [];
     }
 }
 
 function buildSearchContext(results) {
     if (!results.length) return '';
-    let ctx = '\n\n[Web Search Results]\n';
-    for (const r of results) {
-        ctx += `- ${r.snippet}\n`;
+    let ctx = '\n\n[WEB SEARCH RESULTS - Use these to answer the question]\n';
+    for (let i = 0; i < results.length; i++) {
+        ctx += `[${i + 1}] ${results[i].snippet}\n`;
     }
-    ctx += '\nUse the search results above to inform your answer. Cite sources when relevant. If the search results don\'t contain relevant information, answer from your own knowledge.\n';
+    ctx += '\nIMPORTANT: Base your answer on the search results above. Quote specific facts from the results. If the results do not contain the answer, clearly say "I could not find this information in the search results." Do NOT make up information.\n';
     return ctx;
 }
 
