@@ -1361,3 +1361,125 @@ body {
   border-radius: 50%;
   animation: pulse-mic 1.5s ease-in-out infinite;
 }
+
+/* ============= Voice Chat Mode ============= */
+#voice-chat-btn.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #a78bfa;
+}
+
+.voice-chat-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10, 10, 15, 0.95);
+  backdrop-filter: blur(20px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+}
+
+.voice-chat-overlay.active {
+  display: flex;
+}
+
+.voice-orb {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.3), transparent);
+  border: 2px solid rgba(139, 92, 246, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.5s ease;
+}
+
+.voice-orb.listening {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: radial-gradient(circle, rgba(34, 197, 94, 0.2), transparent);
+  animation: orb-pulse 2s ease-in-out infinite;
+  box-shadow: 0 0 40px rgba(34, 197, 94, 0.15);
+}
+
+.voice-orb.thinking {
+  border-color: rgba(245, 158, 11, 0.5);
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.2), transparent);
+  animation: orb-spin 1.5s linear infinite;
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.15);
+}
+
+.voice-orb.speaking {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.3), transparent);
+  animation: orb-pulse 1s ease-in-out infinite;
+  box-shadow: 0 0 40px rgba(139, 92, 246, 0.2);
+}
+
+.voice-orb-icon {
+  font-size: 2.5rem;
+}
+
+@keyframes orb-pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes orb-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.voice-chat-label {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.voice-chat-text {
+  max-width: 600px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  min-height: 2.4em;
+  padding: 0 1rem;
+}
+
+.voice-chat-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all var(--transition);
+}
+
+.voice-chat-close:hover {
+  border-color: var(--border-glow);
+  color: var(--text-primary);
+}

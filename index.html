@@ -86,6 +86,14 @@
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </button>
+            <button id="voice-chat-btn" class="icon-btn" title="Voice chat mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
             <button id="settings-btn" class="icon-btn" title="Settings">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3" />
@@ -192,6 +200,16 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Voice Chat Overlay -->
+  <div id="voice-chat-overlay" class="voice-chat-overlay">
+    <button id="voice-chat-close" class="voice-chat-close" title="Exit voice chat">✕</button>
+    <div id="voice-orb" class="voice-orb">
+      <span class="voice-orb-icon">🎙️</span>
+    </div>
+    <div id="voice-chat-label" class="voice-chat-label">Tap to start talking</div>
+    <div id="voice-chat-text" class="voice-chat-text"></div>
   </div>
 
   <script type="module" src="/src/main.js"></script>

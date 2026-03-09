@@ -16,6 +16,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recordingTimer = null;
 let recordingSeconds = 0;
+let voiceChatActive = false;
 
 // Conversations: { id, title, messages[], createdAt, updatedAt }
 let conversations = [];
@@ -61,6 +62,14 @@ const inputDisclaimer = $('#input-disclaimer');
 // Voice refs
 const micBtn = $('#mic-btn');
 const voiceStatus = $('#voice-status');
+
+// Voice chat overlay refs
+const voiceChatBtn = $('#voice-chat-btn');
+const voiceChatOverlay = $('#voice-chat-overlay');
+const voiceChatClose = $('#voice-chat-close');
+const voiceOrb = $('#voice-orb');
+const voiceChatLabel = $('#voice-chat-label');
+const voiceChatText = $('#voice-chat-text');
 
 // ---- Model Config ----
 const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
@@ -838,7 +847,7 @@ webSearchToggle.addEventListener('touchend', (e) => {
 });
 webSearchSetting.addEventListener('change', () => toggleWebSearch(webSearchSetting.checked));
 
-// Voice / mic
+// Voice / mic (regular mode)
 micBtn.addEventListener('click', handleMicClick);
 micBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
@@ -865,9 +874,7 @@ async function startRecording() {
         };
 
         mediaRecorder.onstop = async () => {
-            // Stop all tracks
             stream.getTracks().forEach(t => t.stop());
-
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             await processRecording(audioBlob);
         };
@@ -914,22 +921,18 @@ async function processRecording(audioBlob) {
     micBtn.classList.add('loading');
 
     try {
-        // Init Whisper if needed (first time downloads ~40MB model)
         await initWhisper((progress) => {
             voiceStatus.innerHTML = `<span class="voice-spinner"></span> Loading Whisper... ${progress}%`;
         });
 
         voiceStatus.innerHTML = '<span class="voice-spinner"></span> Transcribing...';
-
         const text = await transcribeAudio(audioBlob);
 
         if (text) {
-            // Insert transcribed text into input
             userInput.value = userInput.value ? userInput.value + ' ' + text : text;
             autoResizeInput();
             sendBtn.disabled = false;
             userInput.focus();
-
             voiceStatus.className = 'voice-status';
             voiceStatus.innerHTML = '✅ Transcribed! Edit and send, or record more.';
             setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
@@ -946,6 +949,216 @@ async function processRecording(audioBlob) {
 
     micBtn.classList.remove('loading');
 }
+
+// ============================================
+// Voice Chat Mode
+// ============================================
+
+function speakText(text) {
+    return new Promise((resolve) => {
+        if (!('speechSynthesis' in window)) {
+            resolve();
+            return;
+        }
+        // Cancel any ongoing speech
+        speechSynthesis.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        // Try to pick a good English voice
+        const voices = speechSynthesis.getVoices();
+        const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
+            voices.find(v => v.lang.startsWith('en'));
+        if (preferred) utterance.voice = preferred;
+
+        utterance.onend = () => resolve();
+        utterance.onerror = () => resolve();
+        speechSynthesis.speak(utterance);
+    });
+}
+
+function setVoiceChatState(state) {
+    voiceOrb.className = 'voice-orb ' + state;
+    const icons = { idle: '🎙️', listening: '👂', thinking: '🧠', speaking: '🗣️' };
+    const labels = {
+        idle: 'Tap to start talking',
+        listening: 'Listening...',
+        thinking: 'Thinking...',
+        speaking: 'Speaking...',
+    };
+    voiceOrb.querySelector('.voice-orb-icon').textContent = icons[state] || icons.idle;
+    voiceChatLabel.textContent = labels[state] || labels.idle;
+}
+
+function openVoiceChat() {
+    voiceChatActive = true;
+    voiceChatOverlay.classList.add('active');
+    voiceChatBtn.classList.add('active');
+    setVoiceChatState('idle');
+    voiceChatText.textContent = 'Tap the orb to start a voice conversation.';
+}
+
+function closeVoiceChat() {
+    voiceChatActive = false;
+    voiceChatOverlay.classList.remove('active');
+    voiceChatBtn.classList.remove('active');
+    speechSynthesis.cancel();
+    if (isRecording) stopRecording();
+    setVoiceChatState('idle');
+}
+
+async function voiceChatListen() {
+    if (!voiceChatActive) return;
+
+    setVoiceChatState('listening');
+    voiceChatText.textContent = '';
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioChunks = [];
+        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+        recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        const recordingDone = new Promise((resolve) => {
+            recorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop());
+                resolve();
+            };
+        });
+
+        recorder.start();
+
+        // Wait for user to tap orb again to stop
+        await new Promise((resolve) => {
+            const stopHandler = () => {
+                if (recorder.state !== 'inactive') recorder.stop();
+                voiceOrb.removeEventListener('click', stopHandler);
+                voiceOrb.removeEventListener('touchend', stopTouchHandler);
+                resolve();
+            };
+            const stopTouchHandler = (e) => {
+                e.preventDefault();
+                stopHandler();
+            };
+            voiceOrb.addEventListener('click', stopHandler);
+            voiceOrb.addEventListener('touchend', stopTouchHandler);
+        });
+
+        await recordingDone;
+
+        if (!voiceChatActive) return;
+
+        // Transcribe
+        setVoiceChatState('thinking');
+        voiceChatText.textContent = 'Transcribing...';
+
+        await initWhisper((p) => {
+            voiceChatText.textContent = `Loading Whisper... ${p}%`;
+        });
+
+        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+        const userText = await transcribeAudio(audioBlob);
+
+        if (!userText || !voiceChatActive) {
+            voiceChatText.textContent = 'No speech detected. Tap to try again.';
+            setVoiceChatState('idle');
+            return;
+        }
+
+        voiceChatText.textContent = `You: "${userText}"`;
+
+        // Ensure a conversation exists
+        if (!activeConversationId) createConversation();
+        const conv = getActiveConversation();
+        if (!conv) return;
+
+        // Add user message to conversation
+        conv.messages.push({ role: 'user', content: userText });
+        if (conv.messages.filter(m => m.role === 'user').length === 1) {
+            conv.title = generateTitle(conv.messages);
+            renderSidebar();
+        }
+
+        // Generate response
+        voiceChatText.textContent = `You: "${userText}"\n\nThinking...`;
+
+        const sysContent = systemPrompt.value;
+        const messages = [
+            { role: 'system', content: sysContent },
+            ...conv.messages,
+        ];
+
+        let fullResponse = '';
+        const chunks = await engine.chat.completions.create({
+            messages,
+            temperature: parseFloat(temperatureSlider.value),
+            max_tokens: parseInt(maxTokensSlider.value),
+            stream: true,
+        });
+
+        for await (const chunk of chunks) {
+            const delta = chunk.choices?.[0]?.delta?.content || '';
+            if (delta) {
+                fullResponse += delta;
+                voiceChatText.textContent = `You: "${userText}"\n\nAI: ${fullResponse}`;
+            }
+        }
+
+        conv.messages.push({ role: 'assistant', content: fullResponse });
+        conv.updatedAt = Date.now();
+        saveConversations();
+        renderSidebar();
+
+        if (!voiceChatActive) return;
+
+        // Speak response
+        setVoiceChatState('speaking');
+        await speakText(fullResponse);
+
+        if (!voiceChatActive) return;
+
+        // Auto-listen again
+        voiceChatListen();
+
+    } catch (err) {
+        console.error('Voice chat error:', err);
+        voiceChatText.textContent = `Error: ${err.message}. Tap to try again.`;
+        setVoiceChatState('idle');
+    }
+}
+
+// Voice chat event listeners
+voiceChatBtn.addEventListener('click', () => {
+    if (voiceChatActive) closeVoiceChat();
+    else openVoiceChat();
+});
+
+voiceChatClose.addEventListener('click', closeVoiceChat);
+voiceChatClose.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    closeVoiceChat();
+});
+
+// Tap orb to start listening (idle state)
+voiceOrb.addEventListener('click', () => {
+    if (!voiceChatActive) return;
+    const state = voiceOrb.className;
+    if (state.includes('idle')) voiceChatListen();
+});
+voiceOrb.addEventListener('touchend', (e) => {
+    if (!voiceChatActive) return;
+    const state = voiceOrb.className;
+    if (state.includes('idle')) {
+        e.preventDefault();
+        voiceChatListen();
+    }
+});
 
 // ---- Start ----
 init();
