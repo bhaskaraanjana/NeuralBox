@@ -66,10 +66,7 @@ export async function transcribeAudio(audioBlob) {
     const float32Data = audioBuffer.getChannelData(0);
 
     // Run Whisper
-    const result = await transcriber(float32Data, {
-        language: 'en',
-        task: 'transcribe',
-    });
+    const result = await transcriber(float32Data);
 
     await audioCtx.close();
 
