@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>NeuralBox — Private AI in Your Browser</title>
-  <meta name="description" content="Run a powerful AI chatbot entirely in your browser. No server, no sign-up, no data leaves your device. Powered by Qwen 3.5 and WebGPU." />
+  <meta name="description"
+    content="Run a powerful AI chatbot entirely in your browser. No server, no sign-up, no data leaves your device. Powered by Qwen 3.5 and WebGPU." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/style.css" />
 </head>
+
 <body>
   <div id="app">
     <!-- Loading / Model Download Screen -->
@@ -20,12 +23,13 @@
           <h1 class="logo">Neural<span>Box</span></h1>
         </div>
         <p class="tagline">Private AI. Runs in your browser.</p>
-        
+
         <div id="webgpu-error" class="error-card" style="display:none;">
           <div class="error-icon">⚠️</div>
           <h3>WebGPU Not Available</h3>
           <p>Your browser doesn't support WebGPU, which is required to run AI models locally.</p>
-          <p class="error-hint">Try the latest version of <strong>Chrome</strong>, <strong>Edge</strong>, or <strong>Firefox</strong>.</p>
+          <p class="error-hint">Try the latest version of <strong>Chrome</strong>, <strong>Edge</strong>, or
+            <strong>Firefox</strong>.</p>
         </div>
 
         <div id="download-section">
@@ -46,43 +50,82 @@
 
     <!-- Chat Screen -->
     <div id="chat-screen" class="screen">
-      <header class="chat-header">
-        <div class="header-left">
-          <h2 class="header-title">Neural<span>Box</span></h2>
-          <div id="model-badge" class="model-badge">Qwen3.5-0.8B</div>
-        </div>
-        <div class="header-right">
-          <button id="new-chat-btn" class="icon-btn" title="New conversation">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
-          <button id="settings-btn" class="icon-btn" title="Settings">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      <!-- Sidebar -->
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+          <h3 class="sidebar-title">Conversations</h3>
+          <button id="sidebar-new-chat" class="sidebar-new-btn" title="New conversation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
           </button>
         </div>
-      </header>
+        <div id="conversation-list" class="conversation-list"></div>
+        <div class="sidebar-footer">
+          <div class="sidebar-footer-info">🔒 All stored locally</div>
+        </div>
+      </aside>
+      <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
-      <div id="messages" class="messages-container">
-        <div class="welcome-message">
-          <div class="welcome-icon">🧠</div>
-          <h3>Welcome to NeuralBox</h3>
-          <p>Your AI is running <strong>entirely in your browser</strong>. No data ever leaves your device.</p>
-          <div class="welcome-suggestions">
-            <button class="suggestion-chip" data-prompt="Explain quantum computing in simple terms">Explain quantum computing</button>
-            <button class="suggestion-chip" data-prompt="Write a short poem about the ocean">Write a poem about the ocean</button>
-            <button class="suggestion-chip" data-prompt="What are the benefits of learning a second language?">Benefits of learning languages</button>
-            <button class="suggestion-chip" data-prompt="Give me 5 creative project ideas for a weekend">Weekend project ideas</button>
+      <!-- Main Chat Area -->
+      <div class="chat-main">
+        <header class="chat-header">
+          <div class="header-left">
+            <button id="sidebar-toggle" class="icon-btn" title="Toggle sidebar">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18" />
+              </svg>
+            </button>
+            <h2 class="header-title">Neural<span>Box</span></h2>
+            <div id="model-badge" class="model-badge">Qwen3.5-0.8B</div>
+          </div>
+          <div class="header-right">
+            <button id="new-chat-btn" class="icon-btn" title="New conversation">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <button id="settings-btn" class="icon-btn" title="Settings">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div id="messages" class="messages-container">
+          <div class="welcome-message">
+            <div class="welcome-icon">🧠</div>
+            <h3>Welcome to NeuralBox</h3>
+            <p>Your AI is running <strong>entirely in your browser</strong>. No data ever leaves your device.</p>
+            <div class="welcome-suggestions">
+              <button class="suggestion-chip" data-prompt="Explain quantum computing in simple terms">Explain quantum
+                computing</button>
+              <button class="suggestion-chip" data-prompt="Write a short poem about the ocean">Write a poem about the
+                ocean</button>
+              <button class="suggestion-chip"
+                data-prompt="What are the benefits of learning a second language?">Benefits of learning
+                languages</button>
+              <button class="suggestion-chip" data-prompt="Give me 5 creative project ideas for a weekend">Weekend
+                project ideas</button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="input-container">
-        <div class="input-wrapper">
-          <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
-          <button id="send-btn" class="send-btn" disabled>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
-          </button>
+        <div class="input-container">
+          <div class="input-wrapper">
+            <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
+            <button id="send-btn" class="send-btn" disabled>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13" />
+                <path d="M22 2L15 22L11 13L2 9L22 2Z" />
+              </svg>
+            </button>
+          </div>
+          <p class="input-disclaimer">AI runs locally in your browser. Responses may vary in quality.</p>
         </div>
-        <p class="input-disclaimer">AI runs locally in your browser. Responses may vary in quality.</p>
       </div>
     </div>
 
@@ -93,13 +136,16 @@
         <div class="settings-header">
           <h3>Settings</h3>
           <button id="close-settings" class="icon-btn">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
           </button>
         </div>
         <div class="settings-body">
           <div class="setting-group">
             <label for="system-prompt">System Prompt</label>
-            <textarea id="system-prompt" rows="4" placeholder="You are a helpful assistant...">You are a helpful, concise AI assistant. You respond clearly and directly.</textarea>
+            <textarea id="system-prompt" rows="4"
+              placeholder="You are a helpful assistant...">You are a helpful, concise AI assistant. You respond clearly and directly.</textarea>
           </div>
           <div class="setting-group">
             <label for="temperature">Temperature: <span id="temp-value">0.7</span></label>
@@ -122,4 +168,5 @@
 
   <script type="module" src="/src/main.js"></script>
 </body>
+
 </html>
