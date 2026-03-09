@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.4.0] — 2026-03-09
+
+### Added
+- **🗣️ Voice Chat Mode** — continuous back-to-back voice conversations
+- Mic button in header opens full-screen voice chat overlay
+- Animated orb with 4 states: idle (🎙️), listening (👂), thinking (🧠), speaking (🗣️)
+- Text-to-speech via browser SpeechSynthesis API (no download needed)
+- Auto-listen loop: after AI speaks, it automatically starts listening again
+- Conversation transcripts saved to chat history
+- Close button and header toggle to exit voice chat
+- Touch support on all voice chat controls
+
+### Flow
+1. Tap mic button in header → voice chat overlay opens
+2. Tap the orb → starts listening (green pulse)
+3. Tap orb again → stops recording, transcribes with Whisper (amber spin)
+4. AI generates response → speaks it aloud (purple pulse)
+5. Automatically starts listening again → continuous conversation
+
+
 ## [1.3.0] — 2026-03-09
 
 ### Added
