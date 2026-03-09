@@ -3,11 +3,19 @@
 // Multi-conversation support
 // ============================================
 import * as webllm from '@mlc-ai/web-llm';
+import { initWhisper, transcribeAudio, isWhisperReady } from './whisper.js';
 
 // ---- State ----
 let engine = null;
 let isGenerating = false;
 let webSearchEnabled = false;
+
+// Voice state
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingTimer = null;
+let recordingSeconds = 0;
 
 // Conversations: { id, title, messages[], createdAt, updatedAt }
 let conversations = [];
@@ -49,6 +57,10 @@ const conversationList = $('#conversation-list');
 const webSearchToggle = $('#web-search-toggle');
 const webSearchSetting = $('#web-search-setting');
 const inputDisclaimer = $('#input-disclaimer');
+
+// Voice refs
+const micBtn = $('#mic-btn');
+const voiceStatus = $('#voice-status');
 
 // ---- Model Config ----
 const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
@@ -825,6 +837,115 @@ webSearchToggle.addEventListener('touchend', (e) => {
     toggleWebSearch(!webSearchEnabled);
 });
 webSearchSetting.addEventListener('change', () => toggleWebSearch(webSearchSetting.checked));
+
+// Voice / mic
+micBtn.addEventListener('click', handleMicClick);
+micBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    handleMicClick();
+});
+
+async function handleMicClick() {
+    if (isRecording) {
+        stopRecording();
+        return;
+    }
+    await startRecording();
+}
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+            // Stop all tracks
+            stream.getTracks().forEach(t => t.stop());
+
+            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            await processRecording(audioBlob);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        recordingSeconds = 0;
+
+        micBtn.classList.add('recording');
+        voiceStatus.style.display = 'flex';
+        voiceStatus.className = 'voice-status recording';
+        voiceStatus.innerHTML = '<span class="rec-dot"></span> Recording... <span class="voice-timer">0:00</span>';
+
+        recordingTimer = setInterval(() => {
+            recordingSeconds++;
+            const mins = Math.floor(recordingSeconds / 60);
+            const secs = recordingSeconds % 60;
+            const timerEl = voiceStatus.querySelector('.voice-timer');
+            if (timerEl) timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+        }, 1000);
+
+    } catch (err) {
+        console.error('Mic access failed:', err);
+        voiceStatus.style.display = 'flex';
+        voiceStatus.className = 'voice-status';
+        voiceStatus.textContent = '⚠️ Microphone access denied';
+        setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    isRecording = false;
+    clearInterval(recordingTimer);
+    micBtn.classList.remove('recording');
+}
+
+async function processRecording(audioBlob) {
+    voiceStatus.style.display = 'flex';
+    voiceStatus.className = 'voice-status transcribing';
+    voiceStatus.innerHTML = '<span class="voice-spinner"></span> Loading Whisper model...';
+    micBtn.classList.add('loading');
+
+    try {
+        // Init Whisper if needed (first time downloads ~40MB model)
+        await initWhisper((progress) => {
+            voiceStatus.innerHTML = `<span class="voice-spinner"></span> Loading Whisper... ${progress}%`;
+        });
+
+        voiceStatus.innerHTML = '<span class="voice-spinner"></span> Transcribing...';
+
+        const text = await transcribeAudio(audioBlob);
+
+        if (text) {
+            // Insert transcribed text into input
+            userInput.value = userInput.value ? userInput.value + ' ' + text : text;
+            autoResizeInput();
+            sendBtn.disabled = false;
+            userInput.focus();
+
+            voiceStatus.className = 'voice-status';
+            voiceStatus.innerHTML = '✅ Transcribed! Edit and send, or record more.';
+            setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
+        } else {
+            voiceStatus.innerHTML = '⚠️ No speech detected. Try again.';
+            setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
+        }
+    } catch (err) {
+        console.error('Transcription failed:', err);
+        voiceStatus.className = 'voice-status';
+        voiceStatus.innerHTML = `⚠️ Transcription error: ${err.message}`;
+        setTimeout(() => { voiceStatus.style.display = 'none'; }, 5000);
+    }
+
+    micBtn.classList.remove('loading');
+}
 
 // ---- Start ----
 init();

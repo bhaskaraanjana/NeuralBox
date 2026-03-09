@@ -125,6 +125,14 @@
               </svg>
               <span class="web-toggle-label">Search</span>
             </button>
+            <button id="mic-btn" class="mic-btn" title="Voice input (Whisper)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
             <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
             <button id="send-btn" class="send-btn" disabled>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -133,6 +141,7 @@
               </svg>
             </button>
           </div>
+          <div id="voice-status" class="voice-status" style="display:none;"></div>
           <p id="input-disclaimer" class="input-disclaimer">AI runs locally in your browser. Responses may vary in
             quality.</p>
         </div>

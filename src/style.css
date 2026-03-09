@@ -1274,3 +1274,90 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* ============= Voice / Microphone ============= */
+.mic-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.mic-btn:hover {
+  border-color: var(--border-glow);
+  color: var(--text-secondary);
+}
+
+.mic-btn.recording {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  animation: pulse-mic 1.5s ease-in-out infinite;
+}
+
+.mic-btn.loading {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+@keyframes pulse-mic {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+.voice-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  max-width: 800px;
+  margin: 0.3rem auto 0;
+}
+
+.voice-status.recording {
+  color: #ef4444;
+}
+
+.voice-status.transcribing {
+  color: #f59e0b;
+}
+
+.voice-status .voice-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.voice-status .voice-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(245, 158, 11, 0.3);
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.voice-status .rec-dot {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: pulse-mic 1.5s ease-in-out infinite;
+}
