@@ -29,7 +29,8 @@
           <h3>WebGPU Not Available</h3>
           <p>Your browser doesn't support WebGPU, which is required to run AI models locally.</p>
           <p class="error-hint">Try the latest version of <strong>Chrome</strong>, <strong>Edge</strong>, or
-            <strong>Firefox</strong>.</p>
+            <strong>Firefox</strong>.
+          </p>
         </div>
 
         <div id="download-section">
@@ -116,6 +117,14 @@
 
         <div class="input-container">
           <div class="input-wrapper">
+            <button id="web-search-toggle" class="web-toggle" title="Toggle web search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path
+                  d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              </svg>
+              <span class="web-toggle-label">Search</span>
+            </button>
             <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
             <button id="send-btn" class="send-btn" disabled>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -124,7 +133,8 @@
               </svg>
             </button>
           </div>
-          <p class="input-disclaimer">AI runs locally in your browser. Responses may vary in quality.</p>
+          <p id="input-disclaimer" class="input-disclaimer">AI runs locally in your browser. Responses may vary in
+            quality.</p>
         </div>
       </div>
     </div>
@@ -154,6 +164,15 @@
           <div class="setting-group">
             <label for="max-tokens">Max Response Tokens: <span id="tokens-value">1024</span></label>
             <input type="range" id="max-tokens" min="128" max="4096" step="128" value="1024" />
+          </div>
+          <div class="setting-group">
+            <label class="toggle-label">
+              <span>🌐 Web-Enhanced Mode</span>
+              <input type="checkbox" id="web-search-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">When enabled, searches the web to improve answers. Search queries are sent to
+              DuckDuckGo.</p>
           </div>
           <div class="setting-group">
             <button id="clear-history-btn" class="btn-danger">Clear All Conversations</button>

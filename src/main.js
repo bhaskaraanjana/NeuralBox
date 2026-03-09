@@ -7,6 +7,7 @@ import * as webllm from '@mlc-ai/web-llm';
 // ---- State ----
 let engine = null;
 let isGenerating = false;
+let webSearchEnabled = false;
 
 // Conversations: { id, title, messages[], createdAt, updatedAt }
 let conversations = [];
@@ -44,6 +45,11 @@ const sidebarToggle = $('#sidebar-toggle');
 const sidebarNewChat = $('#sidebar-new-chat');
 const conversationList = $('#conversation-list');
 
+// Web search refs
+const webSearchToggle = $('#web-search-toggle');
+const webSearchSetting = $('#web-search-setting');
+const inputDisclaimer = $('#input-disclaimer');
+
 // ---- Model Config ----
 const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
 
@@ -75,6 +81,117 @@ function generateTitle(messages) {
         return text.length > 40 ? text.slice(0, 40) + '…' : text;
     }
     return 'New conversation';
+}
+
+// ============================================
+// Web Search
+// ============================================
+
+function toggleWebSearch(enabled) {
+    webSearchEnabled = enabled;
+    webSearchToggle.classList.toggle('active', enabled);
+    webSearchSetting.checked = enabled;
+
+    if (enabled) {
+        inputDisclaimer.textContent = '🌐 Web-Enhanced — search queries sent to DuckDuckGo';
+        inputDisclaimer.classList.add('web-active');
+    } else {
+        inputDisclaimer.textContent = 'AI runs locally in your browser. Responses may vary in quality.';
+        inputDisclaimer.classList.remove('web-active');
+    }
+
+    // Save preference
+    try {
+        const settings = JSON.parse(localStorage.getItem('neuralbox_settings') || '{}');
+        settings.webSearch = enabled;
+        localStorage.setItem('neuralbox_settings', JSON.stringify(settings));
+    } catch (e) { /* ignore */ }
+}
+
+async function webSearch(query) {
+    try {
+        // Use DuckDuckGo via allorigins proxy to avoid CORS
+        const searchUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
+
+        const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
+        if (!response.ok) throw new Error('Search failed');
+
+        const data = await response.json();
+        const results = [];
+
+        // Abstract (main answer)
+        if (data.Abstract) {
+            results.push({
+                title: data.Heading || 'Summary',
+                snippet: data.Abstract,
+                url: data.AbstractURL || '',
+            });
+        }
+
+        // Related topics
+        if (data.RelatedTopics) {
+            for (const topic of data.RelatedTopics.slice(0, 5)) {
+                if (topic.Text) {
+                    results.push({
+                        title: topic.Text.split(' - ')[0]?.slice(0, 60) || '',
+                        snippet: topic.Text,
+                        url: topic.FirstURL || '',
+                    });
+                }
+                // Handle subtopics
+                if (topic.Topics) {
+                    for (const sub of topic.Topics.slice(0, 2)) {
+                        if (sub.Text) {
+                            results.push({
+                                title: sub.Text.split(' - ')[0]?.slice(0, 60) || '',
+                                snippet: sub.Text,
+                                url: sub.FirstURL || '',
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // Answer (quick facts)
+        if (data.Answer) {
+            results.unshift({
+                title: 'Quick Answer',
+                snippet: data.Answer,
+                url: '',
+            });
+        }
+
+        return results.slice(0, 6);
+    } catch (err) {
+        console.warn('Web search failed:', err);
+        return [];
+    }
+}
+
+function buildSearchContext(results) {
+    if (!results.length) return '';
+    let ctx = '\n\n[Web Search Results]\n';
+    for (const r of results) {
+        ctx += `- ${r.snippet}\n`;
+    }
+    ctx += '\nUse the search results above to inform your answer. Cite sources when relevant. If the search results don\'t contain relevant information, answer from your own knowledge.\n';
+    return ctx;
+}
+
+function renderSourceCitations(results, container) {
+    if (!results.length) return;
+    const sources = results.filter(r => r.url);
+    if (!sources.length) return;
+
+    const div = document.createElement('div');
+    div.className = 'search-sources';
+    div.innerHTML = `
+    <div class="search-sources-title">Sources</div>
+    ${sources.map(s => `<a class="search-source-link" href="${s.url}" target="_blank" rel="noopener">${new URL(s.url).hostname}</a>`).join('')}
+  `;
+    container.appendChild(div);
 }
 
 // ---- Init ----
@@ -344,13 +461,27 @@ async function sendMessage(text) {
     isGenerating = true;
 
     try {
+        // Web search if enabled
+        let searchResults = [];
+        if (webSearchEnabled) {
+            contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Searching the web…</div>';
+            scrollToBottom();
+            searchResults = await webSearch(userText);
+        }
+
+        // Build messages with optional search context
+        const searchContext = buildSearchContext(searchResults);
+        const sysContent = systemPrompt.value + searchContext;
+
         const messages = [
-            { role: 'system', content: systemPrompt.value },
+            { role: 'system', content: sysContent },
             ...conv.messages,
         ];
 
         const temperature = parseFloat(temperatureSlider.value);
         const maxTokens = parseInt(maxTokensSlider.value);
+
+        contentEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
 
         let fullResponse = '';
         let tokenCount = 0;
@@ -385,6 +516,11 @@ async function sendMessage(text) {
       <span class="perf-stat">⏱️ ${elapsed.toFixed(1)}s</span>
     `;
         aiMsg.appendChild(statsEl);
+
+        // Show source citations if we used web search
+        if (searchResults.length > 0) {
+            renderSourceCitations(searchResults, aiMsg);
+        }
 
         // Save to conversation
         conv.messages.push({ role: 'assistant', content: fullResponse });
@@ -517,6 +653,9 @@ function loadSettings() {
             maxTokensSlider.value = settings.maxTokens;
             tokensValue.textContent = settings.maxTokens;
         }
+        if (settings.webSearch) {
+            toggleWebSearch(true);
+        }
     } catch (e) { /* ignore */ }
 }
 
@@ -617,9 +756,16 @@ clearHistoryBtn.addEventListener('click', () => {
     clearAllConversations();
     settingsPanel.classList.remove('open');
 });
-
 // Suggestion chips
 bindSuggestionChips();
+
+// Web search toggles
+webSearchToggle.addEventListener('click', () => toggleWebSearch(!webSearchEnabled));
+webSearchToggle.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    toggleWebSearch(!webSearchEnabled);
+});
+webSearchSetting.addEventListener('change', () => toggleWebSearch(webSearchSetting.checked));
 
 // ---- Start ----
 init();
