@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>NeuralBox — Private AI in Your Browser</title>
+  <meta name="description" content="Run a powerful AI chatbot entirely in your browser. No server, no sign-up, no data leaves your device. Powered by Qwen 3.5 and WebGPU." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Loading / Model Download Screen -->
+    <div id="loading-screen" class="screen active">
+      <div class="loading-content">
+        <div class="logo-container">
+          <div class="logo-glow"></div>
+          <h1 class="logo">Neural<span>Box</span></h1>
+        </div>
+        <p class="tagline">Private AI. Runs in your browser.</p>
+        
+        <div id="webgpu-error" class="error-card" style="display:none;">
+          <div class="error-icon">⚠️</div>
+          <h3>WebGPU Not Available</h3>
+          <p>Your browser doesn't support WebGPU, which is required to run AI models locally.</p>
+          <p class="error-hint">Try the latest version of <strong>Chrome</strong>, <strong>Edge</strong>, or <strong>Firefox</strong>.</p>
+        </div>
+
+        <div id="download-section">
+          <div id="status-text" class="status-text">Checking WebGPU support...</div>
+          <div class="progress-container">
+            <div class="progress-bar">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <span id="progress-percent" class="progress-percent">0%</span>
+          </div>
+          <button id="start-btn" class="btn-primary" style="display:none;">
+            <span class="btn-icon">⚡</span> Load AI Model
+          </button>
+          <p class="download-note">~600MB download, cached for future visits</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="screen">
+      <header class="chat-header">
+        <div class="header-left">
+          <h2 class="header-title">Neural<span>Box</span></h2>
+          <div id="model-badge" class="model-badge">Qwen3.5-0.8B</div>
+        </div>
+        <div class="header-right">
+          <button id="new-chat-btn" class="icon-btn" title="New conversation">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          </button>
+          <button id="settings-btn" class="icon-btn" title="Settings">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="messages" class="messages-container">
+        <div class="welcome-message">
+          <div class="welcome-icon">🧠</div>
+          <h3>Welcome to NeuralBox</h3>
+          <p>Your AI is running <strong>entirely in your browser</strong>. No data ever leaves your device.</p>
+          <div class="welcome-suggestions">
+            <button class="suggestion-chip" data-prompt="Explain quantum computing in simple terms">Explain quantum computing</button>
+            <button class="suggestion-chip" data-prompt="Write a short poem about the ocean">Write a poem about the ocean</button>
+            <button class="suggestion-chip" data-prompt="What are the benefits of learning a second language?">Benefits of learning languages</button>
+            <button class="suggestion-chip" data-prompt="Give me 5 creative project ideas for a weekend">Weekend project ideas</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-container">
+        <div class="input-wrapper">
+          <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
+          <button id="send-btn" class="send-btn" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          </button>
+        </div>
+        <p class="input-disclaimer">AI runs locally in your browser. Responses may vary in quality.</p>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="settings-panel">
+      <div class="settings-overlay" id="settings-overlay"></div>
+      <div class="settings-content">
+        <div class="settings-header">
+          <h3>Settings</h3>
+          <button id="close-settings" class="icon-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="settings-body">
+          <div class="setting-group">
+            <label for="system-prompt">System Prompt</label>
+            <textarea id="system-prompt" rows="4" placeholder="You are a helpful assistant...">You are a helpful, concise AI assistant. You respond clearly and directly.</textarea>
+          </div>
+          <div class="setting-group">
+            <label for="temperature">Temperature: <span id="temp-value">0.7</span></label>
+            <input type="range" id="temperature" min="0" max="1.5" step="0.1" value="0.7" />
+          </div>
+          <div class="setting-group">
+            <label for="max-tokens">Max Response Tokens: <span id="tokens-value">1024</span></label>
+            <input type="range" id="max-tokens" min="128" max="4096" step="128" value="1024" />
+          </div>
+          <div class="setting-group">
+            <button id="clear-history-btn" class="btn-danger">Clear All Conversations</button>
+          </div>
+          <div class="setting-info">
+            <p>🔒 All data stays in your browser. Nothing is sent to any server.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
