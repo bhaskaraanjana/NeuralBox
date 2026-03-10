@@ -72,7 +72,109 @@ const voiceChatLabel = $('#voice-chat-label');
 const voiceChatText = $('#voice-chat-text');
 
 // ---- Model Config ----
-const MODEL_ID = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+const MODEL_CATALOG = [
+    {
+        id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+        name: 'Qwen 2.5 — 0.5B',
+        size: '~350MB',
+        vramMB: 512,
+        tier: 'lite',
+        desc: 'Fastest, works on any device. Limited intelligence.',
+    },
+    {
+        id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+        name: 'Qwen 2.5 — 1.5B',
+        size: '~1GB',
+        vramMB: 1500,
+        tier: 'standard',
+        desc: 'Good balance of speed and quality.',
+    },
+    {
+        id: 'Qwen2.5-3B-Instruct-q4f16_1-MLC',
+        name: 'Qwen 2.5 — 3B',
+        size: '~2GB',
+        vramMB: 3000,
+        tier: 'performance',
+        desc: 'Stronger reasoning and instruction following.',
+    },
+    {
+        id: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
+        name: 'Phi 3.5 Mini — 3.8B',
+        size: '~2.4GB',
+        vramMB: 3500,
+        tier: 'performance',
+        desc: 'Microsoft\'s compact model. Strong at reasoning.',
+    },
+    {
+        id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+        name: 'Llama 3.2 — 3B',
+        size: '~2GB',
+        vramMB: 3000,
+        tier: 'performance',
+        desc: 'Meta\'s latest compact model. Good all-rounder.',
+    },
+    {
+        id: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+        name: 'Qwen 2.5 — 7B',
+        size: '~4.5GB',
+        vramMB: 6000,
+        tier: 'premium',
+        desc: 'Best quality. Needs a powerful GPU (6GB+ VRAM).',
+    },
+];
+
+let selectedModelId = MODEL_CATALOG[0].id; // default to smallest
+
+async function detectDeviceCapabilities() {
+    const result = { vramMB: 0, tier: 'lite', gpuName: 'Unknown' };
+
+    try {
+        if (!navigator.gpu) return result;
+
+        const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+        if (!adapter) return result;
+
+        const info = adapter.info || {};
+        result.gpuName = info.description || info.device || info.vendor || 'Unknown GPU';
+
+        // maxBufferSize is a good proxy for available VRAM
+        const maxBuffer = adapter.limits?.maxBufferSize || 0;
+        const maxStorageBuffer = adapter.limits?.maxStorageBufferBindingSize || 0;
+        const estimatedVRAM = Math.max(maxBuffer, maxStorageBuffer);
+
+        // Convert to MB — maxBufferSize is in bytes
+        result.vramMB = Math.round(estimatedVRAM / (1024 * 1024));
+
+        // Fallback heuristic if limits are too small (some browsers cap reported values)
+        if (result.vramMB < 256) {
+            // Use device memory as a fallback
+            const deviceMem = navigator.deviceMemory || 4; // GB
+            result.vramMB = deviceMem * 512; // rough estimate: half of system RAM
+        }
+
+        // Determine tier
+        if (result.vramMB >= 6000) result.tier = 'premium';
+        else if (result.vramMB >= 3000) result.tier = 'performance';
+        else if (result.vramMB >= 1500) result.tier = 'standard';
+        else result.tier = 'lite';
+
+    } catch (err) {
+        console.warn('GPU detection failed:', err);
+    }
+
+    return result;
+}
+
+function autoSelectModel(capabilities) {
+    // Find the best model that fits the detected VRAM
+    const eligible = MODEL_CATALOG.filter(m => m.vramMB <= capabilities.vramMB * 1.1); // 10% margin
+    if (eligible.length === 0) return MODEL_CATALOG[0]; // fallback to smallest
+    return eligible[eligible.length - 1]; // pick the largest eligible
+}
+
+function getModelById(id) {
+    return MODEL_CATALOG.find(m => m.id === id) || MODEL_CATALOG[0];
+}
 
 // ---- Helpers ----
 function generateId() {
@@ -282,22 +384,46 @@ async function init() {
         return;
     }
 
-    statusText.textContent = 'Ready to load AI model';
+    loadSettings();
+
+    // Detect device capabilities and auto-select model
+    statusText.textContent = 'Detecting device capabilities...';
+    const capabilities = await detectDeviceCapabilities();
+    const recommended = autoSelectModel(capabilities);
+
+    // Check if user has a saved model preference
+    const savedModelId = localStorage.getItem('neuralbox_model');
+    if (savedModelId && MODEL_CATALOG.find(m => m.id === savedModelId)) {
+        selectedModelId = savedModelId;
+    } else {
+        selectedModelId = recommended.id;
+    }
+
+    const selectedModel = getModelById(selectedModelId);
+
+    // Update loading screen
+    statusText.innerHTML = `Recommended: <strong>${selectedModel.name}</strong> (${selectedModel.size})<br><small>${selectedModel.desc}</small>`;
     startBtn.style.display = 'inline-flex';
+
+    // Populate model selector in settings
+    renderModelSelector(capabilities, recommended);
+
+    // Update badge
+    const modelBadge = $('#model-badge');
+    if (modelBadge) modelBadge.textContent = selectedModel.name;
 
     startBtn.addEventListener('click', loadModel);
     startBtn.addEventListener('touchend', (e) => {
         e.preventDefault();
         loadModel();
     });
-
-    loadSettings();
 }
 
 // ---- Model Loading ----
 async function loadModel() {
     startBtn.style.display = 'none';
-    statusText.textContent = 'Initializing AI engine...';
+    const model = getModelById(selectedModelId);
+    statusText.textContent = `Loading ${model.name}...`;
 
     try {
         const initProgressCallback = (report) => {
@@ -312,17 +438,21 @@ async function loadModel() {
             }
 
             if (text.includes('Loading model')) {
-                statusText.textContent = 'Loading model into GPU memory...';
+                statusText.textContent = `Loading ${model.name} into GPU memory...`;
             }
         };
 
-        engine = await webllm.CreateMLCEngine(MODEL_ID, {
+        engine = await webllm.CreateMLCEngine(selectedModelId, {
             initProgressCallback,
         });
 
         progressFill.style.width = '100%';
         progressPercent.textContent = '100%';
-        statusText.textContent = 'Model loaded! Starting chat...';
+        statusText.textContent = `${model.name} loaded! Starting chat...`;
+
+        // Update badge
+        const modelBadge = $('#model-badge');
+        if (modelBadge) modelBadge.textContent = model.name;
 
         setTimeout(() => {
             showChatScreen();
@@ -332,6 +462,39 @@ async function loadModel() {
         statusText.textContent = 'Failed to load model: ' + err.message;
         startBtn.style.display = 'inline-flex';
         startBtn.textContent = '🔄 Retry';
+    }
+}
+
+function renderModelSelector(capabilities, recommended) {
+    const container = document.getElementById('model-selector-group');
+    if (!container) return;
+
+    let html = `<label for="model-select">AI Model</label>`;
+    html += `<select id="model-select">`;
+    for (const m of MODEL_CATALOG) {
+        const isRec = m.id === recommended.id;
+        const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
+        html += `<option value="${m.id}" ${m.id === selectedModelId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>`;
+        html += `${m.name} (${m.size})${isRec ? ' ⭐ Recommended' : ''}${tooLarge ? ' ⚠️ May be too large' : ''}`;
+        html += `</option>`;
+    }
+    html += `</select>`;
+    html += `<p class="setting-hint">`;
+    html += `GPU: ${capabilities.gpuName} • Est. VRAM: ${capabilities.vramMB}MB`;
+    html += `</p>`;
+
+    container.innerHTML = html;
+
+    // Listen for changes
+    const select = document.getElementById('model-select');
+    if (select) {
+        select.addEventListener('change', () => {
+            selectedModelId = select.value;
+            localStorage.setItem('neuralbox_model', selectedModelId);
+            const model = getModelById(selectedModelId);
+            const modelBadge = $('#model-badge');
+            if (modelBadge) modelBadge.textContent = model.name;
+        });
     }
 }
 
