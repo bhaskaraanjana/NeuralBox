@@ -528,18 +528,71 @@ function renderModelSelector(capabilities, recommended) {
     html += `<p class="setting-hint">`;
     html += `GPU: ${capabilities.gpuName} • Est. VRAM: ${capabilities.vramMB}MB`;
     html += `</p>`;
+    html += `<button id="switch-model-btn" class="btn-primary" style="display:none; margin-top:0.5rem; width:100%;">🔄 Switch Model</button>`;
 
     container.innerHTML = html;
 
     // Listen for changes
     const select = document.getElementById('model-select');
+    const switchBtn = document.getElementById('switch-model-btn');
+
     if (select) {
         select.addEventListener('change', () => {
+            const newId = select.value;
+            if (newId !== selectedModelId) {
+                switchBtn.style.display = 'block';
+            } else {
+                switchBtn.style.display = 'none';
+            }
+        });
+    }
+
+    if (switchBtn) {
+        switchBtn.addEventListener('click', async () => {
             selectedModelId = select.value;
             localStorage.setItem('neuralbox_model', selectedModelId);
             const model = getModelById(selectedModelId);
-            const modelBadge = $('#model-badge');
-            if (modelBadge) modelBadge.textContent = model.name;
+
+            // Close settings
+            const settingsPanel = $('#settings-panel');
+            if (settingsPanel) settingsPanel.classList.remove('open');
+
+            // Show loading screen
+            chatScreen.classList.remove('active');
+            loadingScreen.classList.add('active');
+            progressFill.style.width = '0%';
+            progressPercent.textContent = '0%';
+            statusText.textContent = `Switching to ${model.name}...`;
+            startBtn.style.display = 'none';
+
+            try {
+                await engine.reload(selectedModelId, {
+                    initProgressCallback: (report) => {
+                        const text = report.text || '';
+                        statusText.textContent = text;
+                        const match = text.match(/(\d+)%/);
+                        if (match) {
+                            const pct = parseInt(match[1]);
+                            progressFill.style.width = pct + '%';
+                            progressPercent.textContent = pct + '%';
+                        }
+                    },
+                });
+
+                progressFill.style.width = '100%';
+                progressPercent.textContent = '100%';
+                statusText.textContent = `${model.name} loaded!`;
+
+                const modelBadge = $('#model-badge');
+                if (modelBadge) modelBadge.textContent = model.name;
+
+                setTimeout(() => showChatScreen(), 500);
+            } catch (err) {
+                console.error('Model switch failed:', err);
+                statusText.textContent = `Failed: ${err.message}`;
+                startBtn.style.display = 'inline-flex';
+                startBtn.textContent = '🔄 Retry';
+            }
         });
     }
 }

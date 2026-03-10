@@ -1034,6 +1034,24 @@ body {
   background: rgba(220, 38, 38, 0.2);
 }
 
+.btn-primary {
+  padding: 0.7rem 1rem;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: var(--radius-sm);
+  color: #a78bfa;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-primary:hover {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
 .setting-info {
   background: var(--bg-primary);
   border-radius: var(--radius-sm);
