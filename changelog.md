@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.5.0] — 2026-03-10
+
+### Added
+- **🎛️ Model Selection** — choose from 6 models based on your device
+  - Qwen 2.5 — 0.5B (Lite, ~350MB)
+  - Qwen 2.5 — 1.5B (Standard, ~1GB)
+  - Qwen 2.5 — 3B (Performance, ~2GB)
+  - Phi 3.5 Mini — 3.8B (Performance, ~2.4GB)
+  - Llama 3.2 — 3B (Performance, ~2GB)
+  - Qwen 2.5 — 7B (Premium, ~4.5GB)
+- **Auto-detection** — detects GPU VRAM via WebGPU adapter and recommends the best model
+- Model selector dropdown in Settings with ⭐ recommended indicator
+- GPU info displayed in settings (name + estimated VRAM)
+- Model preference saved to localStorage
+- Dynamic header badge shows active model name
+
+
 ## [1.4.0] — 2026-03-09
 
 ### Added
