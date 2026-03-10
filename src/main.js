@@ -71,6 +71,13 @@ const voiceOrb = $('#voice-orb');
 const voiceChatLabel = $('#voice-chat-label');
 const voiceChatText = $('#voice-chat-text');
 
+// Image / vision refs
+const imageBtn = $('#image-btn');
+const imageInput = $('#image-input');
+const imagePreview = $('#image-preview');
+const imagePreviewImg = $('#image-preview-img');
+const imagePreviewClear = $('#image-preview-clear');
+
 // ---- Model Config ----
 const MODEL_CATALOG = [
     {
@@ -130,6 +137,15 @@ const MODEL_CATALOG = [
         desc: 'Microsoft\'s model. Strong at math and logic.',
     },
     {
+        id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
+        name: 'Phi 3.5 Vision — 4.2B 👁️',
+        size: '~2.7GB',
+        vramMB: 4000,
+        tier: 'vision',
+        vision: true,
+        desc: 'Can understand images! Describe, read text, answer questions about photos.',
+    },
+    {
         id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
         name: 'DeepSeek R1 Distill — 7B',
         size: '~4.5GB',
@@ -148,6 +164,12 @@ const MODEL_CATALOG = [
 ];
 
 let selectedModelId = MODEL_CATALOG[0].id; // default to smallest
+let pendingImage = null; // { dataUrl, file } — image waiting to be sent
+
+function isVisionModel() {
+    const model = getModelById(selectedModelId);
+    return model?.vision === true;
+}
 
 async function detectDeviceCapabilities() {
     const result = { vramMB: 0, tier: 'lite', gpuName: 'Unknown' };
@@ -528,6 +550,14 @@ function showChatScreen() {
     chatScreen.classList.add('active');
     userInput.focus();
 
+    // Show image button if vision model is loaded
+    if (isVisionModel()) {
+        imageBtn.style.display = 'flex';
+        userInput.placeholder = 'Ask anything... (you can attach images!)';
+    } else {
+        imageBtn.style.display = 'none';
+    }
+
     // Load conversations from storage
     loadConversations();
 
@@ -689,7 +719,7 @@ function closeSidebar() {
 // ============================================
 
 async function sendMessage(text) {
-    if (!text.trim() || isGenerating || !engine) return;
+    if ((!text.trim() && !pendingImage) || isGenerating || !engine) return;
 
     const userText = text.trim();
     userInput.value = '';
@@ -708,9 +738,26 @@ async function sendMessage(text) {
     const welcome = messagesContainer.querySelector('.welcome-message');
     if (welcome) welcome.remove();
 
-    // Add user message
-    addMessageToDOM('user', userText);
-    conv.messages.push({ role: 'user', content: userText });
+    // Add user message (with optional image)
+    const imageDataUrl = pendingImage?.dataUrl || null;
+    if (imageDataUrl) {
+        addMessageToDOM('user', userText, imageDataUrl);
+        // For vision models, use multimodal content format
+        conv.messages.push({
+            role: 'user',
+            content: [
+                { type: 'image_url', image_url: { url: imageDataUrl } },
+                { type: 'text', text: userText || 'What is in this image?' },
+            ],
+        });
+        // Clear pending image
+        pendingImage = null;
+        imagePreview.style.display = 'none';
+        imagePreviewImg.src = '';
+    } else {
+        addMessageToDOM('user', userText);
+        conv.messages.push({ role: 'user', content: userText });
+    }
 
     // Update title from first user message
     if (conv.messages.filter((m) => m.role === 'user').length === 1) {
@@ -804,7 +851,7 @@ async function sendMessage(text) {
 }
 
 // ---- DOM Helpers ----
-function addMessageToDOM(role, content) {
+function addMessageToDOM(role, content, imageUrl) {
     const msg = document.createElement('div');
     msg.className = `message ${role}`;
 
@@ -814,7 +861,21 @@ function addMessageToDOM(role, content) {
 
     const bubble = document.createElement('div');
     bubble.className = 'message-content';
-    bubble.innerHTML = content ? formatMarkdown(content) : '';
+
+    // If there's an image, show it above the text
+    if (imageUrl && role === 'user') {
+        const img = document.createElement('img');
+        img.src = imageUrl;
+        img.className = 'message-image';
+        img.alt = 'Attached image';
+        bubble.appendChild(img);
+    }
+
+    if (content) {
+        const textDiv = document.createElement('div');
+        textDiv.innerHTML = formatMarkdown(content);
+        bubble.appendChild(textDiv);
+    }
 
     msg.appendChild(avatar);
     msg.appendChild(bubble);
@@ -1345,6 +1406,35 @@ voiceOrb.addEventListener('touchend', (e) => {
         e.preventDefault();
         voiceChatListen();
     }
+});
+
+// Image / vision event listeners
+imageBtn.addEventListener('click', () => imageInput.click());
+imageBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    imageInput.click();
+});
+
+imageInput.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        pendingImage = { dataUrl: ev.target.result, file };
+        imagePreviewImg.src = ev.target.result;
+        imagePreview.style.display = 'flex';
+        sendBtn.disabled = false; // Allow sending with just image
+    };
+    reader.readAsDataURL(file);
+    imageInput.value = ''; // Reset so same file can be selected again
+});
+
+imagePreviewClear.addEventListener('click', () => {
+    pendingImage = null;
+    imagePreview.style.display = 'none';
+    imagePreviewImg.src = '';
+    if (!userInput.value.trim()) sendBtn.disabled = true;
 });
 
 // ---- Start ----

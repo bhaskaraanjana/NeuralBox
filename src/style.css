@@ -1510,3 +1510,70 @@ body {
   border-color: var(--border-glow);
   color: var(--text-primary);
 }
+
+/* ============= Image Input / Vision ============= */
+.image-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.image-btn:hover {
+  border-color: var(--border-glow);
+  color: var(--text-secondary);
+}
+
+.image-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  max-width: 800px;
+  margin: 0.3rem auto 0;
+}
+
+.image-preview img {
+  height: 56px;
+  max-width: 120px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+}
+
+.image-preview-clear {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all var(--transition);
+}
+
+.image-preview-clear:hover {
+  border-color: rgba(220, 38, 38, 0.4);
+  color: #ef4444;
+}
+
+.message-image {
+  max-width: 240px;
+  max-height: 180px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  margin-bottom: 0.5rem;
+  object-fit: contain;
+}
