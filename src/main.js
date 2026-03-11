@@ -887,11 +887,13 @@ async function sendMessage(text) {
       <span class="perf-stat">📝 ${tokenCount} tokens</span>
       <span class="perf-stat">⏱️ ${elapsed.toFixed(1)}s</span>
     `;
-        aiMsg.appendChild(statsEl);
+        
+        const messageBody = aiMsg.querySelector('.message-body') || aiMsg;
+        messageBody.appendChild(statsEl);
 
         // Show source citations if we used web search
         if (searchResults.length > 0) {
-            renderSourceCitations(searchResults, aiMsg);
+            renderSourceCitations(searchResults, messageBody);
         }
 
         // Save to conversation
@@ -917,6 +919,9 @@ function addMessageToDOM(role, content, imageUrl) {
     avatar.className = 'message-avatar';
     avatar.textContent = role === 'user' ? '👤' : '🧠';
 
+    const body = document.createElement('div');
+    body.className = 'message-body';
+
     const bubble = document.createElement('div');
     bubble.className = 'message-content';
 
@@ -935,8 +940,9 @@ function addMessageToDOM(role, content, imageUrl) {
         bubble.appendChild(textDiv);
     }
 
+    body.appendChild(bubble);
     msg.appendChild(avatar);
-    msg.appendChild(bubble);
+    msg.appendChild(body);
     messagesContainer.appendChild(msg);
 
     return msg;

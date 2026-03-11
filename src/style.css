@@ -692,12 +692,26 @@ body {
   border: 1px solid var(--border-color);
 }
 
+.message-body {
+  display: flex;
+  flex-direction: column;
+  max-width: 75%;
+}
+
+.message.user .message-body {
+  align-items: flex-end;
+}
+
+.message.assistant .message-body {
+  align-items: flex-start;
+}
+
 .message-content {
   padding: 0.85rem 1.1rem;
   border-radius: var(--radius-lg);
   font-size: 0.95rem;
   line-height: 1.65;
-  max-width: 75%;
+  width: fit-content;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
@@ -1130,7 +1144,7 @@ body {
 .perf-stats {
   display: flex;
   gap: 1rem;
-  justify-content: center;
+  justify-content: flex-start;
   margin-top: 0.25rem;
   font-size: 0.72rem;
   color: var(--text-muted);
