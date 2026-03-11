@@ -71,6 +71,9 @@ const voiceOrb = $('#voice-orb');
 const voiceChatLabel = $('#voice-chat-label');
 const voiceChatText = $('#voice-chat-text');
 
+// Web / Think toggle refs
+const thinkToggle = $('#think-toggle');
+
 // Image / vision refs
 const imageBtn = $('#image-btn');
 const imageInput = $('#image-input');
@@ -170,10 +173,16 @@ const MODEL_CATALOG = [
 
 let selectedModelId = MODEL_CATALOG[0].id; // default to smallest
 let pendingImage = null; // { dataUrl, file } — image waiting to be sent
+let thinkingEnabled = false; // default to no thinking
 
 function isVisionModel() {
     const model = getModelById(selectedModelId);
     return model?.vision === true;
+}
+
+function isThinkingModel() {
+    const model = getModelById(selectedModelId);
+    return model?.thinking === true;
 }
 
 async function detectDeviceCapabilities() {
@@ -614,6 +623,19 @@ function showChatScreen() {
         userInput.placeholder = 'Ask anything... (you can attach images!)';
     } else {
         imageBtn.style.display = 'none';
+        userInput.placeholder = 'Ask anything...';
+    }
+
+    // Show think toggle if thinking model is loaded
+    if (isThinkingModel()) {
+        thinkToggle.style.display = 'flex';
+        if (thinkingEnabled) {
+            thinkToggle.classList.add('active');
+        } else {
+            thinkToggle.classList.remove('active');
+        }
+    } else {
+        thinkToggle.style.display = 'none';
     }
 
     // Load conversations from storage
@@ -796,6 +818,15 @@ async function sendMessage(text) {
     const welcome = messagesContainer.querySelector('.welcome-message');
     if (welcome) welcome.remove();
 
+    // Formulate final text for user
+    let finalUserText = userText;
+    
+    // If thinking model, explicitly request mode
+    if (isThinkingModel()) {
+        const instruction = thinkingEnabled ? '/think\n' : '/no_think\n';
+        finalUserText = instruction + userText;
+    }
+
     // Add user message (with optional image)
     const imageDataUrl = pendingImage?.dataUrl || null;
     if (imageDataUrl) {
@@ -805,7 +836,7 @@ async function sendMessage(text) {
             role: 'user',
             content: [
                 { type: 'image_url', image_url: { url: imageDataUrl } },
-                { type: 'text', text: userText || 'What is in this image?' },
+                { type: 'text', text: finalUserText || 'What is in this image?' },
             ],
         });
         // Clear pending image
@@ -814,7 +845,7 @@ async function sendMessage(text) {
         imagePreviewImg.src = '';
     } else {
         addMessageToDOM('user', userText);
-        conv.messages.push({ role: 'user', content: userText });
+        conv.messages.push({ role: 'user', content: finalUserText });
     }
 
     // Update title from first user message
@@ -949,15 +980,38 @@ function addMessageToDOM(role, content, imageUrl) {
 }
 
 function formatMarkdown(text) {
-    let html = text
+    // Extract thinking blocks if present
+    let processedText = text;
+    
+    // Check if there is an unclosed think tag (model is currently thinking)
+    const thinkOpenMatch = text.match(/<think>/g);
+    const thinkCloseMatch = text.match(/<\/think>/g);
+    
+    // Handle completed thinking blocks
+    processedText = processedText.replace(/<think>([\s\S]*?)<\/think>/g, (match, content) => {
+        return `<details class="think-block"><summary>🧠 Thought Process</summary><div class="think-content">${formatBasicHTML(content)}</div></details>`;
+    });
+
+    // Handle unclosed thinking block (currently generating)
+    if (thinkOpenMatch && (!thinkCloseMatch || thinkOpenMatch.length > thinkCloseMatch.length)) {
+        const parts = processedText.split(/<think>/);
+        const lastPart = parts.pop(); // The thinking part
+        const bodyBefore = parts.join('<think>'); // Everything before the current thinking
+        
+        return formatBasicHTML(bodyBefore) + `<details class="think-block" open><summary>🧠 Thinking...</summary><div class="think-content">${formatBasicHTML(lastPart)}<span class="typing-indicator" style="display:inline-flex;margin-left:8px;"><span></span><span></span><span></span></span></div></details>`;
+    }
+
+    return '<p>' + formatBasicHTML(processedText) + '</p>';
+}
+
+function formatBasicHTML(text) {
+    return text
         .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
         .replace(/\n\n/g, '</p><p>')
         .replace(/\n/g, '<br>');
-
-    return '<p>' + html + '</p>';
 }
 
 function scrollToBottom() {
@@ -1499,6 +1553,18 @@ imagePreviewClear.addEventListener('click', () => {
     imagePreview.style.display = 'none';
     imagePreviewImg.src = '';
     if (!userInput.value.trim()) sendBtn.disabled = true;
+});
+
+// Think toggle handling
+thinkToggle.addEventListener('click', () => {
+    thinkingEnabled = !thinkingEnabled;
+    if (thinkingEnabled) {
+        thinkToggle.classList.add('active');
+        userInput.placeholder = 'Ask anything... (Thinking mode enabled)';
+    } else {
+        thinkToggle.classList.remove('active');
+        userInput.placeholder = 'Ask anything...';
+    }
 });
 
 // ---- Start ----

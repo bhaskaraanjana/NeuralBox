@@ -1609,3 +1609,41 @@ body {
   margin-bottom: 0.5rem;
   object-fit: contain;
 }
+
+/* ============= Thinking Mode ============= */
+.think-block {
+  margin-bottom: 1rem;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.think-block summary {
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  transition: background var(--transition);
+}
+
+.think-block summary:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+}
+
+.think-content {
+  padding: 0 1rem 1rem 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border-color);
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+}
+.think-content p:last-child {
+  margin-bottom: 0;
+}
