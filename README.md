@@ -5,7 +5,7 @@
 NeuralBox runs powerful LLMs entirely in your browser using WebGPU. Your data never leaves your device.
 
 ![NeuralBox Banner](app-screenshot-placeholder.png) 
-*(Note: Add an actual screenshot to your repo and update this link)*
+
 
 ## ✨ Features
 
