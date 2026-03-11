@@ -94,6 +94,7 @@ const MODEL_CATALOG = [
         size: '~400MB',
         vramMB: 600,
         tier: 'lite',
+        thinking: true,
         desc: 'Fast and lightweight. Better reasoning than Qwen2.5-0.5B.',
     },
     {
@@ -110,6 +111,7 @@ const MODEL_CATALOG = [
         size: '~1.1GB',
         vramMB: 1500,
         tier: 'standard',
+        thinking: true,
         desc: 'Great balance of speed and intelligence. Thinking mode.',
     },
     {
@@ -126,6 +128,7 @@ const MODEL_CATALOG = [
         size: '~2.5GB',
         vramMB: 3500,
         tier: 'performance',
+        thinking: true,
         desc: 'Best value. Matches larger models on reasoning tasks.',
     },
     {
@@ -151,6 +154,7 @@ const MODEL_CATALOG = [
         size: '~4.5GB',
         vramMB: 5500,
         tier: 'premium',
+        thinking: true,
         desc: 'DeepSeek R1 reasoning distilled into 7B. Top-tier thinking.',
     },
     {
@@ -159,6 +163,7 @@ const MODEL_CATALOG = [
         size: '~5GB',
         vramMB: 6000,
         tier: 'premium',
+        thinking: true,
         desc: 'Best quality. Strong reasoning + thinking mode. Needs 6GB+ VRAM.',
     },
 ];
