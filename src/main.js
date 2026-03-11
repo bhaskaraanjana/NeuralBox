@@ -461,22 +461,90 @@ async function init() {
 
     const selectedModel = getModelById(selectedModelId);
 
-    // Update loading screen
-    statusText.innerHTML = `Recommended: <strong>${selectedModel.name}</strong> (${selectedModel.size})<br><small>${selectedModel.desc}</small>`;
-    startBtn.style.display = 'inline-flex';
-
-    // Populate model selector in settings
-    renderModelSelector(capabilities, recommended);
-
     // Update badge
     const modelBadge = $('#model-badge');
     if (modelBadge) modelBadge.textContent = selectedModel.name;
+
+    // Render the initial model selector on the loading screen
+    renderStartModelSelector(capabilities, recommended);
+
+    // Check cache and update UI
+    await updateStartScreenUi(capabilities, recommended);
+
+    // Populate model selector in settings
+    renderModelSelector(capabilities, recommended);
 
     startBtn.addEventListener('click', loadModel);
     startBtn.addEventListener('touchend', (e) => {
         e.preventDefault();
         loadModel();
     });
+}
+
+function renderStartModelSelector(capabilities, recommended) {
+    const container = document.getElementById('start-model-selector-group');
+    if (!container) return;
+
+    let html = `<select id="start-model-select" style="width: 100%; padding: 0.7rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font); cursor: pointer; outline: none;">`;
+    for (const m of MODEL_CATALOG) {
+        const isRec = m.id === recommended.id;
+        const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
+        html += `<option value="${m.id}" ${m.id === selectedModelId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>`;
+        html += `${m.name} (${m.size})${isRec ? ' ⭐ Recommended' : ''}${tooLarge ? ' ⚠️ High VRAM' : ''}`;
+        html += `</option>`;
+    }
+    html += `</select>`;
+    html += `<p class="setting-hint" style="margin-top:0.4rem; text-align:center;">Your GPU: <strong>${capabilities.gpuName}</strong> (~${capabilities.vramMB}MB VRAM)</p>`;
+
+    container.innerHTML = html;
+
+    const select = document.getElementById('start-model-select');
+    if (select) {
+        select.addEventListener('change', async () => {
+            selectedModelId = select.value;
+            localStorage.setItem('neuralbox_model', selectedModelId);
+            
+            // Sync the settings panel dropdown if it exists
+            const settingsSelect = document.getElementById('model-select');
+            if (settingsSelect) settingsSelect.value = selectedModelId;
+
+            // Update badge
+            const modelBadge = $('#model-badge');
+            if (modelBadge) modelBadge.textContent = getModelById(selectedModelId).name;
+
+            // Update cache status
+            await updateStartScreenUi(capabilities, recommended);
+        });
+    }
+}
+
+async function updateStartScreenUi(capabilities, recommended) {
+    const selectedModel = getModelById(selectedModelId);
+    
+    statusText.innerHTML = `Checking cache state...`;
+    startBtn.style.display = 'none';
+    
+    let isCached = false;
+    try {
+        isCached = await webllm.hasModelInCache(selectedModelId);
+    } catch(err) {
+        console.warn('Cache check failed:', err);
+    }
+
+    const noteEl = document.getElementById('cache-status-note');
+    if (!noteEl) return;
+
+    if (isCached) {
+        startBtn.innerHTML = '<span class="btn-icon">⚡</span> Start App (Cached)';
+        noteEl.innerHTML = 'Model is ready locally. <strong>No download required.</strong>';
+        statusText.innerHTML = `Ready to load <strong>${selectedModel.name}</strong>`;
+    } else {
+        startBtn.innerHTML = '<span class="btn-icon">⬇️</span> Download & Start';
+        noteEl.innerHTML = `~${selectedModel.size} download, will be cached for future visits.`;
+        statusText.innerHTML = `First-time setup for <strong>${selectedModel.name}</strong>`;
+    }
+    
+    startBtn.style.display = 'inline-flex';
 }
 
 // ---- Model Loading ----

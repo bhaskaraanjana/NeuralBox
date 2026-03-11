@@ -34,17 +34,18 @@
         </div>
 
         <div id="download-section">
-          <div id="status-text" class="status-text">Checking WebGPU support...</div>
+          <div id="start-model-selector-group" class="model-selector-group" style="margin-bottom: 1rem;"></div>
+          <div id="status-text" class="status-text">Checking device capabilities...</div>
           <div class="progress-container">
             <div class="progress-bar">
               <div id="progress-fill" class="progress-fill"></div>
             </div>
             <span id="progress-percent" class="progress-percent">0%</span>
           </div>
-          <button id="start-btn" class="btn-primary" style="display:none;">
+          <button id="start-btn" class="btn-primary" style="display:none; width: 100%;">
             <span class="btn-icon">⚡</span> Load AI Model
           </button>
-          <p class="download-note">~600MB download, cached for future visits</p>
+          <p id="cache-status-note" class="download-note">Powered by WebGPU</p>
         </div>
       </div>
     </div>
