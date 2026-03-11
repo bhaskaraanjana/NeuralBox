@@ -1034,8 +1034,14 @@ function addMessageToDOM(role, content, imageUrl) {
     }
 
     if (content) {
+        // Hide internal thinking instructions from the UI
+        let displayContent = content;
+        if (role === 'user' && typeof displayContent === 'string') {
+            displayContent = displayContent.replace(/^\/(no_)?think\n/, '');
+        }
+        
         const textDiv = document.createElement('div');
-        textDiv.innerHTML = formatMarkdown(content);
+        textDiv.innerHTML = formatMarkdown(displayContent);
         bubble.appendChild(textDiv);
     }
 
