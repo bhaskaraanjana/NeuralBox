@@ -5,7 +5,7 @@ This file records implementation observations from the current source snapshot.
 ## 1) Docs/metadata mismatch
 
 - `package.json` still reports version `1.0.0`, while `changelog.md` includes entries up to `1.5.0`.
-- `README.md` model list and branding text do not fully match current `MODEL_CATALOG` in `src/main.js`.
+- `README.md` model list and branding text may not fully match current `MODEL_CATALOG` in `src/main.js`.
 
 ## 2) Upstream WebLLM vision embed-size limitation
 
@@ -29,3 +29,8 @@ This file records implementation observations from the current source snapshot.
 
 - Web-enhanced mode routes requests through allorigins + DuckDuckGo endpoints.
 - If either endpoint rate-limits, changes format, or is blocked, search enrichment can degrade.
+
+## 6) Runtime debug panel persistence model
+
+- Debug events are intentionally in-memory only and capped (current max: 100 events).
+- Events are cleared on page reload; only panel enabled/disabled preference is persisted.

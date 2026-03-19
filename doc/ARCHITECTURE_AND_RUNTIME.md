@@ -17,9 +17,12 @@
   - `engine`
   - `isGenerating`
   - `selectedModelId`
+  - `modelSelectionId` (manual model or `AUTO_MODEL_ID`)
   - `thinkingEnabled`
 - Feature toggles:
   - `webSearchEnabled`
+  - `verboseVisionLogs`
+  - `debugPanelEnabled`
 - Conversation state:
   - `conversations[]`
   - `activeConversationId`
@@ -32,6 +35,9 @@
   - `voiceChatActive`
 - Vision input:
   - `pendingImage`
+- Runtime diagnostics:
+  - `runtimeEvents[]` (bounded event buffer)
+  - `activeGenerationId`
 
 ## Main Control Flows
 
@@ -44,7 +50,7 @@
    - estimates VRAM from adapter limits
    - falls back to `navigator.deviceMemory` heuristic
 4. Calls `autoSelectModel()` to recommend a model from `MODEL_CATALOG`.
-5. Restores persisted model (`neuralbox_model`) when valid.
+5. Restores persisted model selection (`neuralbox_model_selection` / legacy `neuralbox_model`) when valid.
 6. Renders:
    - start screen model selector
    - settings panel model selector
@@ -58,6 +64,7 @@
 4. On success:
    - model badge updated
    - transition to chat screen (`showChatScreen()`).
+5. Later model changes use hot swap (`engine.reload(...)`) without full app reset.
 
 ### 3) Conversation Flow
 
@@ -68,9 +75,10 @@
    - optionally prepends `/think` or `/no_think`
    - stores user message (multimodal format for image+vision path)
    - builds system prompt (+ optional search context)
-   - streams model response via `engine.chat.completions.create(...)`
-   - updates UI incrementally and appends performance stats
-   - persists conversation state.
+  - if `Auto` is selected, computes route and may hot-swap model before generation
+  - streams model response via `engine.chat.completions.create(...)`
+  - updates UI incrementally and appends performance stats
+  - persists conversation state.
 
 ### 4) Optional Web Search Flow
 
@@ -125,11 +133,31 @@
   - `renderSidebar`
   - `renderWelcome`
   - show/hide classes for overlays/panels
+  - debug panel render (`renderDebugPanel`)
 
 ## Persistence Strategy
 
-- Browser-only localStorage persistence:
+- Browser-only database persistence through `src/db/database.js`.
+- Primary backend is IndexedDB (`neuralbox_app` / `app_state`).
+- Automatic fallback backend is localStorage-prefixed keys (`db:*`) when IndexedDB is unavailable.
+- Stored records:
   - settings
   - conversations
-  - selected model
-- One migration path exists for legacy `neuralbox_messages` to conversation format.
+  - selected model/selection mode
+- Legacy localStorage keys are automatically migrated on startup:
+  - `neuralbox_settings`
+  - `neuralbox_conversations`
+  - `neuralbox_messages`
+  - `neuralbox_model_selection` / `neuralbox_model`
+
+## Runtime Observability
+
+- Structured runtime events are captured in-memory (default max 100 events).
+- Event classes include:
+  - route decision
+  - hot swap start/progress/done/fail
+  - generation start/cancel/done/error
+- Optional debug panel in-app renders:
+  - current model selection and active model
+  - generation status/id
+  - recent event list

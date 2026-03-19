@@ -2,6 +2,14 @@
 
 Source: `changelog.md`
 
+## Unreleased (local workspace)
+
+- Added explicit `Auto` model selection mode; manual model selection no longer routes by default.
+- Added always-on model hot swap with header progress/status indicator.
+- Changed send control to dual-mode send/stop behavior during generation.
+- Added optional in-app runtime debug panel with recent lifecycle events.
+- Added `npm run test:stability` smoke test for new routing/hot-swap/send-stop contracts.
+
 ## 1.5.0 (2026-03-10)
 
 - Added multi-model selector with VRAM-based recommendation.

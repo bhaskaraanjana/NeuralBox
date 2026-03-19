@@ -1,0 +1,37 @@
+# Environment Setup
+
+## Runtime Requirements
+
+- Node.js `>=20 <26`
+- npm (bundled with Node)
+- A WebGPU-capable browser for full app runtime testing
+
+## First-Time Setup
+
+```bash
+npm install
+npm run env:check
+```
+
+## Development Workflow
+
+```bash
+npm run dev
+```
+
+Open the Vite URL in a browser with WebGPU enabled.
+
+## Validation Workflow
+
+```bash
+npm run env:check
+npm run build
+npm run test:stability
+```
+
+## Notes
+
+- The app is local-first and uses browser storage.
+- Persistence is managed through `src/db/database.js` (IndexedDB-first with safe fallback).
+- Legacy localStorage data is migrated automatically into the database layer on startup.
+

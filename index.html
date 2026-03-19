@@ -83,6 +83,7 @@
             </button>
             <h2 class="header-title">Neural<span>Box</span></h2>
             <div id="model-badge" class="model-badge">Qwen3.5-0.8B</div>
+            <div id="hot-swap-status" class="hot-swap-status" style="display:none;"></div>
           </div>
           <div class="header-right">
             <button id="new-chat-btn" class="icon-btn" title="New conversation">
@@ -107,6 +108,14 @@
             </button>
           </div>
         </header>
+        <div id="debug-panel" class="debug-panel" style="display:none;">
+          <div class="debug-panel-header">
+            <div class="debug-panel-title">Runtime Debug</div>
+            <button id="debug-clear-btn" class="debug-clear-btn" type="button">Clear</button>
+          </div>
+          <div id="debug-state" class="debug-state"></div>
+          <div id="debug-events" class="debug-events"></div>
+        </div>
 
         <div id="messages" class="messages-container">
           <div class="welcome-message">
@@ -152,11 +161,10 @@
             </button>
             <input type="file" id="image-input" accept="image/*" style="display:none;" />
             <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
-            <button id="send-btn" class="send-btn" disabled>
+            <button id="send-btn" class="send-btn" title="Send message" disabled>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
             </button>
           </div>
-          <button id="stop-btn" class="stop-btn" title="Stop generation">Stop generating</button>
           <div id="image-preview" class="image-preview" style="display:none;">
             <img id="image-preview-img" src="" alt="Attached image" />
             <button id="image-preview-clear" class="image-preview-clear" title="Remove image">✕</button>
@@ -220,6 +228,14 @@
               <span class="toggle-switch"></span>
             </label>
             <p class="setting-hint">Adds extra diagnostics to the console for image requests and retries.</p>
+          </div>
+          <div class="setting-group">
+            <label class="toggle-label">
+              <span>Runtime Debug Panel</span>
+              <input type="checkbox" id="debug-panel-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows model routing, hot-swap, cancel, and error events in-app.</p>
           </div>
           <div class="setting-group">
             <label>Conversation Backup</label>

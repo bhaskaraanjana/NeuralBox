@@ -18,6 +18,8 @@ This section documents every tracked repository file.
   - npm lockfile (lockfileVersion 3), fully resolved dependency graph.
 - `vite.config.js`
   - Vite config, COOP/COEP headers, build target, dependency optimization behavior.
+- `rules.md`
+  - Engineering standards and delivery rules for ongoing development.
 
 ## Source Files
 
@@ -28,15 +30,24 @@ This section documents every tracked repository file.
     - message send/stream pipeline
     - conversation CRUD and sidebar rendering
     - optional web search integration
-    - local settings and persistence
+    - app state orchestration and persistence integration
     - mic transcription workflow
     - voice chat loop
     - image attachment behavior for vision models
     - think mode controls
+- `src/db/database.js`
+  - IndexedDB-first persistence module with localStorage fallback and legacy migration.
 - `src/whisper.js`
   - Local Whisper setup and transcription helper functions.
 - `src/style.css`
   - Global design tokens, layout, components, animations, responsive rules.
+
+## Utility Scripts
+
+- `scripts/check-env.mjs`
+  - Environment validation script (Node version + required project files).
+- `scripts/stability-sprint-smoke.mjs`
+  - Runtime contract smoke checks.
 
 ## Documentation Files (Added)
 

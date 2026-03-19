@@ -1,6 +1,6 @@
 # Function Reference
 
-This file documents the functional API of `src/main.js` and `src/whisper.js`.
+This file documents the functional API of `src/main.js`, `src/db/database.js`, and `src/whisper.js`.
 
 ## `src/main.js`
 
@@ -16,6 +16,12 @@ This file documents the functional API of `src/main.js` and `src/whisper.js`.
   - Picks largest model that fits estimated VRAM with margin.
 - `getModelById(id)`
   - Resolves model metadata by ID with fallback.
+- `isAutoModelSelected()`
+  - Returns whether model selection mode is `Auto`.
+- `resolveAutoModelCandidate()`
+  - Computes current concrete model candidate for auto mode.
+- `switchModelById(newModelId, options)`
+  - Hot-swaps engine model in-place and updates model UI state.
 
 ## General helpers
 
@@ -27,6 +33,12 @@ This file documents the functional API of `src/main.js` and `src/whisper.js`.
   - Uses first user message (trimmed) as conversation title.
 - `escapeHtml(text)`
   - Safe text escaping helper for sidebar labels.
+- `logRuntimeEvent(name, data)`
+  - Appends structured runtime event to bounded in-memory buffer.
+- `renderDebugPanel()`
+  - Renders/hides runtime debug panel and current runtime summary.
+- `setHotSwapStatus(text, percent, isActive)`
+  - Updates header hot-swap status indicator.
 
 ## Web search
 
@@ -76,7 +88,7 @@ This file documents the functional API of `src/main.js` and `src/whisper.js`.
 ## Messaging pipeline and rendering
 
 - `sendMessage(text)`
-  - Main text/image send flow, streaming generation, save cycle.
+  - Main text/image send flow, optional auto-route+hot-swap, streaming generation, save cycle.
 - `addMessageToDOM(role, content, imageUrl)`
   - Renders single message bubble.
 - `formatMarkdown(text)`
@@ -129,3 +141,17 @@ This file documents the functional API of `src/main.js` and `src/whisper.js`.
   - Returns whether transcriber is initialized.
 - `isWhisperLoading()`
   - Returns whether initialization is currently in progress.
+
+## `src/db/database.js`
+
+- `initDatabase()`
+  - Initializes persistence backend and performs legacy migration.
+- `loadSettingsRecord()`
+- `saveSettingsRecord(settings)`
+  - Reads/writes settings record.
+- `loadConversationsRecord()`
+- `saveConversationsRecord(conversations)`
+  - Reads/writes conversations record.
+- `loadModelSelectionRecord()`
+- `saveModelSelectionRecord(selectionId)`
+  - Reads/writes selected model mode/ID record.

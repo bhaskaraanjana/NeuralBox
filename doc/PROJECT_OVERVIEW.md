@@ -11,7 +11,8 @@ Core design goals:
 - Local conversation persistence in browser storage.
 - Optional web augmentation (DuckDuckGo via proxy).
 - Optional local speech transcription and browser text-to-speech.
-- Model selection based on estimated device VRAM.
+- Model selection with explicit manual choice or `Auto` routing mode.
+- Hot model swapping in-place during active chat sessions.
 
 ## Technology Stack
 
@@ -23,7 +24,7 @@ Core design goals:
   - WebGPU (`navigator.gpu`)
   - `MediaRecorder` / `getUserMedia`
   - `SpeechSynthesis`
-  - `localStorage`
+  - IndexedDB (with localStorage fallback in DB layer)
 
 ## Entry Points
 
@@ -42,7 +43,9 @@ Core design goals:
 - Chat screen (`#chat-screen`)
   - Sidebar conversation list
   - Chat messages
-  - Input controls (search, think, mic, image, send)
+  - Input controls (search, think, mic, image, send/stop)
+  - Hot-swap progress status in header
+  - Optional runtime debug panel
   - Settings side panel
 - Voice chat overlay (`#voice-chat-overlay`)
   - Full-screen conversational voice loop
@@ -51,9 +54,9 @@ Core design goals:
 
 1. `init()` runs.
 2. WebGPU is checked.
-3. Settings are loaded from localStorage.
+3. Database is initialized and settings are loaded from the persistence layer.
 4. Device capability estimate is computed.
-5. Recommended model is selected (or persisted model is reused).
+5. Recommended model is selected (or persisted selection is reused, including `Auto`).
 6. Model selectors are rendered (start screen + settings panel).
 7. Cache status for selected model is checked.
 8. User clicks start -> model loads via `CreateMLCEngine`.

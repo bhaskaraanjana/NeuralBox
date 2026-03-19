@@ -23,6 +23,7 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
 
 - Uses `engine.chat.completions.create(..., stream: true)`.
 - Streams assistant tokens live to the UI.
+- Input send control becomes stop control while generation is active.
 - Adds simple generation stats:
   - tokens/sec
   - token count
@@ -45,6 +46,7 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
 - Temperature slider.
 - Max tokens slider.
 - Web-enhanced mode toggle.
+- Runtime debug panel toggle.
 - Model selector and runtime model switch.
 - Clear all conversations action.
 
@@ -101,7 +103,22 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
   - cached model -> start immediately
   - uncached model -> download then start
 
-## 10) Mobile and Touch Support
+## 10) Model Selection Modes
+
+- Manual model mode:
+  - exact selected model is used every request
+- `Auto` mode:
+  - request is routed by lightweight heuristics (complexity, coding/reasoning cues, image presence)
+  - route can trigger an in-place model hot swap before generation
+- Model hot swaps are always enabled and show progress in header status.
+
+## 11) Runtime Debug Panel
+
+- Optional panel under chat header.
+- Shows current runtime state snapshot and recent structured runtime events.
+- Includes clear action for the in-memory event buffer.
+
+## 12) Mobile and Touch Support
 
 - Click + `touchend` handlers for many interactive controls.
 - Sidebar slide-in behavior for smaller viewports.

@@ -38,9 +38,17 @@ Header:
 
 - `#sidebar-toggle`
 - `#model-badge`
+- `#hot-swap-status`
 - `#new-chat-btn`
 - `#voice-chat-btn`
 - `#settings-btn`
+
+Debug:
+
+- `#debug-panel`
+- `#debug-state`
+- `#debug-events`
+- `#debug-clear-btn`
 
 Messages:
 
@@ -73,6 +81,7 @@ Settings panel:
 - `#max-tokens`
 - `#tokens-value`
 - `#web-search-setting`
+- `#debug-panel-setting`
 - `#clear-history-btn`
 
 Voice overlay:

@@ -3,6 +3,15 @@
 // Multi-conversation support
 // ============================================
 import * as webllm from '@mlc-ai/web-llm';
+import {
+    initDatabase,
+    loadSettingsRecord,
+    saveSettingsRecord,
+    loadConversationsRecord,
+    saveConversationsRecord,
+    loadModelSelectionRecord,
+    saveModelSelectionRecord,
+} from './db/database.js';
 let whisperModulePromise = null;
 let whisperApi = null;
 
@@ -43,7 +52,6 @@ const startBtn = $('#start-btn');
 const messagesContainer = $('#messages');
 const userInput = $('#user-input');
 const sendBtn = $('#send-btn');
-const stopBtn = $('#stop-btn');
 const newChatBtn = $('#new-chat-btn');
 const settingsBtn = $('#settings-btn');
 const settingsPanel = $('#settings-panel');
@@ -60,6 +68,12 @@ const applyPresetBtn = $('#apply-preset-btn');
 const exportChatsBtn = $('#export-chats-btn');
 const importChatsBtn = $('#import-chats-btn');
 const importChatsInput = $('#import-chats-input');
+const hotSwapStatus = $('#hot-swap-status');
+const debugPanel = $('#debug-panel');
+const debugState = $('#debug-state');
+const debugEvents = $('#debug-events');
+const debugPanelSetting = $('#debug-panel-setting');
+const debugClearBtn = $('#debug-clear-btn');
 
 // Sidebar refs
 const sidebar = $('#sidebar');
@@ -101,6 +115,14 @@ const inputWrapper = $('.input-wrapper');
 // ---- Model Config ----
 const MODEL_CATALOG = [
     {
+        id: 'SmolLM2-135M-Instruct-q0f16-MLC',
+        name: 'SmolLM2 - 135M',
+        size: '~110MB',
+        vramMB: 300,
+        tier: 'nano',
+        desc: 'Tiny fallback model for low-memory devices.',
+    },
+    {
         id: 'SmolLM2-360M-Instruct-q0f16-MLC',
         name: 'SmolLM2 - 360M',
         size: '~200MB',
@@ -116,6 +138,14 @@ const MODEL_CATALOG = [
         tier: 'lite',
         thinking: true,
         desc: 'Fast and lightweight. Better reasoning than Qwen2.5-0.5B.',
+    },
+    {
+        id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+        name: 'Llama 3.2 - 1B',
+        size: '~750MB',
+        vramMB: 900,
+        tier: 'lite',
+        desc: 'Balanced small model with solid general chat quality.',
     },
     {
         id: 'SmolLM2-1.7B-Instruct-q4f16_1-MLC',
@@ -186,11 +216,95 @@ const MODEL_CATALOG = [
         thinking: true,
         desc: 'Best quality. Strong reasoning + thinking mode. Needs 6GB+ VRAM.',
     },
+    {
+        id: 'gemma-2-2b-it-q4f16_1-MLC',
+        name: 'Gemma 2 - 2B',
+        size: '~1.7GB',
+        vramMB: 2200,
+        tier: 'performance',
+        advanced: true,
+        desc: 'Advanced family option tuned for instruction following.',
+    },
+    {
+        id: 'Mistral-7B-Instruct-v0.3-q4f16_1-MLC',
+        name: 'Mistral 7B Instruct v0.3',
+        size: '~4.4GB',
+        vramMB: 5500,
+        tier: 'premium',
+        advanced: true,
+        desc: 'Advanced instruct-tuned 7B model.',
+    },
+    {
+        id: 'OpenHermes-2.5-Mistral-7B-q4f16_1-MLC',
+        name: 'OpenHermes 2.5 - Mistral 7B',
+        size: '~4.4GB',
+        vramMB: 5500,
+        tier: 'premium',
+        advanced: true,
+        desc: 'Advanced conversational Mistral 7B variant.',
+    },
+    {
+        id: 'NeuralHermes-2.5-Mistral-7B-q4f16_1-MLC',
+        name: 'NeuralHermes 2.5 - Mistral 7B',
+        size: '~4.4GB',
+        vramMB: 5500,
+        tier: 'premium',
+        advanced: true,
+        desc: 'Advanced alternative tuned for assistant-style chat.',
+    },
+    {
+        id: 'Hermes-2-Pro-Llama-3-8B-q4f16_1-MLC',
+        name: 'Hermes 2 Pro - Llama 3 8B',
+        size: '~5.1GB',
+        vramMB: 6200,
+        tier: 'premium',
+        advanced: true,
+        desc: 'Advanced Llama 8B family variant.',
+    },
+    {
+        id: 'Hermes-3-Llama-3.1-8B-q4f16_1-MLC',
+        name: 'Hermes 3 - Llama 3.1 8B',
+        size: '~5.1GB',
+        vramMB: 6200,
+        tier: 'premium',
+        advanced: true,
+        desc: 'Advanced Hermes 3 model for experimentation.',
+    },
+    {
+        id: 'DeepSeek-R1-Distill-Llama-8B-q4f16_1-MLC',
+        name: 'DeepSeek R1 Distill - Llama 8B',
+        size: '~5.3GB',
+        vramMB: 6500,
+        tier: 'premium',
+        thinking: true,
+        advanced: true,
+        desc: 'Advanced reasoning-focused Llama 8B distill.',
+    },
+    {
+        id: 'gemma-2-9b-it-q4f16_1-MLC',
+        name: 'Gemma 2 - 9B',
+        size: '~5.8GB',
+        vramMB: 7000,
+        tier: 'premium',
+        advanced: true,
+        desc: 'Large advanced Gemma model, requires high VRAM.',
+    },
 ];
 
 let selectedModelId = MODEL_CATALOG[0].id; // default to smallest
+const AUTO_MODEL_ID = '__auto__';
+let modelSelectionId = MODEL_CATALOG[0].id; // user preference (model id or AUTO_MODEL_ID)
 let pendingImage = null; // { dataUrl, file } - image waiting to be sent
 let thinkingEnabled = false; // default to no thinking
+let deviceCapabilities = null;
+let modelRoutingProfileMode = 'balanced';
+let modelSwitchPromise = null;
+let debugPanelEnabled = false;
+const DEBUG_EVENT_LIMIT = 100;
+const runtimeEvents = [];
+
+const SEND_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>';
+const STOP_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 
 function isVisionModel() {
     const model = getModelById(selectedModelId);
@@ -243,14 +357,371 @@ async function detectDeviceCapabilities() {
 }
 
 function autoSelectModel(capabilities) {
+    const curatedModels = MODEL_CATALOG.filter((m) => !m.advanced);
     // Find the best model that fits the detected VRAM
-    const eligible = MODEL_CATALOG.filter(m => m.vramMB <= capabilities.vramMB * 1.1); // 10% margin
-    if (eligible.length === 0) return MODEL_CATALOG[0]; // fallback to smallest
+    const eligible = curatedModels.filter(m => m.vramMB <= capabilities.vramMB * 1.1); // 10% margin
+    if (eligible.length === 0) return curatedModels[0] || MODEL_CATALOG[0]; // fallback to smallest curated
     return eligible[eligible.length - 1]; // pick the largest eligible
 }
 
 function getModelById(id) {
     return MODEL_CATALOG.find(m => m.id === id) || MODEL_CATALOG[0];
+}
+
+function getModelGroups() {
+    const curated = MODEL_CATALOG.filter((m) => !m.advanced);
+    const advanced = MODEL_CATALOG.filter((m) => m.advanced);
+    return { curated, advanced };
+}
+
+function renderModelOptions(models, options = {}) {
+    const selectionId = options.selectionId || modelSelectionId;
+    const recommendedId = options.recommendedId || null;
+    const capabilities = options.capabilities || { vramMB: 0 };
+    const highVramLabel = options.highVramLabel || 'High VRAM';
+
+    return models.map((m) => {
+        const isRec = m.id === recommendedId;
+        const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
+        return `<option value="${m.id}" ${m.id === selectionId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>${m.name} (${m.size})${isRec ? ' - Recommended' : ''}${tooLarge ? ` - ${highVramLabel}` : ''}</option>`;
+    }).join('');
+}
+
+function isAutoModelSelected() {
+    return modelSelectionId === AUTO_MODEL_ID;
+}
+
+async function getSavedModelSelectionId() {
+    const saved = await loadModelSelectionRecord();
+    if (saved === AUTO_MODEL_ID) return AUTO_MODEL_ID;
+    if (saved && MODEL_CATALOG.find((m) => m.id === saved)) return saved;
+    return null;
+}
+
+function saveModelSelectionId() {
+    void saveModelSelectionRecord(modelSelectionId).catch((err) => {
+        console.error('[DB] Failed to persist model selection:', err);
+    });
+}
+
+function resolveAutoModelCandidate() {
+    const recommended = autoSelectModel(deviceCapabilities || { vramMB: 0 });
+    return getModelById(recommended.id);
+}
+
+function syncModelSelectors() {
+    const settingsSelect = document.getElementById('model-select');
+    if (settingsSelect) settingsSelect.value = modelSelectionId;
+    const startSelect = document.getElementById('start-model-select');
+    if (startSelect) startSelect.value = modelSelectionId;
+}
+
+function applyModelUiState() {
+    const model = getModelById(selectedModelId);
+    const modelBadge = $('#model-badge');
+    if (modelBadge) {
+        modelBadge.textContent = isAutoModelSelected()
+            ? `Auto | ${model.name}`
+            : model.name;
+    }
+
+    if (isVisionModel()) {
+        imageBtn.style.display = 'flex';
+    } else {
+        imageBtn.style.display = 'none';
+        clearPendingImage();
+    }
+
+    if (isThinkingModel()) {
+        thinkToggle.style.display = 'flex';
+        thinkToggle.classList.toggle('active', thinkingEnabled);
+    } else {
+        thinkToggle.style.display = 'none';
+        thinkingEnabled = false;
+        thinkToggle.classList.remove('active');
+    }
+
+    if (isThinkingModel() && thinkingEnabled) {
+        userInput.placeholder = 'Ask anything... (Thinking mode enabled)';
+    } else if (isVisionModel()) {
+        userInput.placeholder = 'Ask anything... (you can attach images!)';
+    } else {
+        userInput.placeholder = 'Ask anything...';
+    }
+
+    updateInputDisclaimer();
+    syncModelSelectors();
+    renderDebugPanel();
+}
+
+function setHotSwapStatus(text, percent = null, isActive = true) {
+    if (!hotSwapStatus) return;
+    if (!isActive) {
+        hotSwapStatus.style.display = 'none';
+        hotSwapStatus.classList.remove('active');
+        hotSwapStatus.textContent = '';
+        return;
+    }
+
+    hotSwapStatus.style.display = 'inline-flex';
+    hotSwapStatus.classList.add('active');
+    if (typeof percent === 'number' && Number.isFinite(percent)) {
+        hotSwapStatus.textContent = `${text} ${percent}%`;
+    } else {
+        hotSwapStatus.textContent = text;
+    }
+}
+
+function getRuntimeStateSummary() {
+    const selectionLabel = isAutoModelSelected()
+        ? 'Auto'
+        : getModelById(modelSelectionId).name;
+    const activeLabel = getModelById(selectedModelId).name;
+    return `Selection: ${selectionLabel} | Active: ${activeLabel} | Generating: ${isGenerating ? 'yes' : 'no'} | GenerationId: ${activeGenerationId}`;
+}
+
+function renderDebugPanel() {
+    if (!debugPanel || !debugState || !debugEvents) return;
+
+    debugPanel.style.display = debugPanelEnabled ? 'block' : 'none';
+    if (!debugPanelEnabled) return;
+
+    debugState.textContent = getRuntimeStateSummary();
+    debugEvents.innerHTML = runtimeEvents
+        .slice()
+        .reverse()
+        .map((event) => {
+            const payload = JSON.stringify(event.data || {});
+            return `<div class="debug-event-row"><span class="debug-event-time">${event.time}</span><span class="debug-event-name">${event.name}</span><span class="debug-event-data">${escapeHtml(payload)}</span></div>`;
+        })
+        .join('');
+}
+
+function logRuntimeEvent(name, data = {}) {
+    const now = new Date();
+    runtimeEvents.push({
+        at: now.toISOString(),
+        time: now.toLocaleTimeString(),
+        name,
+        data: {
+            ...data,
+            selectionMode: isAutoModelSelected() ? 'auto' : 'manual',
+            activeModelId: selectedModelId,
+            activeModelName: getModelById(selectedModelId).name,
+            generationId: activeGenerationId,
+            generating: isGenerating,
+        },
+    });
+
+    if (runtimeEvents.length > DEBUG_EVENT_LIMIT) {
+        runtimeEvents.splice(0, runtimeEvents.length - DEBUG_EVENT_LIMIT);
+    }
+
+    renderDebugPanel();
+}
+
+function parseProgressPercent(reportText) {
+    const text = String(reportText || '');
+    const match = text.match(/(\d+)%/);
+    if (!match) return null;
+    const parsed = parseInt(match[1], 10);
+    if (Number.isNaN(parsed)) return null;
+    return parsed;
+}
+
+function getModelTierRank(model) {
+    const rank = {
+        nano: 0,
+        lite: 1,
+        standard: 2,
+        performance: 3,
+        vision: 3,
+        premium: 4,
+    };
+    return rank[model?.tier] ?? 1;
+}
+
+function getEligibleModels(options = {}) {
+    const requireVision = options.requireVision === true;
+    const excludeVision = options.excludeVision === true;
+    const requireThinking = options.requireThinking === true;
+    const includeAdvanced = options.includeAdvanced === true;
+    const vramCap = (deviceCapabilities?.vramMB || 0) * 1.12;
+
+    let models = MODEL_CATALOG.filter((model) => {
+        if (!includeAdvanced && model.advanced) return false;
+        if (requireVision && !model.vision) return false;
+        if (excludeVision && model.vision) return false;
+        if (requireThinking && !model.thinking) return false;
+        if (vramCap > 0 && model.vramMB > vramCap) return false;
+        return true;
+    });
+
+    if (!models.length) {
+        models = MODEL_CATALOG.filter((model) => {
+            if (!includeAdvanced && model.advanced) return false;
+            if (requireVision && !model.vision) return false;
+            if (excludeVision && model.vision) return false;
+            if (requireThinking && !model.thinking) return false;
+            return true;
+        });
+    }
+
+    return models.sort((a, b) => a.vramMB - b.vramMB);
+}
+
+function analyzeRoutingTask(text) {
+    const raw = String(text || '');
+    const t = raw.toLowerCase();
+    const qCount = (raw.match(/\?/g) || []).length;
+    const longPrompt = raw.length > 500;
+    const coding = /(code|debug|bug|stack trace|exception|typescript|javascript|python|refactor|algorithm|sql|api)/i.test(t);
+    const reasoning = /(analy[sz]e|compare|tradeoff|root cause|plan|strategy|prove|derive|optimi[sz]e|diagnose)/i.test(t);
+    const creative = /(poem|story|creative|brainstorm|lyrics|name ideas)/i.test(t);
+    const complex = longPrompt || qCount > 1 || coding || reasoning;
+    return { coding, reasoning, creative, complex, shortPrompt: raw.length < 100 };
+}
+
+function scoreModelForTask(model, task, hasImage) {
+    let score = getModelTierRank(model) * 20;
+
+    if (model.thinking && (task.reasoning || task.coding || task.complex)) score += 25;
+    if (!model.thinking && task.shortPrompt) score += 4;
+    if (task.creative && getModelTierRank(model) >= 2) score += 6;
+    if (hasImage && model.vision) score += 100;
+    if (!hasImage && model.vision) score -= 15;
+
+    if (modelRoutingProfileMode === 'speed') {
+        score -= model.vramMB / 150;
+        if (task.shortPrompt) score += 6;
+    } else if (modelRoutingProfileMode === 'quality') {
+        score += model.vramMB / 300;
+        if (model.thinking) score += 10;
+    } else {
+        score -= model.vramMB / 350;
+        if (!task.complex && getModelTierRank(model) >= 4) score -= 8;
+    }
+
+    return score;
+}
+
+function chooseModelRoute(text, hasImage) {
+    if (hasImage) {
+        const visionChoices = getEligibleModels({ requireVision: true });
+        if (!visionChoices.length) {
+            return {
+                targetModelId: selectedModelId,
+                reason: 'No compatible vision model available',
+            };
+        }
+        const target = visionChoices[visionChoices.length - 1];
+        return {
+            targetModelId: target.id,
+            reason: `Image detected. Routed to ${target.name}`,
+        };
+    }
+
+    const task = analyzeRoutingTask(text);
+    const eligible = getEligibleModels({ excludeVision: true });
+    if (!eligible.length) {
+        return {
+            targetModelId: selectedModelId,
+            reason: 'No compatible models available',
+        };
+    }
+
+    let bestModel = eligible[0];
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const model of eligible) {
+        const score = scoreModelForTask(model, task, false);
+        if (score > bestScore) {
+            bestModel = model;
+            bestScore = score;
+        }
+    }
+
+    const currentModel = getModelById(selectedModelId);
+    const currentScore = scoreModelForTask(currentModel, task, false);
+    if (bestModel.id !== currentModel.id && bestScore - currentScore < 8) {
+        return {
+            targetModelId: currentModel.id,
+            reason: `Stayed on ${currentModel.name} (similar score)`,
+        };
+    }
+
+    return {
+        targetModelId: bestModel.id,
+        reason: `Routed to ${bestModel.name} for this request`,
+    };
+}
+
+async function switchModelById(newModelId, options = {}) {
+    if (!newModelId || newModelId === selectedModelId || !engine) {
+        return { switched: false, reason: 'No switch needed' };
+    }
+
+    if (modelSwitchPromise) {
+        await modelSwitchPromise;
+        if (newModelId === selectedModelId) {
+            return { switched: false, reason: 'Model already switched by a pending request' };
+        }
+    }
+
+    const targetModel = getModelById(newModelId);
+    const onProgress = typeof options.onProgress === 'function' ? options.onProgress : null;
+    setHotSwapStatus(`Hot swapping to ${targetModel.name}...`);
+    logRuntimeEvent('hot_swap_start', {
+        fromModelId: selectedModelId,
+        toModelId: newModelId,
+        toModelName: targetModel.name,
+    });
+    let lastLoggedPct = -1;
+
+    modelSwitchPromise = (async () => {
+        await engine.reload(newModelId, {
+            initProgressCallback: (report) => {
+                const pct = parseProgressPercent(report?.text || '');
+                setHotSwapStatus(`Hot swapping to ${targetModel.name}...`, pct);
+                if (typeof pct === 'number' && pct !== lastLoggedPct) {
+                    lastLoggedPct = pct;
+                    logRuntimeEvent('hot_swap_progress', {
+                        toModelId: newModelId,
+                        percent: pct,
+                    });
+                }
+                if (onProgress) onProgress(report);
+            },
+        });
+    })();
+
+    try {
+        await modelSwitchPromise;
+        selectedModelId = newModelId;
+        applyModelUiState();
+        setHotSwapStatus(`Switched to ${targetModel.name}`, 100);
+        setTimeout(() => {
+            if (modelSwitchPromise) return;
+            setHotSwapStatus('', null, false);
+        }, 1200);
+        logRuntimeEvent('hot_swap_done', {
+            toModelId: newModelId,
+            toModelName: targetModel.name,
+        });
+        return { switched: true, reason: `Switched to ${targetModel.name}` };
+    } catch (err) {
+        setHotSwapStatus('Hot swap failed', null, true);
+        setTimeout(() => {
+            if (modelSwitchPromise) return;
+            setHotSwapStatus('', null, false);
+        }, 1600);
+        logRuntimeEvent('hot_swap_fail', {
+            toModelId: newModelId,
+            error: String(err?.message || err || ''),
+        });
+        throw err;
+    } finally {
+        modelSwitchPromise = null;
+    }
 }
 
 const PROMPT_PRESETS = [
@@ -297,15 +768,17 @@ async function getWhisperApi() {
 
 function setGeneratingState(active) {
     isGenerating = active;
-    sendBtn.disabled = active || (!userInput.value.trim() && !pendingImage);
-    if (stopBtn) {
-        stopBtn.classList.toggle('visible', active);
-    }
+    sendBtn.disabled = !active && (!userInput.value.trim() && !pendingImage);
+    sendBtn.classList.toggle('generating', active);
+    sendBtn.title = active ? 'Stop generation' : 'Send message';
+    sendBtn.innerHTML = active ? STOP_ICON_SVG : SEND_ICON_SVG;
+    renderDebugPanel();
 }
 
 function requestGenerationCancel() {
     if (!isGenerating) return;
     generationCancelRequested = true;
+    logRuntimeEvent('generation_cancel', { source: 'user' });
     try {
         if (engine && typeof engine.interruptGenerate === 'function') {
             engine.interruptGenerate();
@@ -627,18 +1100,16 @@ function buildVisionCompactContext(messages) {
 // Web Search
 // ============================================
 
-function toggleWebSearch(enabled) {
+function toggleWebSearch(enabled, options = {}) {
+    const shouldPersist = options.persist !== false;
     webSearchEnabled = enabled;
     webSearchToggle.classList.toggle('active', enabled);
     webSearchSetting.checked = enabled;
     updateInputDisclaimer();
 
-    // Save preference
-    try {
-        const settings = JSON.parse(localStorage.getItem('neuralbox_settings') || '{}');
-        settings.webSearch = enabled;
-        localStorage.setItem('neuralbox_settings', JSON.stringify(settings));
-    } catch (e) { /* ignore */ }
+    if (shouldPersist) {
+        saveSettings();
+    }
 }
 
 function updateInputDisclaimer() {
@@ -810,36 +1281,38 @@ async function init() {
         return;
     }
 
-    loadSettings();
+    await initDatabase();
+    await loadSettings();
     renderPromptPresets();
 
     // Detect device capabilities and auto-select model
     statusText.textContent = 'Detecting device capabilities...';
-    const capabilities = await detectDeviceCapabilities();
-    const recommended = autoSelectModel(capabilities);
+    deviceCapabilities = await detectDeviceCapabilities();
+    const recommended = autoSelectModel(deviceCapabilities);
 
-    // Check if user has a saved model preference
-    const savedModelId = localStorage.getItem('neuralbox_model');
-    if (savedModelId && MODEL_CATALOG.find(m => m.id === savedModelId)) {
-        selectedModelId = savedModelId;
+    // Check if user has a saved model preference (manual model or auto)
+    const savedSelectionId = await getSavedModelSelectionId();
+    if (savedSelectionId) {
+        modelSelectionId = savedSelectionId;
     } else {
-        selectedModelId = recommended.id;
+        modelSelectionId = recommended.id;
     }
+    selectedModelId = isAutoModelSelected() ? recommended.id : modelSelectionId;
 
-    const selectedModel = getModelById(selectedModelId);
-
-    // Update badge
-    const modelBadge = $('#model-badge');
-    if (modelBadge) modelBadge.textContent = selectedModel.name;
+    applyModelUiState();
+    logRuntimeEvent('app_init', {
+        gpu: deviceCapabilities?.gpuName || 'unknown',
+        vramMB: deviceCapabilities?.vramMB || 0,
+    });
 
     // Render the initial model selector on the loading screen
-    renderStartModelSelector(capabilities, recommended);
+    renderStartModelSelector(deviceCapabilities, recommended);
 
     // Check cache and update UI
-    await updateStartScreenUi(capabilities, recommended);
+    await updateStartScreenUi(deviceCapabilities, recommended);
 
     // Populate model selector in settings
-    renderModelSelector(capabilities, recommended);
+    renderModelSelector(deviceCapabilities, recommended);
 
     startBtn.addEventListener('click', loadModel);
     startBtn.addEventListener('touchend', (e) => {
@@ -851,14 +1324,27 @@ async function init() {
 function renderStartModelSelector(capabilities, recommended) {
     const container = document.getElementById('start-model-selector-group');
     if (!container) return;
+    const groups = getModelGroups();
 
     let html = `<select id="start-model-select" style="width: 100%; padding: 0.7rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font); cursor: pointer; outline: none;">`;
-    for (const m of MODEL_CATALOG) {
-        const isRec = m.id === recommended.id;
-        const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
-        html += `<option value="${m.id}" ${m.id === selectedModelId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>`;
-        html += `${m.name} (${m.size})${isRec ? ' - Recommended' : ''}${tooLarge ? ' - High VRAM' : ''}`;
-        html += `</option>`;
+    html += `<option value="${AUTO_MODEL_ID}" ${modelSelectionId === AUTO_MODEL_ID ? 'selected' : ''}>Auto (smart per request)</option>`;
+    html += `<optgroup label="Curated Models">`;
+    html += renderModelOptions(groups.curated, {
+        selectionId: modelSelectionId,
+        recommendedId: recommended.id,
+        capabilities,
+        highVramLabel: 'High VRAM',
+    });
+    html += `</optgroup>`;
+    if (groups.advanced.length > 0) {
+        html += `<optgroup label="Advanced Models">`;
+        html += renderModelOptions(groups.advanced, {
+            selectionId: modelSelectionId,
+            recommendedId: recommended.id,
+            capabilities,
+            highVramLabel: 'High VRAM',
+        });
+        html += `</optgroup>`;
     }
     html += `</select>`;
     html += `<p class="setting-hint" style="margin-top:0.4rem; text-align:center;">Your GPU: <strong>${capabilities.gpuName}</strong> (~${capabilities.vramMB}MB VRAM)</p>`;
@@ -868,16 +1354,10 @@ function renderStartModelSelector(capabilities, recommended) {
     const select = document.getElementById('start-model-select');
     if (select) {
         select.addEventListener('change', async () => {
-            selectedModelId = select.value;
-            localStorage.setItem('neuralbox_model', selectedModelId);
-            
-            // Sync the settings panel dropdown if it exists
-            const settingsSelect = document.getElementById('model-select');
-            if (settingsSelect) settingsSelect.value = selectedModelId;
-
-            // Update badge
-            const modelBadge = $('#model-badge');
-            if (modelBadge) modelBadge.textContent = getModelById(selectedModelId).name;
+            modelSelectionId = select.value;
+            saveModelSelectionId();
+            selectedModelId = isAutoModelSelected() ? recommended.id : modelSelectionId;
+            applyModelUiState();
 
             // Update cache status
             await updateStartScreenUi(capabilities, recommended);
@@ -886,14 +1366,17 @@ function renderStartModelSelector(capabilities, recommended) {
 }
 
 async function updateStartScreenUi(capabilities, recommended) {
-    const selectedModel = getModelById(selectedModelId);
+    const selectedModel = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
+    const displayName = isAutoModelSelected()
+        ? `Auto (starts with ${selectedModel.name})`
+        : selectedModel.name;
     
     statusText.innerHTML = `Checking cache state...`;
     startBtn.style.display = 'none';
     
     let isCached = false;
     try {
-        isCached = await webllm.hasModelInCache(selectedModelId);
+        isCached = await webllm.hasModelInCache(selectedModel.id);
     } catch(err) {
         console.warn('Cache check failed:', err);
     }
@@ -904,11 +1387,11 @@ async function updateStartScreenUi(capabilities, recommended) {
     if (isCached) {
         startBtn.textContent = 'Start App (Cached)';
         noteEl.innerHTML = 'Model is ready locally. <strong>No download required.</strong>';
-        statusText.innerHTML = `Ready to load <strong>${selectedModel.name}</strong>`;
+        statusText.innerHTML = `Ready to load <strong>${displayName}</strong>`;
     } else {
         startBtn.textContent = 'Download & Start';
         noteEl.innerHTML = `~${selectedModel.size} download, will be cached for future visits.`;
-        statusText.innerHTML = `First-time setup for <strong>${selectedModel.name}</strong>`;
+        statusText.innerHTML = `First-time setup for <strong>${displayName}</strong>`;
     }
     
     startBtn.style.display = 'inline-flex';
@@ -917,7 +1400,9 @@ async function updateStartScreenUi(capabilities, recommended) {
 // ---- Model Loading ----
 async function loadModel() {
     startBtn.style.display = 'none';
-    const model = getModelById(selectedModelId);
+    const targetModel = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
+    selectedModelId = targetModel.id;
+    const model = targetModel;
     statusText.textContent = `Loading ${model.name}...`;
 
     try {
@@ -937,20 +1422,21 @@ async function loadModel() {
             }
         };
 
-        engine = await webllm.CreateMLCEngine(selectedModelId, {
+        engine = await webllm.CreateMLCEngine(targetModel.id, {
             initProgressCallback,
         });
 
         progressFill.style.width = '100%';
         progressPercent.textContent = '100%';
         statusText.textContent = `${model.name} loaded! Starting chat...`;
-
-        // Update badge
-        const modelBadge = $('#model-badge');
-        if (modelBadge) modelBadge.textContent = model.name;
+        applyModelUiState();
+        logRuntimeEvent('model_loaded', {
+            modelId: selectedModelId,
+            modelName: model.name,
+        });
 
         setTimeout(() => {
-            showChatScreen();
+            void showChatScreen();
         }, 500);
     } catch (err) {
         console.error('Model loading failed:', err);
@@ -963,15 +1449,28 @@ async function loadModel() {
 function renderModelSelector(capabilities, recommended) {
     const container = document.getElementById('model-selector-group');
     if (!container) return;
+    const groups = getModelGroups();
 
     let html = `<label for="model-select">AI Model</label>`;
     html += `<select id="model-select">`;
-    for (const m of MODEL_CATALOG) {
-        const isRec = m.id === recommended.id;
-        const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
-        html += `<option value="${m.id}" ${m.id === selectedModelId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>`;
-        html += `${m.name} (${m.size})${isRec ? ' - Recommended' : ''}${tooLarge ? ' - May be too large' : ''}`;
-        html += `</option>`;
+    html += `<option value="${AUTO_MODEL_ID}" ${modelSelectionId === AUTO_MODEL_ID ? 'selected' : ''}>Auto (smart per request)</option>`;
+    html += `<optgroup label="Curated Models">`;
+    html += renderModelOptions(groups.curated, {
+        selectionId: modelSelectionId,
+        recommendedId: recommended.id,
+        capabilities,
+        highVramLabel: 'May be too large',
+    });
+    html += `</optgroup>`;
+    if (groups.advanced.length > 0) {
+        html += `<optgroup label="Advanced Models">`;
+        html += renderModelOptions(groups.advanced, {
+            selectionId: modelSelectionId,
+            recommendedId: recommended.id,
+            capabilities,
+            highVramLabel: 'May be too large',
+        });
+        html += `</optgroup>`;
     }
     html += `</select>`;
     html += `<p class="setting-hint">`;
@@ -987,8 +1486,8 @@ function renderModelSelector(capabilities, recommended) {
 
     if (select) {
         select.addEventListener('change', () => {
-            const newId = select.value;
-            if (newId !== selectedModelId) {
+            const newSelection = select.value;
+            if (newSelection !== modelSelectionId) {
                 switchBtn.style.display = 'block';
             } else {
                 switchBtn.style.display = 'none';
@@ -998,85 +1497,51 @@ function renderModelSelector(capabilities, recommended) {
 
     if (switchBtn) {
         switchBtn.addEventListener('click', async () => {
-            selectedModelId = select.value;
-            localStorage.setItem('neuralbox_model', selectedModelId);
-            const model = getModelById(selectedModelId);
+            const requestedSelection = select.value;
+            const targetModel = requestedSelection === AUTO_MODEL_ID
+                ? resolveAutoModelCandidate()
+                : getModelById(requestedSelection);
+            if (requestedSelection === modelSelectionId && targetModel.id === selectedModelId) {
+                switchBtn.style.display = 'none';
+                return;
+            }
+            if (isGenerating) {
+                alert('Please wait for generation to finish before switching models.');
+                return;
+            }
+            modelSelectionId = requestedSelection;
+            saveModelSelectionId();
+            const model = targetModel;
 
             // Close settings
             const settingsPanel = $('#settings-panel');
             if (settingsPanel) settingsPanel.classList.remove('open');
 
-            // Show loading screen
-            chatScreen.classList.remove('active');
-            loadingScreen.classList.add('active');
-            progressFill.style.width = '0%';
-            progressPercent.textContent = '0%';
-            statusText.textContent = `Switching to ${model.name}...`;
-            startBtn.style.display = 'none';
-
             try {
-                await engine.reload(selectedModelId, {
-                    initProgressCallback: (report) => {
-                        const text = report.text || '';
-                        statusText.textContent = text;
-                        const match = text.match(/(\d+)%/);
-                        if (match) {
-                            const pct = parseInt(match[1]);
-                            progressFill.style.width = pct + '%';
-                            progressPercent.textContent = pct + '%';
-                        }
-                    },
-                });
-
-                progressFill.style.width = '100%';
-                progressPercent.textContent = '100%';
-                statusText.textContent = `${model.name} loaded!`;
-
-                const modelBadge = $('#model-badge');
-                if (modelBadge) modelBadge.textContent = model.name;
-
-                setTimeout(() => showChatScreen(), 500);
+                switchBtn.disabled = true;
+                switchBtn.textContent = `Hot swapping to ${model.name}...`;
+                await switchModelById(targetModel.id);
+                switchBtn.style.display = 'none';
             } catch (err) {
                 console.error('Model switch failed:', err);
-                statusText.textContent = `Failed: ${err.message}`;
-                startBtn.style.display = 'inline-flex';
-                startBtn.textContent = 'Retry';
+                alert(`Model switch failed: ${err.message}`);
+            } finally {
+                switchBtn.disabled = false;
+                switchBtn.textContent = 'Switch Model';
             }
         });
     }
 }
 
 // ---- Screen Management ----
-function showChatScreen() {
+async function showChatScreen() {
     loadingScreen.classList.remove('active');
     chatScreen.classList.add('active');
     userInput.focus();
-
-    // Show image button if vision model is loaded
-    if (isVisionModel()) {
-        imageBtn.style.display = 'flex';
-        userInput.placeholder = 'Ask anything... (you can attach images!)';
-    } else {
-        imageBtn.style.display = 'none';
-        userInput.placeholder = 'Ask anything...';
-        clearPendingImage();
-    }
-    updateInputDisclaimer();
-
-    // Show think toggle if thinking model is loaded
-    if (isThinkingModel()) {
-        thinkToggle.style.display = 'flex';
-        if (thinkingEnabled) {
-            thinkToggle.classList.add('active');
-        } else {
-            thinkToggle.classList.remove('active');
-        }
-    } else {
-        thinkToggle.style.display = 'none';
-    }
+    applyModelUiState();
 
     // Load conversations from storage
-    loadConversations();
+    await loadConversations();
 
     // If no conversations, show welcome screen (no active conversation)
     if (conversations.length === 0) {
@@ -1340,13 +1805,45 @@ async function sendMessage(text) {
     const aiMsg = addMessageToDOM('assistant', '');
     const contentEl = aiMsg.querySelector('.message-content');
     contentEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+    const hasAssistantHistory = conv.messages.some((m) => m?.role === 'assistant');
 
     scrollToBottom();
     generationCancelRequested = false;
     const generationId = ++activeGenerationId;
     setGeneratingState(true);
+    logRuntimeEvent('generation_start', {
+        generationId,
+        hasImage: Boolean(imageDataUrl),
+        userChars: userText.length,
+    });
 
     try {
+        if (isAutoModelSelected()) {
+            const routing = chooseModelRoute(userText, Boolean(imageDataUrl));
+            logRuntimeEvent('route_decision', {
+                reason: routing.reason,
+                targetModelId: routing.targetModelId,
+                currentModelId: selectedModelId,
+            });
+            if (routing.targetModelId !== selectedModelId) {
+                if (hasAssistantHistory) {
+                    contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Preparing the best model for this request...</div>';
+                    scrollToBottom();
+                }
+                await switchModelById(routing.targetModelId, {
+                    onProgress: () => {
+                        if (hasAssistantHistory) {
+                            contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Loading selected model...</div>';
+                        }
+                    },
+                });
+                visionDebug('Model routing switch', {
+                    routeReason: routing.reason,
+                    targetModel: routing.targetModelId,
+                });
+            }
+        }
+
         // Web search if enabled
         let searchResults = [];
         if (webSearchEnabled && userText) {
@@ -1489,6 +1986,11 @@ async function sendMessage(text) {
         }
 
         // Save to conversation
+        logRuntimeEvent('generation_done', {
+            generationId,
+            tokenCount,
+            elapsedSec: Number(elapsed.toFixed(2)),
+        });
         conv.messages.push({ role: 'assistant', content: fullResponse });
         conv.updatedAt = Date.now();
         saveConversations();
@@ -1499,9 +2001,17 @@ async function sendMessage(text) {
             if (!contentEl.textContent?.trim()) {
                 contentEl.innerHTML = '<span style="color: #9ca3af;">Generation stopped.</span>';
             }
+            logRuntimeEvent('generation_cancelled', {
+                generationId,
+                reason: 'interrupted',
+            });
         } else {
             console.error('Generation error:', err);
             contentEl.innerHTML = `<span style="color: #f87171;">Error: ${err.message}</span>`;
+            logRuntimeEvent('generation_error', {
+                generationId,
+                error: String(err?.message || err || ''),
+            });
         }
     } finally {
         if (generationId === activeGenerationId) {
@@ -1617,38 +2127,15 @@ function renderWelcome() {
 
 // ---- Persistence ----
 function saveConversations() {
-    try {
-        localStorage.setItem('neuralbox_conversations', JSON.stringify(conversations));
-    } catch (e) { /* ignore quota errors */ }
+    void saveConversationsRecord(conversations).catch((err) => {
+        console.error('[DB] Failed to save conversations:', err);
+    });
 }
 
-function loadConversations() {
+async function loadConversations() {
     try {
-        const saved = localStorage.getItem('neuralbox_conversations');
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            conversations = Array.isArray(parsed) ? parsed : [];
-        }
-
-        // Migrate old single-conversation format
-        if (conversations.length === 0) {
-            const oldMessages = localStorage.getItem('neuralbox_messages');
-            if (oldMessages) {
-                const msgs = JSON.parse(oldMessages);
-                if (msgs.length > 0) {
-                    const conv = {
-                        id: generateId(),
-                        title: generateTitle(msgs),
-                        messages: msgs,
-                        createdAt: Date.now(),
-                        updatedAt: Date.now(),
-                    };
-                    conversations.push(conv);
-                    saveConversations();
-                    localStorage.removeItem('neuralbox_messages');
-                }
-            }
-        }
+        const parsed = await loadConversationsRecord();
+        conversations = Array.isArray(parsed) ? parsed : [];
 
         let normalizedAny = false;
         for (const conv of conversations) {
@@ -1689,12 +2176,13 @@ function applyPromptPreset(presetId) {
     saveSettings();
 }
 
-function exportConversationsToFile() {
+async function exportConversationsToFile() {
+    const storedSettings = await loadSettingsRecord();
     const payload = {
         version: 1,
         exportedAt: new Date().toISOString(),
         conversations,
-        settings: JSON.parse(localStorage.getItem('neuralbox_settings') || '{}'),
+        settings: storedSettings,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1718,11 +2206,11 @@ async function importConversationsFromFile(file) {
         pinned: Boolean(conv?.pinned),
         messages: Array.isArray(conv?.messages) ? conv.messages : [],
     }));
-    localStorage.setItem('neuralbox_conversations', JSON.stringify(conversations));
+    await saveConversationsRecord(conversations);
 
     if (parsed?.settings && typeof parsed.settings === 'object') {
-        localStorage.setItem('neuralbox_settings', JSON.stringify(parsed.settings));
-        loadSettings();
+        await saveSettingsRecord(parsed.settings);
+        await loadSettings();
     }
 
     const visible = getVisibleConversations();
@@ -1736,9 +2224,9 @@ async function importConversationsFromFile(file) {
 }
 
 // ---- Settings ----
-function loadSettings() {
+async function loadSettings() {
     try {
-        const settings = JSON.parse(localStorage.getItem('neuralbox_settings') || '{}');
+        const settings = await loadSettingsRecord();
         systemPrompt.value = settings.systemPrompt || DEFAULT_SYSTEM_PROMPT;
         if (systemPrompt.value === LEGACY_SYSTEM_PROMPT) {
             systemPrompt.value = DEFAULT_SYSTEM_PROMPT;
@@ -1752,25 +2240,34 @@ function loadSettings() {
             tokensValue.textContent = settings.maxTokens;
         }
         if (settings.webSearch) {
-            toggleWebSearch(true);
+            toggleWebSearch(true, { persist: false });
+        } else {
+            toggleWebSearch(false, { persist: false });
         }
         verboseVisionLogs = Boolean(settings.verboseVisionLogs);
+        debugPanelEnabled = Boolean(settings.debugPanelEnabled);
         if (visionVerboseSetting) {
             visionVerboseSetting.checked = verboseVisionLogs;
         }
+        if (debugPanelSetting) {
+            debugPanelSetting.checked = debugPanelEnabled;
+        }
+        renderDebugPanel();
     } catch (e) { /* ignore */ }
 }
 
 function saveSettings() {
-    try {
-        localStorage.setItem('neuralbox_settings', JSON.stringify({
-            systemPrompt: systemPrompt.value,
-            temperature: parseFloat(temperatureSlider.value),
-            maxTokens: parseInt(maxTokensSlider.value),
-            webSearch: webSearchEnabled,
-            verboseVisionLogs: verboseVisionLogs,
-        }));
-    } catch (e) { /* ignore */ }
+    const snapshot = {
+        systemPrompt: systemPrompt.value,
+        temperature: parseFloat(temperatureSlider.value),
+        maxTokens: parseInt(maxTokensSlider.value),
+        webSearch: webSearchEnabled,
+        verboseVisionLogs: verboseVisionLogs,
+        debugPanelEnabled: debugPanelEnabled,
+    };
+    void saveSettingsRecord(snapshot).catch((err) => {
+        console.error('[DB] Failed to save settings:', err);
+    });
 }
 
 // ---- Suggestion Chips ----
@@ -1793,18 +2290,21 @@ function bindSuggestionChips() {
 // ============================================
 
 // Send message
-sendBtn.addEventListener('click', () => sendMessage(userInput.value));
-sendBtn.addEventListener('touchend', (e) => {
-    e.preventDefault();
+sendBtn.addEventListener('click', () => {
+    if (isGenerating) {
+        requestGenerationCancel();
+        return;
+    }
     sendMessage(userInput.value);
 });
-if (stopBtn) {
-    stopBtn.addEventListener('click', requestGenerationCancel);
-    stopBtn.addEventListener('touchend', (e) => {
-        e.preventDefault();
+sendBtn.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    if (isGenerating) {
         requestGenerationCancel();
-    });
-}
+        return;
+    }
+    sendMessage(userInput.value);
+});
 
 // Enter to send
 userInput.addEventListener('keydown', (e) => {
@@ -1817,7 +2317,7 @@ userInput.addEventListener('keydown', (e) => {
 // Auto-resize
 userInput.addEventListener('input', () => {
     autoResizeInput();
-    sendBtn.disabled = !userInput.value.trim() || isGenerating;
+    sendBtn.disabled = !isGenerating && (!userInput.value.trim() && !pendingImage);
 });
 
 // New chat (header button)
@@ -1892,13 +2392,31 @@ if (visionVerboseSetting) {
         saveSettings();
     });
 }
+if (debugPanelSetting) {
+    debugPanelSetting.addEventListener('change', () => {
+        debugPanelEnabled = Boolean(debugPanelSetting.checked);
+        renderDebugPanel();
+        saveSettings();
+    });
+}
+if (debugClearBtn) {
+    debugClearBtn.addEventListener('click', () => {
+        runtimeEvents.length = 0;
+        logRuntimeEvent('debug_cleared', { source: 'user' });
+    });
+}
 if (promptPresetSelect && applyPresetBtn) {
     applyPresetBtn.addEventListener('click', () => {
         applyPromptPreset(promptPresetSelect.value);
     });
 }
 if (exportChatsBtn) {
-    exportChatsBtn.addEventListener('click', exportConversationsToFile);
+    exportChatsBtn.addEventListener('click', () => {
+        void exportConversationsToFile().catch((err) => {
+            console.error('Export failed:', err);
+            alert(`Export failed: ${err.message}`);
+        });
+    });
 }
 if (importChatsBtn && importChatsInput) {
     importChatsBtn.addEventListener('click', () => importChatsInput.click());
@@ -2395,14 +2913,9 @@ function normalizeVisionDataUrl(dataUrl, longEdge = 1344, shortEdge = 1008) {
 // Think toggle handling
 thinkToggle.addEventListener('click', () => {
     thinkingEnabled = !thinkingEnabled;
-    if (thinkingEnabled) {
-        thinkToggle.classList.add('active');
-        userInput.placeholder = 'Ask anything... (Thinking mode enabled)';
-    } else {
-        thinkToggle.classList.remove('active');
-        userInput.placeholder = 'Ask anything...';
-    }
+    applyModelUiState();
 });
 
 // ---- Start ----
+setGeneratingState(false);
 init();

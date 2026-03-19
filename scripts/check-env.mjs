@@ -1,0 +1,34 @@
+import { existsSync } from 'node:fs';
+
+function fail(message) {
+  console.error(`Environment check failed: ${message}`);
+  process.exit(1);
+}
+
+const [major] = process.versions.node.split('.').map((x) => Number.parseInt(x, 10));
+if (Number.isNaN(major)) {
+  fail(`Cannot parse Node version: ${process.versions.node}`);
+}
+
+if (major < 20 || major >= 26) {
+  fail(`Node ${process.versions.node} is unsupported. Use Node >=20 and <26.`);
+}
+
+const requiredFiles = [
+  'package.json',
+  'vite.config.js',
+  'src/main.js',
+  'src/db/database.js',
+  'rules.md',
+];
+
+for (const file of requiredFiles) {
+  if (!existsSync(file)) {
+    fail(`Missing required project file: ${file}`);
+  }
+}
+
+console.log('Environment check passed.');
+console.log(`Node: ${process.versions.node}`);
+console.log('Project files and runtime constraints are valid.');
+
