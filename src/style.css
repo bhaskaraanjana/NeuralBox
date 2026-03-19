@@ -314,6 +314,27 @@ body {
   flex-shrink: 0;
 }
 
+.sidebar-tools {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+#conversation-search {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 0.82rem;
+  padding: 0.5rem 0.65rem;
+  outline: none;
+}
+
+#conversation-search:focus {
+  border-color: var(--border-glow);
+}
+
 .sidebar-title {
   font-size: 0.9rem;
   font-weight: 600;
@@ -825,6 +846,38 @@ body {
   box-shadow: var(--shadow-glow);
 }
 
+.conv-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+
+.conv-item:hover .conv-pin,
+.conv-item.pinned .conv-pin {
+  opacity: 1;
+}
+
+.conv-pin:hover {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+}
+
+.conv-item.pinned .conv-title::before {
+  content: 'Pinned • ';
+  color: #facc15;
+  font-weight: 600;
+}
+
 .input-wrapper.drag-active {
   border-color: rgba(74, 222, 128, 0.55);
   box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
@@ -1034,6 +1087,15 @@ body {
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+}
+
+.setting-inline-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.setting-inline-row > *:first-child {
+  flex: 1;
 }
 
 .btn-danger {

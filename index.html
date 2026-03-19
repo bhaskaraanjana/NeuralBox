@@ -62,6 +62,9 @@
             </svg>
           </button>
         </div>
+        <div class="sidebar-tools">
+          <input id="conversation-search" type="text" placeholder="Search conversations..." />
+        </div>
         <div id="conversation-list" class="conversation-list"></div>
         <div class="sidebar-footer">
           <div class="sidebar-footer-info">🔒 All stored locally</div>
@@ -153,6 +156,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
             </button>
           </div>
+          <button id="stop-btn" class="stop-btn" title="Stop generation">Stop generating</button>
           <div id="image-preview" class="image-preview" style="display:none;">
             <img id="image-preview-img" src="" alt="Attached image" />
             <button id="image-preview-clear" class="image-preview-clear" title="Remove image">✕</button>
@@ -194,6 +198,13 @@
             <input type="range" id="max-tokens" min="128" max="4096" step="128" value="1024" />
           </div>
           <div class="setting-group">
+            <label for="prompt-preset-select">Prompt Presets</label>
+            <div class="setting-inline-row">
+              <select id="prompt-preset-select"></select>
+              <button id="apply-preset-btn" class="btn-primary" type="button">Apply</button>
+            </div>
+          </div>
+          <div class="setting-group">
             <label class="toggle-label">
               <span>🌐 Web-Enhanced Mode</span>
               <input type="checkbox" id="web-search-setting" />
@@ -201,6 +212,22 @@
             </label>
             <p class="setting-hint">When enabled, searches the web to improve answers. Search queries are sent to
               DuckDuckGo.</p>
+          </div>
+          <div class="setting-group">
+            <label class="toggle-label">
+              <span>Verbose Vision Logs</span>
+              <input type="checkbox" id="vision-verbose-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Adds extra diagnostics to the console for image requests and retries.</p>
+          </div>
+          <div class="setting-group">
+            <label>Conversation Backup</label>
+            <div class="setting-inline-row">
+              <button id="export-chats-btn" class="btn-primary" type="button">Export</button>
+              <button id="import-chats-btn" class="btn-primary" type="button">Import</button>
+            </div>
+            <input type="file" id="import-chats-input" accept="application/json" style="display:none;" />
           </div>
           <div class="setting-group">
             <button id="clear-history-btn" class="btn-danger">Clear All Conversations</button>
@@ -227,3 +254,7 @@
 </body>
 
 </html>
+
+
+
+

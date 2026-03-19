@@ -3,7 +3,8 @@
 // Multi-conversation support
 // ============================================
 import * as webllm from '@mlc-ai/web-llm';
-import { initWhisper, transcribeAudio, isWhisperReady } from './whisper.js';
+let whisperModulePromise = null;
+let whisperApi = null;
 
 const LEGACY_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You can ONLY have text conversations. You CANNOT browse the web, read images, run code, access files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
 const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. If the active model supports vision, you can analyze user-provided images. You cannot browse the web unless the app explicitly provides search results, and you cannot run code, access local files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
@@ -12,6 +13,10 @@ const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running
 let engine = null;
 let isGenerating = false;
 let webSearchEnabled = false;
+let generationCancelRequested = false;
+let activeGenerationId = 0;
+let conversationSearchQuery = '';
+let verboseVisionLogs = false;
 
 // Voice state
 let isRecording = false;
@@ -38,6 +43,7 @@ const startBtn = $('#start-btn');
 const messagesContainer = $('#messages');
 const userInput = $('#user-input');
 const sendBtn = $('#send-btn');
+const stopBtn = $('#stop-btn');
 const newChatBtn = $('#new-chat-btn');
 const settingsBtn = $('#settings-btn');
 const settingsPanel = $('#settings-panel');
@@ -49,6 +55,11 @@ const tempValue = $('#temp-value');
 const maxTokensSlider = $('#max-tokens');
 const tokensValue = $('#tokens-value');
 const clearHistoryBtn = $('#clear-history-btn');
+const promptPresetSelect = $('#prompt-preset-select');
+const applyPresetBtn = $('#apply-preset-btn');
+const exportChatsBtn = $('#export-chats-btn');
+const importChatsBtn = $('#import-chats-btn');
+const importChatsInput = $('#import-chats-input');
 
 // Sidebar refs
 const sidebar = $('#sidebar');
@@ -56,10 +67,12 @@ const sidebarOverlay = $('#sidebar-overlay');
 const sidebarToggle = $('#sidebar-toggle');
 const sidebarNewChat = $('#sidebar-new-chat');
 const conversationList = $('#conversation-list');
+const conversationSearch = $('#conversation-search');
 
 // Web search refs
 const webSearchToggle = $('#web-search-toggle');
 const webSearchSetting = $('#web-search-setting');
+const visionVerboseSetting = $('#vision-verbose-setting');
 const inputDisclaimer = $('#input-disclaimer');
 
 // Voice refs
@@ -240,6 +253,91 @@ function getModelById(id) {
     return MODEL_CATALOG.find(m => m.id === id) || MODEL_CATALOG[0];
 }
 
+const PROMPT_PRESETS = [
+    {
+        id: 'balanced',
+        label: 'Balanced Assistant',
+        prompt: DEFAULT_SYSTEM_PROMPT,
+    },
+    {
+        id: 'writer',
+        label: 'Writer',
+        prompt: 'You are a concise writing assistant. Improve clarity, structure, and tone while preserving user intent. Offer 2-3 variants when useful.',
+    },
+    {
+        id: 'coder',
+        label: 'Coder',
+        prompt: 'You are a practical coding assistant. Provide correct code first, then short explanations. Call out assumptions and suggest tests.',
+    },
+    {
+        id: 'research',
+        label: 'Research',
+        prompt: 'You are a research assistant. Organize answers into key points, evidence, and caveats. Highlight uncertainty instead of guessing.',
+    },
+    {
+        id: 'tutor',
+        label: 'Tutor',
+        prompt: 'You are a patient tutor. Explain step-by-step, check understanding, and use examples before introducing advanced terms.',
+    },
+];
+
+async function getWhisperApi() {
+    if (whisperApi) return whisperApi;
+    if (!whisperModulePromise) {
+        whisperModulePromise = import('./whisper.js');
+    }
+    const mod = await whisperModulePromise;
+    whisperApi = {
+        initWhisper: mod.initWhisper,
+        transcribeAudio: mod.transcribeAudio,
+        isWhisperReady: mod.isWhisperReady,
+    };
+    return whisperApi;
+}
+
+function setGeneratingState(active) {
+    isGenerating = active;
+    sendBtn.disabled = active || (!userInput.value.trim() && !pendingImage);
+    if (stopBtn) {
+        stopBtn.classList.toggle('visible', active);
+    }
+}
+
+function requestGenerationCancel() {
+    if (!isGenerating) return;
+    generationCancelRequested = true;
+    try {
+        if (engine && typeof engine.interruptGenerate === 'function') {
+            engine.interruptGenerate();
+        }
+    } catch (err) {
+        console.warn('interruptGenerate failed:', err);
+    }
+}
+
+function getSortedConversations() {
+    return [...conversations].sort((a, b) => {
+        const ap = a?.pinned ? 1 : 0;
+        const bp = b?.pinned ? 1 : 0;
+        if (ap !== bp) return bp - ap;
+        return (b?.updatedAt || 0) - (a?.updatedAt || 0);
+    });
+}
+
+function getVisibleConversations() {
+    const sorted = getSortedConversations();
+    if (!conversationSearchQuery) return sorted;
+    const q = conversationSearchQuery.toLowerCase();
+    return sorted.filter((conv) => {
+        const title = String(conv?.title || '').toLowerCase();
+        const text = conv?.messages
+            ?.map((m) => getMessageText(m?.content || ''))
+            .join(' ')
+            .toLowerCase() || '';
+        return title.includes(q) || text.includes(q);
+    });
+}
+
 // ---- Helpers ----
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -315,6 +413,16 @@ function getEffectiveSystemPrompt() {
 
 function safeStartsWith(value, prefix) {
     return typeof value === 'string' && value.startsWith(prefix);
+}
+
+function isVisionRecoverableError(err) {
+    const errText = String(err?.message || err || '');
+    return /startsWith|embed\.shape|image_url\.url/i.test(errText);
+}
+
+function visionDebug(label, payload) {
+    if (!verboseVisionLogs) return;
+    console.info(`[Vision Debug] ${label}`, payload);
 }
 
 function calculatePhiVisionResizeShape(imageHeight, imageWidth) {
@@ -462,7 +570,7 @@ async function normalizeConversationVisionImages(conv) {
             msg.content[i] = { ...part, image_url: { url: nextUrl } };
 
             changed += 1;
-            console.info('[Vision] Migrated stored image to landscape 4:3', {
+            visionDebug('Migrated stored image to landscape 4:3', {
                 before: `${dims.width}x${dims.height}`,
                 after: `${normalized.targetWidth}x${normalized.targetHeight}`,
                 embedEstimate: estimatePhiVisionEmbedSize(normalized.targetHeight, normalized.targetWidth).embedSize,
@@ -471,6 +579,48 @@ async function normalizeConversationVisionImages(conv) {
     }
 
     return changed;
+}
+
+function updateLatestUserImageUrl(conv, dataUrl) {
+    if (!conv || !Array.isArray(conv.messages) || !dataUrl) return false;
+    for (let i = conv.messages.length - 1; i >= 0; i--) {
+        const msg = conv.messages[i];
+        if (!msg || msg.role !== 'user' || !Array.isArray(msg.content)) continue;
+        let changed = false;
+        msg.content = msg.content.map((part) => {
+            if (part?.type !== 'image_url') return part;
+            changed = true;
+            return { ...part, image_url: { url: dataUrl } };
+        });
+        return changed;
+    }
+    return false;
+}
+
+function buildVisionCompactContext(messages) {
+    if (!Array.isArray(messages) || messages.length === 0) return [];
+    const latestIndex = messages.length - 1;
+
+    return messages.map((msg, index) => {
+        if (!msg || msg.role !== 'user' || !Array.isArray(msg.content)) return msg;
+        const text = getMessageText(msg.content).trim();
+        const imageUrl = getMessageImageUrl(msg.content);
+
+        if (index === latestIndex && imageUrl) {
+            return {
+                role: 'user',
+                content: [
+                    { type: 'text', text: text || 'What is in this image?' },
+                    { type: 'image_url', image_url: { url: imageUrl } },
+                ],
+            };
+        }
+
+        return {
+            role: 'user',
+            content: text || 'Please continue.',
+        };
+    });
 }
 
 // ============================================
@@ -661,6 +811,7 @@ async function init() {
     }
 
     loadSettings();
+    renderPromptPresets();
 
     // Detect device capabilities and auto-select model
     statusText.textContent = 'Detecting device capabilities...';
@@ -933,7 +1084,8 @@ function showChatScreen() {
         renderWelcome();
     } else {
         // Load the most recent conversation
-        switchToConversation(conversations[0].id);
+        const visible = getVisibleConversations();
+        if (visible.length > 0) switchToConversation(visible[0].id);
     }
 
     renderSidebar();
@@ -948,6 +1100,7 @@ function createConversation() {
         id: generateId(),
         title: 'New conversation',
         messages: [],
+        pinned: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
     };
@@ -992,8 +1145,9 @@ function deleteConversation(id) {
     conversations = conversations.filter((c) => c.id !== id);
 
     if (activeConversationId === id) {
-        if (conversations.length > 0) {
-            switchToConversation(conversations[0].id);
+        const visible = getVisibleConversations();
+        if (visible.length > 0) {
+            switchToConversation(visible[0].id);
         } else {
             activeConversationId = null;
             renderWelcome();
@@ -1013,25 +1167,29 @@ function getActiveConversation() {
 // ============================================
 
 function renderSidebar() {
-    if (conversations.length === 0) {
+    const visibleConversations = getVisibleConversations();
+    if (visibleConversations.length === 0) {
         conversationList.innerHTML = `
       <div class="conv-empty">
-        <p>No conversations yet.</p>
-        <p>Start a new chat!</p>
+        <p>${conversations.length === 0 ? 'No conversations yet.' : 'No matches found.'}</p>
+        <p>${conversations.length === 0 ? 'Start a new chat!' : 'Try another search.'}</p>
       </div>
     `;
         return;
     }
 
-    conversationList.innerHTML = conversations
+    conversationList.innerHTML = visibleConversations
         .map(
             (conv) => `
-      <div class="conv-item ${conv.id === activeConversationId ? 'active' : ''}" data-id="${conv.id}">
+      <div class="conv-item ${conv.id === activeConversationId ? 'active' : ''} ${conv.pinned ? 'pinned' : ''}" data-id="${conv.id}">
         <span class="conv-icon">[chat]</span>
         <div class="conv-info">
           <div class="conv-title">${escapeHtml(conv.title)}</div>
           <div class="conv-time">${formatTime(conv.updatedAt)}</div>
         </div>
+        <button class="conv-pin" data-pin-id="${conv.id}" title="${conv.pinned ? 'Unpin conversation' : 'Pin conversation'}">
+          ${conv.pinned ? 'Unpin' : 'Pin'}
+        </button>
         <button class="conv-delete" data-delete-id="${conv.id}" title="Delete conversation">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
@@ -1044,13 +1202,25 @@ function renderSidebar() {
     conversationList.querySelectorAll('.conv-item').forEach((item) => {
         item.addEventListener('click', (e) => {
             // Don't switch if clicking delete
-            if (e.target.closest('.conv-delete')) return;
+            if (e.target.closest('.conv-delete') || e.target.closest('.conv-pin')) return;
             switchToConversation(item.dataset.id);
         });
         item.addEventListener('touchend', (e) => {
-            if (e.target.closest('.conv-delete')) return;
+            if (e.target.closest('.conv-delete') || e.target.closest('.conv-pin')) return;
             e.preventDefault();
             switchToConversation(item.dataset.id);
+        });
+    });
+
+    conversationList.querySelectorAll('.conv-pin').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleConversationPin(btn.dataset.pinId);
+        });
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleConversationPin(btn.dataset.pinId);
         });
     });
 
@@ -1135,7 +1305,7 @@ async function sendMessage(text) {
         const est = imageMeta
             ? estimatePhiVisionEmbedSize(imageMeta.targetHeight, imageMeta.targetWidth)
             : null;
-        console.info('[Vision] Sending image prompt', {
+        visionDebug('Sending image prompt', {
             model: selectedModelId,
             source: imageMeta ? `${imageMeta.sourceWidth}x${imageMeta.sourceHeight}` : 'unknown',
             prepared: imageMeta ? `${imageMeta.targetWidth}x${imageMeta.targetHeight}` : 'unknown',
@@ -1172,8 +1342,9 @@ async function sendMessage(text) {
     contentEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
 
     scrollToBottom();
-
-    isGenerating = true;
+    generationCancelRequested = false;
+    const generationId = ++activeGenerationId;
+    setGeneratingState(true);
 
     try {
         // Web search if enabled
@@ -1195,6 +1366,13 @@ async function sendMessage(text) {
 
         const temperature = parseFloat(temperatureSlider.value);
         const maxTokens = parseInt(maxTokensSlider.value);
+        const createStream = (requestMessages) => engine.chat.completions.create({
+            messages: requestMessages,
+            temperature,
+            max_tokens: maxTokens,
+            stream: true,
+            stream_options: { include_usage: true },
+        });
 
         contentEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
 
@@ -1203,54 +1381,78 @@ async function sendMessage(text) {
         const startTime = performance.now();
 
         let chunks;
-        try {
-            chunks = await engine.chat.completions.create({
-                messages,
-                temperature,
-                max_tokens: maxTokens,
-                stream: true,
-                stream_options: { include_usage: true },
-            });
-        } catch (err) {
-            const errText = String(err?.message || err || '');
-            const canRetryVision = Boolean(imageDataUrl && isVisionModel() && /startsWith|embed\\.shape/i.test(errText));
-            if (!canRetryVision) throw err;
+        const isVisionRequest = Boolean(imageDataUrl && isVisionModel());
+        let requestMessages = messages;
+        let finalErr = null;
 
-            console.warn('[Vision] Generation failed, retrying with normalized fallback image', {
-                reason: errText,
-                model: selectedModelId,
-            });
-            const fallback = await normalizeVisionDataUrl(imageDataUrl, 1008, 756);
-            const fallbackDataUrl = fallback.dataUrl;
-            const fallbackEst = estimatePhiVisionEmbedSize(fallback.targetHeight, fallback.targetWidth);
-            console.info('[Vision] Retry image prepared', {
-                target: `${fallback.targetWidth}x${fallback.targetHeight}`,
-                crop: `${fallbackEst.cropH}x${fallbackEst.cropW}`,
-                embedEstimate: fallbackEst.embedSize,
-            });
-            const latestUser = conv.messages[conv.messages.length - 1];
-            if (latestUser && Array.isArray(latestUser.content)) {
-                latestUser.content = latestUser.content.map((part) => {
-                    if (part?.type !== 'image_url') return part;
-                    return { ...part, image_url: { url: fallbackDataUrl } };
-                });
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (generationCancelRequested || generationId !== activeGenerationId) {
+                throw new Error('Generation cancelled by user.');
             }
+            try {
+                chunks = await createStream(requestMessages);
+                finalErr = null;
+                break;
+            } catch (err) {
+                if (generationCancelRequested || generationId !== activeGenerationId) {
+                    throw new Error('Generation cancelled by user.');
+                }
+                finalErr = err;
+                if (!isVisionRequest || !isVisionRecoverableError(err)) {
+                    throw err;
+                }
 
-            const retryMessages = [
-                { role: 'system', content: sysContent },
-                ...conv.messages,
-            ];
+                if (attempt === 0) {
+                    console.warn('[Vision] Generation failed, retrying with compatibility resize', {
+                        reason: String(err?.message || err || ''),
+                        model: selectedModelId,
+                    });
+                    contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Vision retry: applying compatibility resize...</div>';
+                    scrollToBottom();
 
-            chunks = await engine.chat.completions.create({
-                messages: retryMessages,
-                temperature,
-                max_tokens: maxTokens,
-                stream: true,
-                stream_options: { include_usage: true },
-            });
+                    const fallback = await normalizeVisionDataUrl(imageDataUrl, 1008, 756);
+                    const fallbackDataUrl = fallback.dataUrl;
+                    const fallbackEst = estimatePhiVisionEmbedSize(fallback.targetHeight, fallback.targetWidth);
+                    visionDebug('Retry image prepared (compatibility)', {
+                        target: `${fallback.targetWidth}x${fallback.targetHeight}`,
+                        crop: `${fallbackEst.cropH}x${fallbackEst.cropW}`,
+                        embedEstimate: fallbackEst.embedSize,
+                    });
+                    updateLatestUserImageUrl(conv, fallbackDataUrl);
+                    requestMessages = [
+                        { role: 'system', content: sysContent },
+                        ...conv.messages,
+                    ];
+                    continue;
+                }
+
+                if (attempt === 1) {
+                    console.warn('[Vision] Second vision attempt failed, retrying with compact context', {
+                        reason: String(err?.message || err || ''),
+                        model: selectedModelId,
+                    });
+                    contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Vision retry: compacting context for compatibility...</div>';
+                    scrollToBottom();
+
+                    const canonical = await normalizeVisionDataUrl(imageDataUrl, 1344, 1008);
+                    updateLatestUserImageUrl(conv, canonical.dataUrl);
+                    requestMessages = [
+                        { role: 'system', content: sysContent },
+                        ...buildVisionCompactContext(conv.messages),
+                    ];
+                    continue;
+                }
+            }
+        }
+
+        if (!chunks) {
+            throw finalErr || new Error('Vision generation failed after automatic retries.');
         }
 
         for await (const chunk of chunks) {
+            if (generationCancelRequested || generationId !== activeGenerationId) {
+                break;
+            }
             const delta = chunk.choices?.[0]?.delta?.content || '';
             if (delta) {
                 fullResponse += delta;
@@ -1258,6 +1460,13 @@ async function sendMessage(text) {
                 contentEl.innerHTML = formatMarkdown(fullResponse);
                 scrollToBottom();
             }
+        }
+
+        if (generationCancelRequested || generationId !== activeGenerationId) {
+            if (!fullResponse.trim()) {
+                contentEl.innerHTML = '<span style="color: #9ca3af;">Generation stopped.</span>';
+            }
+            return;
         }
 
         const elapsed = (performance.now() - startTime) / 1000;
@@ -1285,12 +1494,20 @@ async function sendMessage(text) {
         saveConversations();
         renderSidebar();
     } catch (err) {
-        console.error('Generation error:', err);
-        contentEl.innerHTML = `<span style="color: #f87171;">Error: ${err.message}</span>`;
+        const errText = String(err?.message || err || '');
+        if (/cancelled by user/i.test(errText) || generationCancelRequested || generationId !== activeGenerationId) {
+            if (!contentEl.textContent?.trim()) {
+                contentEl.innerHTML = '<span style="color: #9ca3af;">Generation stopped.</span>';
+            }
+        } else {
+            console.error('Generation error:', err);
+            contentEl.innerHTML = `<span style="color: #f87171;">Error: ${err.message}</span>`;
+        }
+    } finally {
+        if (generationId === activeGenerationId) {
+            setGeneratingState(false);
+        }
     }
-
-    isGenerating = false;
-    sendBtn.disabled = !userInput.value.trim();
 }
 
 // ---- DOM Helpers ----
@@ -1435,6 +1652,7 @@ function loadConversations() {
 
         let normalizedAny = false;
         for (const conv of conversations) {
+            conv.pinned = Boolean(conv?.pinned);
             if (normalizeConversationForModel(conv)) {
                 normalizedAny = true;
             }
@@ -1453,6 +1671,68 @@ function clearAllConversations() {
     saveConversations();
     renderSidebar();
     renderWelcome();
+}
+
+function renderPromptPresets() {
+    if (!promptPresetSelect) return;
+    promptPresetSelect.innerHTML = PROMPT_PRESETS
+        .map((preset) => `<option value="${preset.id}">${preset.label}</option>`)
+        .join('');
+    const match = PROMPT_PRESETS.find((p) => p.prompt === (systemPrompt.value || '').trim());
+    promptPresetSelect.value = match?.id || 'balanced';
+}
+
+function applyPromptPreset(presetId) {
+    const preset = PROMPT_PRESETS.find((p) => p.id === presetId);
+    if (!preset) return;
+    systemPrompt.value = preset.prompt;
+    saveSettings();
+}
+
+function exportConversationsToFile() {
+    const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        conversations,
+        settings: JSON.parse(localStorage.getItem('neuralbox_settings') || '{}'),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = url;
+    a.download = `neuralbox-export-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+async function importConversationsFromFile(file) {
+    if (!file) return;
+    const raw = await file.text();
+    const parsed = JSON.parse(raw);
+    const importedConversations = Array.isArray(parsed?.conversations) ? parsed.conversations : [];
+    conversations = importedConversations.map((conv) => ({
+        ...conv,
+        pinned: Boolean(conv?.pinned),
+        messages: Array.isArray(conv?.messages) ? conv.messages : [],
+    }));
+    localStorage.setItem('neuralbox_conversations', JSON.stringify(conversations));
+
+    if (parsed?.settings && typeof parsed.settings === 'object') {
+        localStorage.setItem('neuralbox_settings', JSON.stringify(parsed.settings));
+        loadSettings();
+    }
+
+    const visible = getVisibleConversations();
+    if (visible.length > 0) {
+        switchToConversation(visible[0].id);
+    } else {
+        activeConversationId = null;
+        renderWelcome();
+    }
+    renderSidebar();
 }
 
 // ---- Settings ----
@@ -1474,6 +1754,10 @@ function loadSettings() {
         if (settings.webSearch) {
             toggleWebSearch(true);
         }
+        verboseVisionLogs = Boolean(settings.verboseVisionLogs);
+        if (visionVerboseSetting) {
+            visionVerboseSetting.checked = verboseVisionLogs;
+        }
     } catch (e) { /* ignore */ }
 }
 
@@ -1483,6 +1767,8 @@ function saveSettings() {
             systemPrompt: systemPrompt.value,
             temperature: parseFloat(temperatureSlider.value),
             maxTokens: parseInt(maxTokensSlider.value),
+            webSearch: webSearchEnabled,
+            verboseVisionLogs: verboseVisionLogs,
         }));
     } catch (e) { /* ignore */ }
 }
@@ -1512,6 +1798,13 @@ sendBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
     sendMessage(userInput.value);
 });
+if (stopBtn) {
+    stopBtn.addEventListener('click', requestGenerationCancel);
+    stopBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        requestGenerationCancel();
+    });
+}
 
 // Enter to send
 userInput.addEventListener('keydown', (e) => {
@@ -1547,9 +1840,18 @@ sidebarNewChat.addEventListener('touchend', (e) => {
     e.preventDefault();
     createConversation();
 });
+if (conversationSearch) {
+    conversationSearch.addEventListener('input', () => {
+        conversationSearchQuery = String(conversationSearch.value || '').trim();
+        renderSidebar();
+    });
+}
 
 // Settings
-settingsBtn.addEventListener('click', () => settingsPanel.classList.add('open'));
+settingsBtn.addEventListener('click', () => {
+    renderPromptPresets();
+    settingsPanel.classList.add('open');
+});
 settingsOverlay.addEventListener('click', () => {
     settingsPanel.classList.remove('open');
     saveSettings();
@@ -1584,6 +1886,35 @@ webSearchToggle.addEventListener('touchend', (e) => {
     toggleWebSearch(!webSearchEnabled);
 });
 webSearchSetting.addEventListener('change', () => toggleWebSearch(webSearchSetting.checked));
+if (visionVerboseSetting) {
+    visionVerboseSetting.addEventListener('change', () => {
+        verboseVisionLogs = Boolean(visionVerboseSetting.checked);
+        saveSettings();
+    });
+}
+if (promptPresetSelect && applyPresetBtn) {
+    applyPresetBtn.addEventListener('click', () => {
+        applyPromptPreset(promptPresetSelect.value);
+    });
+}
+if (exportChatsBtn) {
+    exportChatsBtn.addEventListener('click', exportConversationsToFile);
+}
+if (importChatsBtn && importChatsInput) {
+    importChatsBtn.addEventListener('click', () => importChatsInput.click());
+    importChatsInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            await importConversationsFromFile(file);
+        } catch (err) {
+            console.error('Import failed:', err);
+            alert(`Import failed: ${err.message}`);
+        } finally {
+            importChatsInput.value = '';
+        }
+    });
+}
 
 // Voice / mic (regular mode)
 micBtn.addEventListener('click', handleMicClick);
@@ -1659,12 +1990,13 @@ async function processRecording(audioBlob) {
     micBtn.classList.add('loading');
 
     try {
-        await initWhisper((progress) => {
+        const whisper = await getWhisperApi();
+        await whisper.initWhisper((progress) => {
             voiceStatus.innerHTML = `<span class="voice-spinner"></span> Loading Whisper... ${progress}%`;
         });
 
         voiceStatus.innerHTML = '<span class="voice-spinner"></span> Transcribing...';
-        const text = await transcribeAudio(audioBlob);
+        const text = await whisper.transcribeAudio(audioBlob);
 
         if (text) {
             userInput.value = userInput.value ? userInput.value + ' ' + text : text;
@@ -1796,12 +2128,13 @@ async function voiceChatListen() {
         setVoiceChatState('thinking');
         voiceChatText.textContent = 'Transcribing...';
 
-        await initWhisper((p) => {
+        const whisper = await getWhisperApi();
+        await whisper.initWhisper((p) => {
             voiceChatText.textContent = `Loading Whisper... ${p}%`;
         });
 
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const userText = await transcribeAudio(audioBlob);
+        const userText = await whisper.transcribeAudio(audioBlob);
 
         if (!userText || !voiceChatActive) {
             voiceChatText.textContent = 'No speech detected. Tap to try again.';
@@ -1957,7 +2290,7 @@ function attachImageFile(file) {
             imagePreview.style.display = 'flex';
             sendBtn.disabled = false; // Allow sending with just image
             const est = estimatePhiVisionEmbedSize(normalized.targetHeight, normalized.targetWidth);
-            console.info('[Vision] Image prepared', {
+            visionDebug('Image prepared', {
                 source: `${normalized.sourceWidth}x${normalized.sourceHeight}`,
                 target: `${normalized.targetWidth}x${normalized.targetHeight}`,
                 sourceOrientation: normalized.orientation,
@@ -2005,6 +2338,15 @@ function normalizeVisionImage(file) {
         };
         reader.readAsDataURL(file);
     });
+}
+
+function toggleConversationPin(id) {
+    const conv = conversations.find((c) => c.id === id);
+    if (!conv) return;
+    conv.pinned = !conv.pinned;
+    conv.updatedAt = Date.now();
+    saveConversations();
+    renderSidebar();
 }
 
 function normalizeVisionDataUrl(dataUrl, longEdge = 1344, shortEdge = 1008) {
