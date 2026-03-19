@@ -825,6 +825,12 @@ body {
   box-shadow: var(--shadow-glow);
 }
 
+.input-wrapper.drag-active {
+  border-color: rgba(74, 222, 128, 0.55);
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+  background: rgba(74, 222, 128, 0.04);
+}
+
 #user-input {
   flex: 1;
   background: transparent;

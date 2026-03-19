@@ -1,9 +1,12 @@
 // ============================================
-// NeuralBox — Main Application
+// NeuralBox - Main Application
 // Multi-conversation support
 // ============================================
 import * as webllm from '@mlc-ai/web-llm';
 import { initWhisper, transcribeAudio, isWhisperReady } from './whisper.js';
+
+const LEGACY_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You can ONLY have text conversations. You CANNOT browse the web, read images, run code, access files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
+const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. If the active model supports vision, you can analyze user-provided images. You cannot browse the web unless the app explicitly provides search results, and you cannot run code, access local files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
 
 // ---- State ----
 let engine = null;
@@ -80,12 +83,13 @@ const imageInput = $('#image-input');
 const imagePreview = $('#image-preview');
 const imagePreviewImg = $('#image-preview-img');
 const imagePreviewClear = $('#image-preview-clear');
+const inputWrapper = $('.input-wrapper');
 
 // ---- Model Config ----
 const MODEL_CATALOG = [
     {
         id: 'SmolLM2-360M-Instruct-q0f16-MLC',
-        name: 'SmolLM2 — 360M',
+        name: 'SmolLM2 - 360M',
         size: '~200MB',
         vramMB: 400,
         tier: 'nano',
@@ -93,7 +97,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'Qwen3-0.6B-q4f16_1-MLC',
-        name: 'Qwen 3 — 0.6B',
+        name: 'Qwen 3 - 0.6B',
         size: '~400MB',
         vramMB: 600,
         tier: 'lite',
@@ -102,7 +106,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'SmolLM2-1.7B-Instruct-q4f16_1-MLC',
-        name: 'SmolLM2 — 1.7B',
+        name: 'SmolLM2 - 1.7B',
         size: '~1GB',
         vramMB: 1200,
         tier: 'standard',
@@ -110,7 +114,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'Qwen3-1.7B-q4f16_1-MLC',
-        name: 'Qwen 3 — 1.7B',
+        name: 'Qwen 3 - 1.7B',
         size: '~1.1GB',
         vramMB: 1500,
         tier: 'standard',
@@ -119,7 +123,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-        name: 'Llama 3.2 — 3B',
+        name: 'Llama 3.2 - 3B',
         size: '~2GB',
         vramMB: 2500,
         tier: 'performance',
@@ -127,7 +131,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'Qwen3-4B-q4f16_1-MLC',
-        name: 'Qwen 3 — 4B ⭐',
+        name: 'Qwen 3 - 4B',
         size: '~2.5GB',
         vramMB: 3500,
         tier: 'performance',
@@ -136,7 +140,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
-        name: 'Phi 3.5 Mini — 3.8B',
+        name: 'Phi 3.5 Mini - 3.8B',
         size: '~2.4GB',
         vramMB: 3500,
         tier: 'performance',
@@ -144,7 +148,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
-        name: 'Phi 3.5 Vision — 4.2B 👁️',
+        name: 'Phi 3.5 Vision - 4.2B',
         size: '~2.7GB',
         vramMB: 4000,
         tier: 'vision',
@@ -153,7 +157,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
-        name: 'DeepSeek R1 Distill — 7B',
+        name: 'DeepSeek R1 Distill - 7B',
         size: '~4.5GB',
         vramMB: 5500,
         tier: 'premium',
@@ -162,7 +166,7 @@ const MODEL_CATALOG = [
     },
     {
         id: 'Qwen3-8B-q4f16_1-MLC',
-        name: 'Qwen 3 — 8B',
+        name: 'Qwen 3 - 8B',
         size: '~5GB',
         vramMB: 6000,
         tier: 'premium',
@@ -172,7 +176,7 @@ const MODEL_CATALOG = [
 ];
 
 let selectedModelId = MODEL_CATALOG[0].id; // default to smallest
-let pendingImage = null; // { dataUrl, file } — image waiting to be sent
+let pendingImage = null; // { dataUrl, file } - image waiting to be sent
 let thinkingEnabled = false; // default to no thinking
 
 function isVisionModel() {
@@ -202,7 +206,7 @@ async function detectDeviceCapabilities() {
         const maxStorageBuffer = adapter.limits?.maxStorageBufferBindingSize || 0;
         const estimatedVRAM = Math.max(maxBuffer, maxStorageBuffer);
 
-        // Convert to MB — maxBufferSize is in bytes
+        // Convert to MB - maxBufferSize is in bytes
         result.vramMB = Math.round(estimatedVRAM / (1024 * 1024));
 
         // Fallback heuristic if limits are too small (some browsers cap reported values)
@@ -260,10 +264,213 @@ function generateTitle(messages) {
     // Use the first user message as a title, truncated
     const firstUserMsg = messages.find((m) => m.role === 'user');
     if (firstUserMsg) {
-        const text = firstUserMsg.content.trim();
-        return text.length > 40 ? text.slice(0, 40) + '…' : text;
+        const text = getMessageText(firstUserMsg.content)
+            .replace(/^\/(no_)?think\n/, '')
+            .trim();
+        if (!text && getMessageImageUrl(firstUserMsg.content)) {
+            return 'Image conversation';
+        }
+        return text.length > 40 ? text.slice(0, 40) + '...' : text;
     }
     return 'New conversation';
+}
+
+function getMessageText(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content
+            .filter((part) => part?.type === 'text' && typeof part.text === 'string')
+            .map((part) => part.text)
+            .join('\n')
+            .trim();
+    }
+    return '';
+}
+
+function getMessageImageUrl(content) {
+    if (!Array.isArray(content)) return null;
+    const imagePart = content.find((part) => part?.type === 'image_url');
+    if (!imagePart) return null;
+    if (typeof imagePart.image_url === 'string') return imagePart.image_url;
+    return imagePart.image_url?.url || null;
+}
+
+function getRenderableMessage(role, content) {
+    const text = getMessageText(content);
+    const imageUrl = role === 'user' ? getMessageImageUrl(content) : null;
+
+    return {
+        text: role === 'user' ? text.replace(/^\/(no_)?think\n/, '') : text,
+        imageUrl,
+    };
+}
+
+function getEffectiveSystemPrompt() {
+    const rawPrompt = systemPrompt.value?.trim() || DEFAULT_SYSTEM_PROMPT;
+    if (rawPrompt === LEGACY_SYSTEM_PROMPT) {
+        return DEFAULT_SYSTEM_PROMPT;
+    }
+    return rawPrompt;
+}
+
+function safeStartsWith(value, prefix) {
+    return typeof value === 'string' && value.startsWith(prefix);
+}
+
+function calculatePhiVisionResizeShape(imageHeight, imageWidth) {
+    const hdNum = 16;
+    const ratio = imageWidth / imageHeight;
+    let scale = 1;
+    while (scale * Math.ceil(scale / ratio) <= hdNum) {
+        scale += 1;
+    }
+    scale -= 1;
+    const newW = scale * 336;
+    const newH = Math.floor(newW / ratio);
+    return [newH, newW];
+}
+
+function calculatePhiVisionCropShape(imageHeight, imageWidth) {
+    const [resizedHeight, resizedWidth] = calculatePhiVisionResizeShape(imageHeight, imageWidth);
+    const padH = Math.ceil(resizedHeight / 336) * 336;
+    const padW = resizedWidth;
+    return [Math.floor(padH / 336), Math.floor(padW / 336)];
+}
+
+function estimatePhiVisionEmbedSize(imageHeight, imageWidth) {
+    const [cropH, cropW] = calculatePhiVisionCropShape(imageHeight, imageWidth);
+    const subTokens = cropH * 12 * ((cropW * 12) + 1);
+    const globalTokens = 12 * (12 + 1);
+    return {
+        cropH,
+        cropW,
+        embedSize: subTokens + 1 + globalTokens,
+    };
+}
+
+function readImageDimensions(dataUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.width, height: img.height });
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
+}
+
+function normalizeUserMultimodalContent(content) {
+    if (!Array.isArray(content)) return { content, changed: false };
+
+    let changed = false;
+    let normalized = [];
+
+    for (const part of content) {
+        if (part?.type === 'text') {
+            const text = typeof part.text === 'string' ? part.text : '';
+            if (text !== part.text) changed = true;
+            normalized.push({ type: 'text', text });
+            continue;
+        }
+
+        if (part?.type === 'image_url') {
+            const rawUrl = typeof part.image_url === 'string'
+                ? part.image_url
+                : (typeof part.image_url?.url === 'string' ? part.image_url.url : '');
+
+            if (!rawUrl) {
+                changed = true;
+                continue;
+            }
+
+            if (typeof part.image_url === 'string' || part.image_url?.url !== rawUrl) {
+                changed = true;
+            }
+
+            normalized.push({
+                type: 'image_url',
+                image_url: { url: rawUrl },
+            });
+            continue;
+        }
+
+        normalized.push(part);
+    }
+
+    const textParts = normalized.filter((part) => part?.type === 'text');
+    if (textParts.length > 1) {
+        changed = true;
+        const merged = textParts.map((part) => part.text || '').join('\n').trim();
+        normalized = normalized.filter((part) => part?.type !== 'text');
+        normalized.unshift({ type: 'text', text: merged });
+    }
+
+    if (!normalized.some((part) => part?.type === 'text')) {
+        changed = true;
+        normalized.unshift({ type: 'text', text: 'What is in this image?' });
+    }
+
+    return { content: normalized, changed };
+}
+
+function normalizeConversationForModel(conv) {
+    if (!conv || !Array.isArray(conv.messages)) return false;
+
+    let changed = false;
+    conv.messages = conv.messages.map((msg) => {
+        if (!msg || msg.role !== 'user' || !Array.isArray(msg.content)) return msg;
+
+        const normalized = normalizeUserMultimodalContent(msg.content);
+        if (!normalized.changed) return msg;
+
+        changed = true;
+        return {
+            ...msg,
+            content: normalized.content,
+        };
+    });
+
+    return changed;
+}
+
+async function normalizeConversationVisionImages(conv) {
+    if (!conv || !Array.isArray(conv.messages)) return 0;
+    let changed = 0;
+
+    for (const msg of conv.messages) {
+        if (!msg || msg.role !== 'user' || !Array.isArray(msg.content)) continue;
+
+        for (let i = 0; i < msg.content.length; i++) {
+            const part = msg.content[i];
+            if (part?.type !== 'image_url') continue;
+
+            const currentUrl = typeof part.image_url === 'string'
+                ? part.image_url
+                : part.image_url?.url;
+            if (!safeStartsWith(currentUrl, 'data:image')) continue;
+
+            let dims;
+            try {
+                dims = await readImageDimensions(currentUrl);
+            } catch (err) {
+                console.warn('[Vision] Failed to read stored image dimensions:', err);
+                continue;
+            }
+
+            if (dims.width === 1344 && dims.height === 1008) continue;
+
+            const normalized = await normalizeVisionDataUrl(currentUrl, 1344, 1008);
+            const nextUrl = normalized.dataUrl;
+            msg.content[i] = { ...part, image_url: { url: nextUrl } };
+
+            changed += 1;
+            console.info('[Vision] Migrated stored image to landscape 4:3', {
+                before: `${dims.width}x${dims.height}`,
+                after: `${normalized.targetWidth}x${normalized.targetHeight}`,
+                embedEstimate: estimatePhiVisionEmbedSize(normalized.targetHeight, normalized.targetWidth).embedSize,
+            });
+        }
+    }
+
+    return changed;
 }
 
 // ============================================
@@ -274,14 +481,7 @@ function toggleWebSearch(enabled) {
     webSearchEnabled = enabled;
     webSearchToggle.classList.toggle('active', enabled);
     webSearchSetting.checked = enabled;
-
-    if (enabled) {
-        inputDisclaimer.textContent = '🌐 Web-Enhanced — search queries sent to DuckDuckGo';
-        inputDisclaimer.classList.add('web-active');
-    } else {
-        inputDisclaimer.textContent = 'AI runs locally in your browser. Responses may vary in quality.';
-        inputDisclaimer.classList.remove('web-active');
-    }
+    updateInputDisclaimer();
 
     // Save preference
     try {
@@ -289,6 +489,22 @@ function toggleWebSearch(enabled) {
         settings.webSearch = enabled;
         localStorage.setItem('neuralbox_settings', JSON.stringify(settings));
     } catch (e) { /* ignore */ }
+}
+
+function updateInputDisclaimer() {
+    if (webSearchEnabled) {
+        inputDisclaimer.textContent = 'Web-Enhanced mode is on. Search queries are sent to DuckDuckGo.';
+        inputDisclaimer.classList.add('web-active');
+        return;
+    }
+
+    if (isVisionModel()) {
+        inputDisclaimer.textContent = 'Vision ready. Attach, paste, or drop an image to analyze.';
+    } else {
+        inputDisclaimer.textContent = 'AI runs locally in your browser. Responses may vary in quality.';
+    }
+
+    inputDisclaimer.classList.remove('web-active');
 }
 
 async function webSearch(query) {
@@ -490,7 +706,7 @@ function renderStartModelSelector(capabilities, recommended) {
         const isRec = m.id === recommended.id;
         const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
         html += `<option value="${m.id}" ${m.id === selectedModelId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>`;
-        html += `${m.name} (${m.size})${isRec ? ' ⭐ Recommended' : ''}${tooLarge ? ' ⚠️ High VRAM' : ''}`;
+        html += `${m.name} (${m.size})${isRec ? ' - Recommended' : ''}${tooLarge ? ' - High VRAM' : ''}`;
         html += `</option>`;
     }
     html += `</select>`;
@@ -535,11 +751,11 @@ async function updateStartScreenUi(capabilities, recommended) {
     if (!noteEl) return;
 
     if (isCached) {
-        startBtn.innerHTML = '<span class="btn-icon">⚡</span> Start App (Cached)';
+        startBtn.textContent = 'Start App (Cached)';
         noteEl.innerHTML = 'Model is ready locally. <strong>No download required.</strong>';
         statusText.innerHTML = `Ready to load <strong>${selectedModel.name}</strong>`;
     } else {
-        startBtn.innerHTML = '<span class="btn-icon">⬇️</span> Download & Start';
+        startBtn.textContent = 'Download & Start';
         noteEl.innerHTML = `~${selectedModel.size} download, will be cached for future visits.`;
         statusText.innerHTML = `First-time setup for <strong>${selectedModel.name}</strong>`;
     }
@@ -589,7 +805,7 @@ async function loadModel() {
         console.error('Model loading failed:', err);
         statusText.textContent = 'Failed to load model: ' + err.message;
         startBtn.style.display = 'inline-flex';
-        startBtn.textContent = '🔄 Retry';
+        startBtn.textContent = 'Retry';
     }
 }
 
@@ -603,14 +819,14 @@ function renderModelSelector(capabilities, recommended) {
         const isRec = m.id === recommended.id;
         const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
         html += `<option value="${m.id}" ${m.id === selectedModelId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>`;
-        html += `${m.name} (${m.size})${isRec ? ' ⭐ Recommended' : ''}${tooLarge ? ' ⚠️ May be too large' : ''}`;
+        html += `${m.name} (${m.size})${isRec ? ' - Recommended' : ''}${tooLarge ? ' - May be too large' : ''}`;
         html += `</option>`;
     }
     html += `</select>`;
     html += `<p class="setting-hint">`;
-    html += `GPU: ${capabilities.gpuName} • Est. VRAM: ${capabilities.vramMB}MB`;
+    html += `GPU: ${capabilities.gpuName} - Est. VRAM: ${capabilities.vramMB}MB`;
     html += `</p>`;
-    html += `<button id="switch-model-btn" class="btn-primary" style="display:none; margin-top:0.5rem; width:100%;">🔄 Switch Model</button>`;
+    html += `<button id="switch-model-btn" class="btn-primary" style="display:none; margin-top:0.5rem; width:100%;">Switch Model</button>`;
 
     container.innerHTML = html;
 
@@ -673,7 +889,7 @@ function renderModelSelector(capabilities, recommended) {
                 console.error('Model switch failed:', err);
                 statusText.textContent = `Failed: ${err.message}`;
                 startBtn.style.display = 'inline-flex';
-                startBtn.textContent = '🔄 Retry';
+                startBtn.textContent = 'Retry';
             }
         });
     }
@@ -692,7 +908,9 @@ function showChatScreen() {
     } else {
         imageBtn.style.display = 'none';
         userInput.placeholder = 'Ask anything...';
+        clearPendingImage();
     }
+    updateInputDisclaimer();
 
     // Show think toggle if thinking model is loaded
     if (isThinkingModel()) {
@@ -749,6 +967,10 @@ function switchToConversation(id) {
     activeConversationId = id;
     const conv = getActiveConversation();
     if (!conv) return;
+    const convWasNormalized = normalizeConversationForModel(conv);
+    if (convWasNormalized) {
+        saveConversations();
+    }
 
     // Render messages
     messagesContainer.innerHTML = '';
@@ -756,7 +978,8 @@ function switchToConversation(id) {
         renderWelcome();
     } else {
         for (const msg of conv.messages) {
-            addMessageToDOM(msg.role, msg.content);
+            const renderable = getRenderableMessage(msg.role, msg.content);
+            addMessageToDOM(msg.role, renderable.text, renderable.imageUrl);
         }
         scrollToBottom();
     }
@@ -804,7 +1027,7 @@ function renderSidebar() {
         .map(
             (conv) => `
       <div class="conv-item ${conv.id === activeConversationId ? 'active' : ''}" data-id="${conv.id}">
-        <span class="conv-icon">💬</span>
+        <span class="conv-icon">[chat]</span>
         <div class="conv-info">
           <div class="conv-title">${escapeHtml(conv.title)}</div>
           <div class="conv-time">${formatTime(conv.updatedAt)}</div>
@@ -881,6 +1104,15 @@ async function sendMessage(text) {
 
     const conv = getActiveConversation();
     if (!conv) return;
+    if (normalizeConversationForModel(conv)) {
+        saveConversations();
+    }
+    if (isVisionModel()) {
+        const migrated = await normalizeConversationVisionImages(conv);
+        if (migrated > 0) {
+            saveConversations();
+        }
+    }
 
     // Remove welcome message
     const welcome = messagesContainer.querySelector('.welcome-message');
@@ -897,14 +1129,26 @@ async function sendMessage(text) {
 
     // Add user message (with optional image)
     const imageDataUrl = pendingImage?.dataUrl || null;
+    const imageMeta = pendingImage?.meta || null;
     if (imageDataUrl) {
         addMessageToDOM('user', userText, imageDataUrl);
+        const est = imageMeta
+            ? estimatePhiVisionEmbedSize(imageMeta.targetHeight, imageMeta.targetWidth)
+            : null;
+        console.info('[Vision] Sending image prompt', {
+            model: selectedModelId,
+            source: imageMeta ? `${imageMeta.sourceWidth}x${imageMeta.sourceHeight}` : 'unknown',
+            prepared: imageMeta ? `${imageMeta.targetWidth}x${imageMeta.targetHeight}` : 'unknown',
+            crop: est ? `${est.cropH}x${est.cropW}` : 'unknown',
+            embedEstimate: est ? est.embedSize : 'unknown',
+            promptLength: (finalUserText || '').length,
+        });
         // For vision models, use multimodal content format
         conv.messages.push({
             role: 'user',
             content: [
-                { type: 'image_url', image_url: { url: imageDataUrl } },
                 { type: 'text', text: finalUserText || 'What is in this image?' },
+                { type: 'image_url', image_url: { url: imageDataUrl } },
             ],
         });
         // Clear pending image
@@ -934,15 +1178,15 @@ async function sendMessage(text) {
     try {
         // Web search if enabled
         let searchResults = [];
-        if (webSearchEnabled) {
-            contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Searching the web…</div>';
+        if (webSearchEnabled && userText) {
+            contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Searching the web...</div>';
             scrollToBottom();
             searchResults = await webSearch(userText);
         }
 
         // Build messages with optional search context
         const searchContext = buildSearchContext(searchResults);
-        const sysContent = systemPrompt.value + searchContext;
+        const sysContent = getEffectiveSystemPrompt() + searchContext;
 
         const messages = [
             { role: 'system', content: sysContent },
@@ -958,13 +1202,53 @@ async function sendMessage(text) {
         let tokenCount = 0;
         const startTime = performance.now();
 
-        const chunks = await engine.chat.completions.create({
-            messages,
-            temperature,
-            max_tokens: maxTokens,
-            stream: true,
-            stream_options: { include_usage: true },
-        });
+        let chunks;
+        try {
+            chunks = await engine.chat.completions.create({
+                messages,
+                temperature,
+                max_tokens: maxTokens,
+                stream: true,
+                stream_options: { include_usage: true },
+            });
+        } catch (err) {
+            const errText = String(err?.message || err || '');
+            const canRetryVision = Boolean(imageDataUrl && isVisionModel() && /startsWith|embed\\.shape/i.test(errText));
+            if (!canRetryVision) throw err;
+
+            console.warn('[Vision] Generation failed, retrying with normalized fallback image', {
+                reason: errText,
+                model: selectedModelId,
+            });
+            const fallback = await normalizeVisionDataUrl(imageDataUrl, 1008, 756);
+            const fallbackDataUrl = fallback.dataUrl;
+            const fallbackEst = estimatePhiVisionEmbedSize(fallback.targetHeight, fallback.targetWidth);
+            console.info('[Vision] Retry image prepared', {
+                target: `${fallback.targetWidth}x${fallback.targetHeight}`,
+                crop: `${fallbackEst.cropH}x${fallbackEst.cropW}`,
+                embedEstimate: fallbackEst.embedSize,
+            });
+            const latestUser = conv.messages[conv.messages.length - 1];
+            if (latestUser && Array.isArray(latestUser.content)) {
+                latestUser.content = latestUser.content.map((part) => {
+                    if (part?.type !== 'image_url') return part;
+                    return { ...part, image_url: { url: fallbackDataUrl } };
+                });
+            }
+
+            const retryMessages = [
+                { role: 'system', content: sysContent },
+                ...conv.messages,
+            ];
+
+            chunks = await engine.chat.completions.create({
+                messages: retryMessages,
+                temperature,
+                max_tokens: maxTokens,
+                stream: true,
+                stream_options: { include_usage: true },
+            });
+        }
 
         for await (const chunk of chunks) {
             const delta = chunk.choices?.[0]?.delta?.content || '';
@@ -982,9 +1266,9 @@ async function sendMessage(text) {
         const statsEl = document.createElement('div');
         statsEl.className = 'perf-stats';
         statsEl.innerHTML = `
-      <span class="perf-stat">⚡ ${tokPerSec.toFixed(1)} tok/s</span>
-      <span class="perf-stat">📝 ${tokenCount} tokens</span>
-      <span class="perf-stat">⏱️ ${elapsed.toFixed(1)}s</span>
+      <span class="perf-stat">${tokPerSec.toFixed(1)} tok/s</span>
+      <span class="perf-stat">${tokenCount} tokens</span>
+      <span class="perf-stat">${elapsed.toFixed(1)}s</span>
     `;
         
         const messageBody = aiMsg.querySelector('.message-body') || aiMsg;
@@ -1016,7 +1300,7 @@ function addMessageToDOM(role, content, imageUrl) {
 
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    avatar.textContent = role === 'user' ? '👤' : '🧠';
+    avatar.textContent = role === 'user' ? 'You' : 'AI';
 
     const body = document.createElement('div');
     body.className = 'message-body';
@@ -1063,7 +1347,7 @@ function formatMarkdown(text) {
     
     // Handle completed thinking blocks
     processedText = processedText.replace(/<think>([\s\S]*?)<\/think>/g, (match, content) => {
-        return `<details class="think-block"><summary>🧠 Thought Process</summary><div class="think-content">${formatBasicHTML(content)}</div></details>`;
+        return `<details class="think-block"><summary>Thought Process</summary><div class="think-content">${formatBasicHTML(content)}</div></details>`;
     });
 
     // Handle unclosed thinking block (currently generating)
@@ -1072,7 +1356,7 @@ function formatMarkdown(text) {
         const lastPart = parts.pop(); // The thinking part
         const bodyBefore = parts.join('<think>'); // Everything before the current thinking
         
-        return formatBasicHTML(bodyBefore) + `<details class="think-block" open><summary>🧠 Thinking...</summary><div class="think-content">${formatBasicHTML(lastPart)}<span class="typing-indicator" style="display:inline-flex;margin-left:8px;"><span></span><span></span><span></span></span></div></details>`;
+        return formatBasicHTML(bodyBefore) + `<details class="think-block" open><summary>Thinking...</summary><div class="think-content">${formatBasicHTML(lastPart)}<span class="typing-indicator" style="display:inline-flex;margin-left:8px;"><span></span><span></span><span></span></span></div></details>`;
     }
 
     return '<p>' + formatBasicHTML(processedText) + '</p>';
@@ -1100,7 +1384,7 @@ function autoResizeInput() {
 function renderWelcome() {
     messagesContainer.innerHTML = `
     <div class="welcome-message">
-      <div class="welcome-icon">🧠</div>
+      <div class="welcome-icon">AI</div>
       <h3>Welcome to NeuralBox</h3>
       <p>Your AI is running <strong>entirely in your browser</strong>. No data ever leaves your device.</p>
       <div class="welcome-suggestions">
@@ -1125,7 +1409,8 @@ function loadConversations() {
     try {
         const saved = localStorage.getItem('neuralbox_conversations');
         if (saved) {
-            conversations = JSON.parse(saved);
+            const parsed = JSON.parse(saved);
+            conversations = Array.isArray(parsed) ? parsed : [];
         }
 
         // Migrate old single-conversation format
@@ -1147,6 +1432,16 @@ function loadConversations() {
                 }
             }
         }
+
+        let normalizedAny = false;
+        for (const conv of conversations) {
+            if (normalizeConversationForModel(conv)) {
+                normalizedAny = true;
+            }
+        }
+        if (normalizedAny) {
+            saveConversations();
+        }
     } catch (e) {
         conversations = [];
     }
@@ -1164,7 +1459,10 @@ function clearAllConversations() {
 function loadSettings() {
     try {
         const settings = JSON.parse(localStorage.getItem('neuralbox_settings') || '{}');
-        if (settings.systemPrompt) systemPrompt.value = settings.systemPrompt;
+        systemPrompt.value = settings.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+        if (systemPrompt.value === LEGACY_SYSTEM_PROMPT) {
+            systemPrompt.value = DEFAULT_SYSTEM_PROMPT;
+        }
         if (settings.temperature != null) {
             temperatureSlider.value = settings.temperature;
             tempValue.textContent = settings.temperature;
@@ -1340,7 +1638,7 @@ async function startRecording() {
         console.error('Mic access failed:', err);
         voiceStatus.style.display = 'flex';
         voiceStatus.className = 'voice-status';
-        voiceStatus.textContent = '⚠️ Microphone access denied';
+        voiceStatus.textContent = 'Microphone access denied';
         setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
     }
 }
@@ -1374,16 +1672,16 @@ async function processRecording(audioBlob) {
             sendBtn.disabled = false;
             userInput.focus();
             voiceStatus.className = 'voice-status';
-            voiceStatus.innerHTML = '✅ Transcribed! Edit and send, or record more.';
+            voiceStatus.innerHTML = 'Transcribed! Edit and send, or record more.';
             setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
         } else {
-            voiceStatus.innerHTML = '⚠️ No speech detected. Try again.';
+            voiceStatus.innerHTML = 'No speech detected. Try again.';
             setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
         }
     } catch (err) {
         console.error('Transcription failed:', err);
         voiceStatus.className = 'voice-status';
-        voiceStatus.innerHTML = `⚠️ Transcription error: ${err.message}`;
+        voiceStatus.innerHTML = `Transcription error: ${err.message}`;
         setTimeout(() => { voiceStatus.style.display = 'none'; }, 5000);
     }
 
@@ -1410,8 +1708,8 @@ function speakText(text) {
 
         // Try to pick a good English voice
         const voices = speechSynthesis.getVoices();
-        const preferred = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
-            voices.find(v => v.lang.startsWith('en'));
+        const preferred = voices.find((v) => safeStartsWith(v?.lang, 'en') && typeof v?.name === 'string' && v.name.includes('Google')) ||
+            voices.find((v) => safeStartsWith(v?.lang, 'en'));
         if (preferred) utterance.voice = preferred;
 
         utterance.onend = () => resolve();
@@ -1422,7 +1720,7 @@ function speakText(text) {
 
 function setVoiceChatState(state) {
     voiceOrb.className = 'voice-orb ' + state;
-    const icons = { idle: '🎙️', listening: '👂', thinking: '🧠', speaking: '🗣️' };
+    const icons = { idle: 'Mic', listening: 'Listen', thinking: 'AI', speaking: 'Speak' };
     const labels = {
         idle: 'Tap to start talking',
         listening: 'Listening...',
@@ -1528,7 +1826,7 @@ async function voiceChatListen() {
         // Generate response
         voiceChatText.textContent = `You: "${userText}"\n\nThinking...`;
 
-        const sysContent = systemPrompt.value;
+        const sysContent = getEffectiveSystemPrompt();
         const messages = [
             { role: 'system', content: sysContent },
             ...conv.messages,
@@ -1610,24 +1908,147 @@ imageBtn.addEventListener('touchend', (e) => {
 imageInput.addEventListener('change', (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-        pendingImage = { dataUrl: ev.target.result, file };
-        imagePreviewImg.src = ev.target.result;
-        imagePreview.style.display = 'flex';
-        sendBtn.disabled = false; // Allow sending with just image
-    };
-    reader.readAsDataURL(file);
+    attachImageFile(file);
     imageInput.value = ''; // Reset so same file can be selected again
 });
 
 imagePreviewClear.addEventListener('click', () => {
+    clearPendingImage();
+});
+
+userInput.addEventListener('paste', (e) => {
+    if (!isVisionModel()) return;
+    const file = getImageFromClipboard(e.clipboardData);
+    if (!file) return;
+    e.preventDefault();
+    attachImageFile(file);
+});
+
+if (inputWrapper) {
+    inputWrapper.addEventListener('dragover', (e) => {
+        if (!isVisionModel()) return;
+        if (!getImageFromDataTransfer(e.dataTransfer)) return;
+        e.preventDefault();
+        inputWrapper.classList.add('drag-active');
+    });
+
+    inputWrapper.addEventListener('dragleave', () => {
+        inputWrapper.classList.remove('drag-active');
+    });
+
+    inputWrapper.addEventListener('drop', (e) => {
+        if (!isVisionModel()) return;
+        const file = getImageFromDataTransfer(e.dataTransfer);
+        if (!file) return;
+        e.preventDefault();
+        inputWrapper.classList.remove('drag-active');
+        attachImageFile(file);
+    });
+}
+
+function attachImageFile(file) {
+    const mimeType = typeof file?.type === 'string' ? file.type : '';
+    if (!file || !safeStartsWith(mimeType, 'image/')) return;
+    if (!isVisionModel()) return;
+    normalizeVisionImage(file)
+        .then((normalized) => {
+            pendingImage = { dataUrl: normalized.dataUrl, file, meta: normalized };
+            imagePreviewImg.src = normalized.dataUrl;
+            imagePreview.style.display = 'flex';
+            sendBtn.disabled = false; // Allow sending with just image
+            const est = estimatePhiVisionEmbedSize(normalized.targetHeight, normalized.targetWidth);
+            console.info('[Vision] Image prepared', {
+                source: `${normalized.sourceWidth}x${normalized.sourceHeight}`,
+                target: `${normalized.targetWidth}x${normalized.targetHeight}`,
+                sourceOrientation: normalized.orientation,
+                crop: `${est.cropH}x${est.cropW}`,
+                embedEstimate: est.embedSize,
+            });
+        })
+        .catch((err) => {
+            console.error('Image processing failed:', err);
+        });
+}
+
+function clearPendingImage() {
     pendingImage = null;
     imagePreview.style.display = 'none';
     imagePreviewImg.src = '';
     if (!userInput.value.trim()) sendBtn.disabled = true;
-});
+}
+
+function getImageFromClipboard(clipboardData) {
+    if (!clipboardData?.items) return null;
+    for (const item of clipboardData.items) {
+        if (safeStartsWith(item?.type, 'image/')) {
+            return item.getAsFile();
+        }
+    }
+    return null;
+}
+
+function getImageFromDataTransfer(dataTransfer) {
+    if (!dataTransfer) return null;
+    const files = dataTransfer.files;
+    if (!files || files.length === 0) return null;
+    const file = files[0];
+    const mimeType = typeof file?.type === 'string' ? file.type : '';
+    return safeStartsWith(mimeType, 'image/') ? file : null;
+}
+
+function normalizeVisionImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => {
+            normalizeVisionDataUrl(String(reader.result || ''), 1344, 1008).then(resolve).catch(reject);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function normalizeVisionDataUrl(dataUrl, longEdge = 1344, shortEdge = 1008) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const sourceLandscape = img.width >= img.height;
+            // Keep the output image in landscape 4:3. WebLLM phi-3.5 vision currently
+            // hardcodes a 1921 image embed size and only the 3x4 crop layout matches it.
+            const targetWidth = longEdge;
+            const targetHeight = shortEdge;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Failed to get 2D canvas context'));
+                return;
+            }
+
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(0, 0, targetWidth, targetHeight);
+
+            const scale = Math.min(targetWidth / img.width, targetHeight / img.height);
+            const drawW = Math.max(1, Math.round(img.width * scale));
+            const drawH = Math.max(1, Math.round(img.height * scale));
+            const offsetX = Math.floor((targetWidth - drawW) / 2);
+            const offsetY = Math.floor((targetHeight - drawH) / 2);
+            ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+
+            resolve({
+                dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+                sourceWidth: img.width,
+                sourceHeight: img.height,
+                targetWidth,
+                targetHeight,
+                orientation: sourceLandscape ? 'landscape' : 'portrait',
+            });
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+    });
+}
 
 // Think toggle handling
 thinkToggle.addEventListener('click', () => {
