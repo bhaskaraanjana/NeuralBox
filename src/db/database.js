@@ -5,6 +5,7 @@ const STORE_NAME = 'app_state';
 const KEY_SETTINGS = 'settings';
 const KEY_CONVERSATIONS = 'conversations';
 const KEY_MODEL_SELECTION = 'model_selection';
+const KEY_RAG_DOCS = 'rag_docs';
 const KEY_MIGRATION = 'migration_v1_local_storage';
 
 let backend = null;
@@ -198,3 +199,13 @@ export async function saveModelSelectionRecord(selectionId) {
     await store.set(KEY_MODEL_SELECTION, selectionId);
 }
 
+export async function loadRagDocsRecord() {
+    const store = await initDatabase();
+    const value = await store.get(KEY_RAG_DOCS);
+    return Array.isArray(value) ? value : [];
+}
+
+export async function saveRagDocsRecord(docs) {
+    const store = await initDatabase();
+    await store.set(KEY_RAG_DOCS, Array.isArray(docs) ? docs : []);
+}

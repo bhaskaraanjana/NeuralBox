@@ -11,6 +11,8 @@ import {
     saveConversationsRecord,
     loadModelSelectionRecord,
     saveModelSelectionRecord,
+    loadRagDocsRecord,
+    saveRagDocsRecord,
 } from './db/database.js';
 let whisperModulePromise = null;
 let whisperApi = null;
@@ -65,6 +67,11 @@ const tokensValue = $('#tokens-value');
 const clearHistoryBtn = $('#clear-history-btn');
 const promptPresetSelect = $('#prompt-preset-select');
 const applyPresetBtn = $('#apply-preset-btn');
+const workflowSelect = $('#workflow-select');
+const applyWorkflowBtn = $('#apply-workflow-btn');
+const trustLayerSetting = $('#trust-layer-setting');
+const deterministicSetting = $('#deterministic-setting');
+const deterministicSeedInput = $('#deterministic-seed');
 const exportChatsBtn = $('#export-chats-btn');
 const importChatsBtn = $('#import-chats-btn');
 const importChatsInput = $('#import-chats-input');
@@ -74,6 +81,16 @@ const debugState = $('#debug-state');
 const debugEvents = $('#debug-events');
 const debugPanelSetting = $('#debug-panel-setting');
 const debugClearBtn = $('#debug-clear-btn');
+const workbenchPanel = $('#workbench-panel');
+const workbenchBody = $('#workbench-body');
+const workbenchSetting = $('#workbench-setting');
+const workbenchClearBtn = $('#workbench-clear-btn');
+const ragAddBtn = $('#rag-add-btn');
+const ragClearBtn = $('#rag-clear-btn');
+const ragFileInput = $('#rag-file-input');
+const ragStatus = $('#rag-status');
+const exportMdBtn = $('#export-md-btn');
+const copyShareBtn = $('#copy-share-btn');
 
 // Sidebar refs
 const sidebar = $('#sidebar');
@@ -307,6 +324,20 @@ let runtimeBenchmark = null;
 let runtimeBenchmarkPromise = null;
 let benchmarkDeferredUntilIdle = false;
 let inlineNoticeTimer = null;
+let workflowModeId = 'general';
+let trustLayerEnabled = true;
+let deterministicModeEnabled = false;
+let deterministicSeed = 42;
+let workbenchEnabled = false;
+const workbenchEntries = [];
+const WORKBENCH_LIMIT = 40;
+let ragDocuments = [];
+let ragChunks = [];
+const RAG_MAX_DOCS = 24;
+const RAG_MAX_CHARS_PER_DOC = 240000;
+const RAG_CHUNK_SIZE = 900;
+const RAG_CHUNK_OVERLAP = 160;
+const RAG_MAX_MATCHES = 4;
 const reliabilityStats = {
     generationRetries: 0,
     generationFailures: 0,
@@ -372,6 +403,227 @@ function setInlineNotice(message, kind = 'info', durationMs = 2600) {
         inlineNoticeTimer = null;
         updateInputDisclaimer();
     }, durationMs);
+}
+
+function pushWorkbenchEvent(kind, payload = {}) {
+    const item = {
+        at: Date.now(),
+        kind,
+        payload,
+    };
+    workbenchEntries.push(item);
+    if (workbenchEntries.length > WORKBENCH_LIMIT) {
+        workbenchEntries.splice(0, workbenchEntries.length - WORKBENCH_LIMIT);
+    }
+    renderWorkbenchPanel();
+}
+
+function renderWorkbenchPanel() {
+    if (!workbenchPanel || !workbenchBody) return;
+    workbenchPanel.style.display = workbenchEnabled ? 'block' : 'none';
+    if (!workbenchEnabled) return;
+    if (!workbenchEntries.length) {
+        workbenchBody.innerHTML = '<div class="workbench-row"><div class="workbench-row-title">No events yet</div><div class="workbench-row-meta">Send a message to inspect route decisions and context.</div></div>';
+        return;
+    }
+    workbenchBody.innerHTML = workbenchEntries
+        .slice()
+        .reverse()
+        .map((entry) => {
+            const time = new Date(entry.at).toLocaleTimeString();
+            const payloadStr = Object.entries(entry.payload || {})
+                .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+                .join(' | ');
+            return `<div class="workbench-row"><div class="workbench-row-title">${escapeHtml(time)} • ${escapeHtml(entry.kind)}</div><div class="workbench-row-meta">${escapeHtml(payloadStr || '—')}</div></div>`;
+        })
+        .join('');
+}
+
+function clearWorkbenchEvents() {
+    workbenchEntries.length = 0;
+    renderWorkbenchPanel();
+}
+
+function normalizeRagDocText(text) {
+    return String(text || '')
+        .replace(/\r\n/g, '\n')
+        .replace(/\t/g, '  ')
+        .replace(/[ \u00a0]{2,}/g, ' ')
+        .trim();
+}
+
+function splitTextIntoRagChunks(text, chunkSize = RAG_CHUNK_SIZE, overlap = RAG_CHUNK_OVERLAP) {
+    const normalized = normalizeRagDocText(text);
+    if (!normalized) return [];
+    const chunks = [];
+    let cursor = 0;
+    while (cursor < normalized.length) {
+        const end = Math.min(normalized.length, cursor + chunkSize);
+        const chunk = normalized.slice(cursor, end).trim();
+        if (chunk) chunks.push(chunk);
+        if (end >= normalized.length) break;
+        cursor = Math.max(end - overlap, cursor + 1);
+    }
+    return chunks;
+}
+
+function tokenizeRagQuery(text) {
+    return normalizeRagDocText(text)
+        .toLowerCase()
+        .split(/[^a-z0-9_]+/i)
+        .filter((t) => t.length > 2)
+        .slice(0, 24);
+}
+
+function rebuildRagChunkIndex() {
+    const next = [];
+    for (const doc of ragDocuments) {
+        const chunks = Array.isArray(doc?.chunks) ? doc.chunks : [];
+        for (let i = 0; i < chunks.length; i++) {
+            next.push({
+                docId: doc.id,
+                docName: doc.name,
+                idx: i,
+                text: chunks[i],
+            });
+        }
+    }
+    ragChunks = next;
+}
+
+function getRagMatchScore(queryTokens, chunkText) {
+    if (!queryTokens.length || !chunkText) return 0;
+    const hay = chunkText.toLowerCase();
+    let score = 0;
+    for (const token of queryTokens) {
+        const hits = hay.split(token).length - 1;
+        if (hits > 0) {
+            score += Math.min(6, hits) * (token.length >= 6 ? 2 : 1);
+        }
+    }
+    return score;
+}
+
+function retrieveRagChunks(query, maxMatches = RAG_MAX_MATCHES) {
+    if (!ragChunks.length) return [];
+    const tokens = tokenizeRagQuery(query);
+    if (!tokens.length) return [];
+    const ranked = ragChunks
+        .map((chunk) => ({
+            ...chunk,
+            score: getRagMatchScore(tokens, chunk.text),
+        }))
+        .filter((c) => c.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, maxMatches);
+    return ranked;
+}
+
+function buildRagContext(matches) {
+    if (!matches.length) return '';
+    let ctx = '\n\n[LOCAL DOCUMENT CONTEXT - Use this if relevant]\n';
+    matches.forEach((match, i) => {
+        ctx += `[DOC ${i + 1}] ${match.docName}: ${match.text}\n`;
+    });
+    ctx += '\nIMPORTANT: Treat local document context as user-provided source material. If conflict exists, call it out clearly.\n';
+    return ctx;
+}
+
+function renderRagStatus() {
+    if (!ragStatus) return;
+    const docCount = ragDocuments.length;
+    const chunkCount = ragChunks.length;
+    if (!docCount) {
+        ragStatus.textContent = 'No local docs loaded.';
+        return;
+    }
+    ragStatus.textContent = `${docCount} docs indexed • ${chunkCount} chunks ready for retrieval.`;
+}
+
+function persistRagDocs() {
+    void saveRagDocsRecord(ragDocuments).catch((err) => {
+        console.error('[DB] Failed to save RAG docs:', err);
+    });
+}
+
+function sanitizeRagDoc(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = String(raw.id || '').trim();
+    const name = String(raw.name || '').trim();
+    const text = normalizeRagDocText(raw.text || '');
+    const chunksRaw = Array.isArray(raw.chunks) ? raw.chunks : splitTextIntoRagChunks(text);
+    const chunks = chunksRaw
+        .map((c) => normalizeRagDocText(c))
+        .filter(Boolean);
+    if (!id || !name || !text || !chunks.length) return null;
+    return {
+        id,
+        name,
+        text,
+        chunks,
+        sizeChars: Number(raw.sizeChars) || text.length,
+        addedAt: Number(raw.addedAt) || Date.now(),
+    };
+}
+
+function loadRagDocsIntoState(docs = []) {
+    ragDocuments = docs
+        .map(sanitizeRagDoc)
+        .filter(Boolean)
+        .slice(0, RAG_MAX_DOCS);
+    rebuildRagChunkIndex();
+    renderRagStatus();
+}
+
+async function readFileAsText(file) {
+    if (!file) return '';
+    try {
+        return await file.text();
+    } catch (_err) {
+        return '';
+    }
+}
+
+async function ingestRagFiles(files = []) {
+    const list = Array.from(files || []);
+    if (!list.length) return;
+    const docsToAdd = [];
+    for (const file of list) {
+        if (!file) continue;
+        const rawText = await readFileAsText(file);
+        const text = normalizeRagDocText(rawText).slice(0, RAG_MAX_CHARS_PER_DOC);
+        if (!text) continue;
+        const chunks = splitTextIntoRagChunks(text);
+        if (!chunks.length) continue;
+        docsToAdd.push({
+            id: `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+            name: file.name || 'document',
+            text,
+            chunks,
+            sizeChars: text.length,
+            addedAt: Date.now(),
+        });
+    }
+    if (!docsToAdd.length) {
+        setInlineNotice('No supported text content found in selected files.', 'warn', 2200);
+        return;
+    }
+    const combined = [...ragDocuments, ...docsToAdd].slice(-RAG_MAX_DOCS);
+    loadRagDocsIntoState(combined);
+    persistRagDocs();
+    setInlineNotice(`Indexed ${docsToAdd.length} document(s) for local RAG.`, 'info', 2200);
+    pushWorkbenchEvent('rag_docs_indexed', {
+        added: docsToAdd.length,
+        totalDocs: ragDocuments.length,
+        totalChunks: ragChunks.length,
+    });
+}
+
+function clearRagDocs() {
+    loadRagDocsIntoState([]);
+    persistRagDocs();
+    setInlineNotice('Cleared local RAG documents.', 'info', 1800);
+    pushWorkbenchEvent('rag_docs_cleared', {});
 }
 
 function getModelFitGrade(model, capabilities = deviceCapabilities || { vramMB: 0 }) {
@@ -683,6 +935,7 @@ function applyModelUiState() {
     updateInputDisclaimer();
     syncModelSelectors();
     renderDebugPanel();
+    renderWorkbenchPanel();
 }
 
 function setHotSwapStatus(text, percent = null, isActive = true) {
@@ -708,7 +961,10 @@ function getRuntimeStateSummary() {
         ? 'Auto'
         : getModelById(modelSelectionId).name;
     const activeLabel = getModelById(selectedModelId).name;
-    return `Selection: ${selectionLabel} | Active: ${activeLabel} | Profile: ${modelRoutingProfileMode} | Benchmark: ${getBenchmarkSummary()} | Retries: ${reliabilityStats.generationRetries} | Failures: ${reliabilityStats.generationFailures} | Generating: ${isGenerating ? 'yes' : 'no'} | GenerationId: ${activeGenerationId}`;
+    const deterministicLabel = deterministicModeEnabled
+        ? `on${Number.isFinite(parseInt(deterministicSeed, 10)) ? ` (seed ${parseInt(deterministicSeed, 10)})` : ''}`
+        : 'off';
+    return `Selection: ${selectionLabel} | Active: ${activeLabel} | Workflow: ${getWorkflowById(workflowModeId).label} | Deterministic: ${deterministicLabel} | RAG: ${ragDocuments.length} docs/${ragChunks.length} chunks | Profile: ${modelRoutingProfileMode} | Benchmark: ${getBenchmarkSummary()} | Retries: ${reliabilityStats.generationRetries} | Failures: ${reliabilityStats.generationFailures} | Generating: ${isGenerating ? 'yes' : 'no'} | GenerationId: ${activeGenerationId}`;
 }
 
 function renderDebugPanel() {
@@ -914,6 +1170,10 @@ async function switchModelById(newModelId, options = {}) {
         toModelId: newModelId,
         toModelName: targetModel.name,
     });
+    pushWorkbenchEvent('hot_swap_start', {
+        from: getModelById(selectedModelId).name,
+        to: targetModel.name,
+    });
     let lastLoggedPct = -1;
 
     modelSwitchPromise = (async () => {
@@ -925,6 +1185,10 @@ async function switchModelById(newModelId, options = {}) {
                     lastLoggedPct = pct;
                     logRuntimeEvent('hot_swap_progress', {
                         toModelId: newModelId,
+                        percent: pct,
+                    });
+                    pushWorkbenchEvent('hot_swap_progress', {
+                        to: targetModel.name,
                         percent: pct,
                     });
                 }
@@ -946,6 +1210,9 @@ async function switchModelById(newModelId, options = {}) {
             toModelId: newModelId,
             toModelName: targetModel.name,
         });
+        pushWorkbenchEvent('hot_swap_done', {
+            to: targetModel.name,
+        });
         scheduleDeferredBenchmarkIfIdle();
         return { switched: true, reason: `Switched to ${targetModel.name}` };
     } catch (err) {
@@ -958,6 +1225,10 @@ async function switchModelById(newModelId, options = {}) {
         }, 1600);
         logRuntimeEvent('hot_swap_fail', {
             toModelId: newModelId,
+            error: String(err?.message || err || ''),
+        });
+        pushWorkbenchEvent('hot_swap_fail', {
+            to: targetModel.name,
             error: String(err?.message || err || ''),
         });
         throw err;
@@ -992,7 +1263,167 @@ const PROMPT_PRESETS = [
         label: 'Tutor',
         prompt: 'You are a patient tutor. Explain step-by-step, check understanding, and use examples before introducing advanced terms.',
     },
+    {
+        id: 'summarizer',
+        label: 'Summarizer',
+        prompt: 'You are a concise summarization assistant. Return key points, important details, and a short action checklist.',
+    },
+    {
+        id: 'product_manager',
+        label: 'Product Manager',
+        prompt: 'You are a product manager assistant. Structure output into Problem, User Impact, Options, Tradeoffs, and Recommendation.',
+    },
 ];
+
+const WORKFLOW_MODES = [
+    {
+        id: 'general',
+        label: 'General',
+        instruction: '',
+    },
+    {
+        id: 'structured_json',
+        label: 'Structured JSON',
+        instruction: '\n\nWorkflow mode: Return a valid JSON object only. Use keys: summary, key_points (array), actions (array), risks (array).',
+    },
+    {
+        id: 'code_review',
+        label: 'Code Review',
+        instruction: '\n\nWorkflow mode: Focus on correctness and regressions first. Return sections: Findings, Risks, Suggested Fixes, Tests.',
+    },
+    {
+        id: 'study_tutor',
+        label: 'Study Tutor',
+        instruction: '\n\nWorkflow mode: Teach in steps. Use sections: Concept, Example, Quick Check, Next Step.',
+    },
+    {
+        id: 'meeting_notes',
+        label: 'Meeting Notes',
+        instruction: '\n\nWorkflow mode: Return concise meeting notes with sections: Decisions, Action Items (owner + due date), Open Questions.',
+    },
+];
+
+function getWorkflowById(id) {
+    return WORKFLOW_MODES.find((w) => w.id === id) || WORKFLOW_MODES[0];
+}
+
+function renderWorkflowModes() {
+    if (!workflowSelect) return;
+    workflowSelect.innerHTML = WORKFLOW_MODES
+        .map((workflow) => `<option value="${workflow.id}">${workflow.label}</option>`)
+        .join('');
+    workflowSelect.value = getWorkflowById(workflowModeId).id;
+}
+
+function applyWorkflowMode(modeId, options = {}) {
+    const persist = options.persist !== false;
+    const notify = options.notify !== false;
+    const workflow = getWorkflowById(modeId);
+    workflowModeId = workflow.id;
+    if (workflowSelect) workflowSelect.value = workflow.id;
+    if (persist) saveSettings();
+    if (notify) {
+        setInlineNotice(`Workflow mode set to "${workflow.label}".`, 'info', 1800);
+    }
+}
+
+function getWorkflowInstruction() {
+    const workflow = getWorkflowById(workflowModeId);
+    return workflow?.instruction || '';
+}
+
+function getGenerationRequestConfig() {
+    const maxTokens = parseInt(maxTokensSlider.value);
+    const baseTemperature = parseFloat(temperatureSlider.value);
+    const config = {
+        maxTokens,
+        temperature: deterministicModeEnabled ? 0 : baseTemperature,
+        deterministic: deterministicModeEnabled,
+        seed: deterministicModeEnabled ? parseInt(deterministicSeed, 10) : null,
+    };
+    if (!Number.isFinite(config.seed)) {
+        config.seed = null;
+    }
+    return config;
+}
+
+async function createStreamingCompletion(requestMessages, config, options = {}) {
+    const includeUsage = options.includeUsage === true;
+    const payload = {
+        messages: requestMessages,
+        temperature: config.temperature,
+        max_tokens: config.maxTokens,
+        stream: true,
+    };
+    if (includeUsage) {
+        payload.stream_options = { include_usage: true };
+    }
+    if (config.deterministic && Number.isFinite(config.seed)) {
+        payload.seed = config.seed;
+    }
+
+    try {
+        return await engine.chat.completions.create(payload);
+    } catch (err) {
+        const msg = String(err?.message || err || '');
+        if (Object.prototype.hasOwnProperty.call(payload, 'seed') && /seed|unknown field/i.test(msg)) {
+            reliabilityStats.recoveries += 1;
+            reliabilityStats.lastError = msg;
+            logRuntimeEvent('deterministic_seed_unsupported', {
+                reason: msg,
+            });
+            delete payload.seed;
+            return await engine.chat.completions.create(payload);
+        }
+        throw err;
+    }
+}
+
+function buildTrustMeta(payload = {}) {
+    return {
+        modelId: payload.modelId || selectedModelId,
+        modelName: payload.modelName || getModelById(selectedModelId).name,
+        routeReason: payload.routeReason || 'Manual model selection',
+        routeScore: payload.routeScore ?? null,
+        profile: modelRoutingProfileMode,
+        workflowId: workflowModeId,
+        workflowLabel: getWorkflowById(workflowModeId).label,
+        deterministic: Boolean(deterministicModeEnabled),
+        seed: deterministicModeEnabled && Number.isFinite(parseInt(deterministicSeed, 10))
+            ? parseInt(deterministicSeed, 10)
+            : null,
+        temperature: payload.temperature,
+        maxTokens: payload.maxTokens,
+        hasImage: Boolean(payload.hasImage),
+        webSources: Number(payload.webSources || 0),
+        ragSources: Number(payload.ragSources || 0),
+        generatedAt: Date.now(),
+    };
+}
+
+function renderTrustMetaHtml(meta = {}) {
+    const routeScore = Number.isFinite(meta.routeScore) ? ` (score ${meta.routeScore})` : '';
+    const deterministicText = meta.deterministic
+        ? `on${Number.isFinite(meta.seed) ? ` (seed ${meta.seed})` : ''}`
+        : 'off';
+    return `
+        <details class="trust-meta">
+            <summary>Trust Layer: why this answer</summary>
+            <div class="trust-meta-grid">
+                <span><strong>Model:</strong> ${escapeHtml(meta.modelName || '')}</span>
+                <span><strong>Profile:</strong> ${escapeHtml(meta.profile || '')}</span>
+                <span><strong>Workflow:</strong> ${escapeHtml(meta.workflowLabel || '')}</span>
+                <span><strong>Deterministic:</strong> ${escapeHtml(deterministicText)}</span>
+                <span><strong>Temperature:</strong> ${escapeHtml(String(meta.temperature ?? 'n/a'))}</span>
+                <span><strong>Max tokens:</strong> ${escapeHtml(String(meta.maxTokens ?? 'n/a'))}</span>
+                <span><strong>Web sources:</strong> ${escapeHtml(String(meta.webSources ?? 0))}</span>
+                <span><strong>RAG matches:</strong> ${escapeHtml(String(meta.ragSources ?? 0))}</span>
+                <span><strong>Image input:</strong> ${meta.hasImage ? 'yes' : 'no'}</span>
+            </div>
+            <div class="trust-meta-reason"><strong>Route reason:</strong> ${escapeHtml(String(meta.routeReason || 'n/a'))}${routeScore}</div>
+        </details>
+    `;
+}
 
 async function getWhisperApi() {
     if (whisperApi) return whisperApi;
@@ -1356,16 +1787,19 @@ function toggleWebSearch(enabled, options = {}) {
 
 function updateInputDisclaimer() {
     const capabilityLabel = getModelCapabilitiesLabel(getModelById(selectedModelId));
+    const ragLabel = ragDocuments.length > 0
+        ? ` Local docs: ${ragDocuments.length} indexed.`
+        : '';
     if (webSearchEnabled) {
-        inputDisclaimer.textContent = `Web-Enhanced mode is on. Search queries are sent to DuckDuckGo. Active model supports: ${capabilityLabel}.`;
+        inputDisclaimer.textContent = `Web-Enhanced mode is on. Search queries are sent to DuckDuckGo. Active model supports: ${capabilityLabel}.${ragLabel}`;
         inputDisclaimer.classList.add('web-active');
         return;
     }
 
     if (isVisionModel()) {
-        inputDisclaimer.textContent = `Vision ready. Attach, paste, or drop an image to analyze. Supports: ${capabilityLabel}.`;
+        inputDisclaimer.textContent = `Vision ready. Attach, paste, or drop an image to analyze. Supports: ${capabilityLabel}.${ragLabel}`;
     } else {
-        inputDisclaimer.textContent = `AI runs locally in your browser. Supports: ${capabilityLabel}.`;
+        inputDisclaimer.textContent = `AI runs locally in your browser. Supports: ${capabilityLabel}.${ragLabel}`;
     }
 
     inputDisclaimer.classList.remove('web-active', 'notice-error', 'notice-warn', 'notice-info');
@@ -1526,7 +1960,10 @@ async function init() {
 
     await initDatabase();
     await loadSettings();
+    loadRagDocsIntoState(await loadRagDocsRecord());
     renderPromptPresets();
+    renderWorkflowModes();
+    renderWorkbenchPanel();
 
     // Detect device capabilities and auto-select model
     statusText.textContent = 'Detecting device capabilities...';
@@ -1548,6 +1985,8 @@ async function init() {
         vramMB: deviceCapabilities?.vramMB || 0,
         profile: modelRoutingProfileMode,
         benchmark: getBenchmarkSummary(),
+        workflow: workflowModeId,
+        deterministic: deterministicModeEnabled,
     });
 
     // Render the initial model selector on the loading screen
@@ -1596,6 +2035,8 @@ function renderStartModelSelector(capabilities, recommended) {
     const selectedCard = getModelScoreCard(selected, modelRoutingProfileMode, capabilities);
     html += `<p class="setting-hint" style="margin-top:0.4rem; text-align:center;">Your GPU: <strong>${capabilities.gpuName}</strong> (~${capabilities.vramMB}MB VRAM)</p>`;
     html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Profile: <strong>${modelRoutingProfileMode}</strong> • Benchmark: <strong>${getBenchmarkSummary()}</strong></p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Workflow: <strong>${getWorkflowById(workflowModeId).label}</strong> • Deterministic: <strong>${deterministicModeEnabled ? 'on' : 'off'}</strong></p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Local RAG: <strong>${ragDocuments.length} docs</strong> • Workbench: <strong>${workbenchEnabled ? 'on' : 'off'}</strong></p>`;
     html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Selected supports: <strong>${getModelCapabilitiesLabel(selected)}</strong> • Fit: <strong>${selectedCard.fitLabel}</strong> • Score: <strong>${selectedCard.total}</strong></p>`;
 
     container.innerHTML = html;
@@ -1751,6 +2192,8 @@ function renderModelSelector(capabilities, recommended) {
     html += `<p class="setting-hint">`;
     html += `GPU: ${capabilities.gpuName} - Est. VRAM: ${capabilities.vramMB}MB`;
     html += `<br/>Profile: ${modelRoutingProfileMode} - Benchmark: ${getBenchmarkSummary()}`;
+    html += `<br/>Workflow: ${getWorkflowById(workflowModeId).label} - Deterministic: ${deterministicModeEnabled ? 'on' : 'off'}`;
+    html += `<br/>Local RAG: ${ragDocuments.length} docs - Workbench: ${workbenchEnabled ? 'on' : 'off'}`;
     html += `<br/>Selected supports: ${getModelCapabilitiesLabel(selected)} - Fit: ${selectedCard.fitLabel} - Score: ${selectedCard.total}`;
     html += `</p>`;
     html += `<button id="switch-model-btn" class="btn-primary" style="display:none; margin-top:0.5rem; width:100%;">Switch Model</button>`;
@@ -1875,7 +2318,7 @@ function switchToConversation(id) {
     } else {
         for (const msg of conv.messages) {
             const renderable = getRenderableMessage(msg.role, msg.content);
-            addMessageToDOM(msg.role, renderable.text, renderable.imageUrl);
+            addMessageToDOM(msg.role, renderable.text, renderable.imageUrl, msg.meta || null);
         }
         scrollToBottom();
     }
@@ -2098,21 +2541,41 @@ async function sendMessage(text) {
     generationCancelRequested = false;
     const generationId = ++activeGenerationId;
     setGeneratingState(true);
+    let routeReason = `Manual model selection (${getModelById(selectedModelId).name})`;
+    let routeScore = null;
     logRuntimeEvent('generation_start', {
         generationId,
         hasImage: Boolean(imageDataUrl),
         userChars: userText.length,
+        workflow: workflowModeId,
+        deterministic: deterministicModeEnabled,
+        seed: deterministicModeEnabled ? deterministicSeed : null,
+    });
+    pushWorkbenchEvent('generation_start', {
+        generationId,
+        hasImage: Boolean(imageDataUrl),
+        workflow: getWorkflowById(workflowModeId).label,
+        deterministic: deterministicModeEnabled,
+        seed: deterministicModeEnabled ? deterministicSeed : null,
+        model: getModelById(selectedModelId).name,
     });
 
     try {
         if (isAutoModelSelected()) {
             const routing = chooseModelRoute(userText, Boolean(imageDataUrl));
+            routeReason = routing.reason;
+            routeScore = routing.targetScore ?? null;
             logRuntimeEvent('route_decision', {
                 reason: routing.reason,
                 targetModelId: routing.targetModelId,
                 currentModelId: selectedModelId,
                 targetScore: routing.targetScore,
                 profile: modelRoutingProfileMode,
+            });
+            pushWorkbenchEvent('route_decision', {
+                reason: routing.reason,
+                targetModel: getModelById(routing.targetModelId).name,
+                targetScore: routing.targetScore,
             });
             if (routing.targetModelId !== selectedModelId) {
                 if (hasAssistantHistory) {
@@ -2135,13 +2598,29 @@ async function sendMessage(text) {
                 } catch (switchErr) {
                     reliabilityStats.switchFailures += 1;
                     reliabilityStats.lastError = String(switchErr?.message || switchErr || '');
+                    routeReason = `${routing.reason} (switch failed, stayed on ${getModelById(selectedModelId).name})`;
                     logRuntimeEvent('route_switch_failed', {
                         targetModelId: routing.targetModelId,
+                        error: reliabilityStats.lastError,
+                    });
+                    pushWorkbenchEvent('route_switch_failed', {
+                        targetModel: getModelById(routing.targetModelId).name,
                         error: reliabilityStats.lastError,
                     });
                     contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Model switch failed, continuing on current model...</div>';
                     scrollToBottom();
                 }
+            }
+        }
+
+        let ragMatches = [];
+        if (userText && ragChunks.length > 0) {
+            ragMatches = retrieveRagChunks(userText);
+            if (ragMatches.length > 0) {
+                pushWorkbenchEvent('rag_retrieval', {
+                    matches: ragMatches.length,
+                    docs: Array.from(new Set(ragMatches.map((m) => m.docName))).join(', '),
+                });
             }
         }
 
@@ -2151,26 +2630,27 @@ async function sendMessage(text) {
             contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Searching the web...</div>';
             scrollToBottom();
             searchResults = await webSearch(userText);
+            pushWorkbenchEvent('web_search', {
+                results: searchResults.length,
+            });
         }
 
         // Build messages with optional search context
         const searchContext = buildSearchContext(searchResults);
-        const sysContent = getEffectiveSystemPrompt() + searchContext;
+        const ragContext = buildRagContext(ragMatches);
+        const sysContent = getEffectiveSystemPrompt() + ragContext + searchContext + getWorkflowInstruction();
 
         const messages = [
             { role: 'system', content: sysContent },
             ...conv.messages,
         ];
 
-        const temperature = parseFloat(temperatureSlider.value);
-        const maxTokens = parseInt(maxTokensSlider.value);
-        const createStream = (requestMessages) => engine.chat.completions.create({
-            messages: requestMessages,
-            temperature,
-            max_tokens: maxTokens,
-            stream: true,
-            stream_options: { include_usage: true },
-        });
+        const requestConfig = getGenerationRequestConfig();
+        const createStream = (requestMessages) => createStreamingCompletion(
+            requestMessages,
+            requestConfig,
+            { includeUsage: true },
+        );
 
         contentEl.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
 
@@ -2207,6 +2687,10 @@ async function sendMessage(text) {
                             attempt: attempt + 1,
                             reason: String(err?.message || err || ''),
                         });
+                        pushWorkbenchEvent('generation_retry', {
+                            attempt: attempt + 1,
+                            reason: String(err?.message || err || ''),
+                        });
                         contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Recovering from runtime issue, retrying...</div>';
                         scrollToBottom();
                         requestMessages = [
@@ -2225,6 +2709,9 @@ async function sendMessage(text) {
                     });
                     contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Vision retry: applying compatibility resize...</div>';
                     scrollToBottom();
+                    pushWorkbenchEvent('vision_retry_resize', {
+                        reason: String(err?.message || err || ''),
+                    });
 
                     const fallback = await normalizeVisionDataUrl(imageDataUrl, 1008, 756);
                     const fallbackDataUrl = fallback.dataUrl;
@@ -2249,6 +2736,9 @@ async function sendMessage(text) {
                     });
                     contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Vision retry: compacting context for compatibility...</div>';
                     scrollToBottom();
+                    pushWorkbenchEvent('vision_retry_compact_context', {
+                        reason: String(err?.message || err || ''),
+                    });
 
                     const canonical = await normalizeVisionDataUrl(imageDataUrl, 1344, 1008);
                     updateLatestUserImageUrl(conv, canonical.dataUrl);
@@ -2309,11 +2799,42 @@ async function sendMessage(text) {
             generationId,
             tokenCount,
             elapsedSec: Number(elapsed.toFixed(2)),
+            routeReason,
+            routeScore,
+            workflow: workflowModeId,
+            deterministic: deterministicModeEnabled,
+            ragMatches: ragMatches.length,
+            webResults: searchResults.length,
         });
-        conv.messages.push({ role: 'assistant', content: fullResponse });
+        const trustMeta = buildTrustMeta({
+            routeReason,
+            routeScore,
+            modelId: selectedModelId,
+            modelName: getModelById(selectedModelId).name,
+            temperature: requestConfig.temperature,
+            maxTokens: requestConfig.maxTokens,
+            hasImage: Boolean(imageDataUrl),
+            webSources: searchResults.length,
+            ragSources: ragMatches.length,
+        });
+        conv.messages.push({ role: 'assistant', content: fullResponse, meta: trustMeta });
+        if (trustLayerEnabled) {
+            const messageBodyForTrust = aiMsg.querySelector('.message-body');
+            if (messageBodyForTrust && !messageBodyForTrust.querySelector('.trust-meta')) {
+                const trustContainer = document.createElement('div');
+                trustContainer.innerHTML = renderTrustMetaHtml(trustMeta);
+                messageBodyForTrust.appendChild(trustContainer);
+            }
+        }
         conv.updatedAt = Date.now();
         saveConversations();
         renderSidebar();
+        pushWorkbenchEvent('generation_done', {
+            tokenCount,
+            elapsedSec: Number(elapsed.toFixed(2)),
+            ragMatches: ragMatches.length,
+            webResults: searchResults.length,
+        });
     } catch (err) {
         const errText = String(err?.message || err || '');
         if (/cancelled by user/i.test(errText) || generationCancelRequested || generationId !== activeGenerationId) {
@@ -2333,6 +2854,9 @@ async function sendMessage(text) {
                 generationId,
                 error: String(err?.message || err || ''),
             });
+            pushWorkbenchEvent('generation_error', {
+                error: String(err?.message || err || ''),
+            });
         }
     } finally {
         if (generationId === activeGenerationId) {
@@ -2343,7 +2867,7 @@ async function sendMessage(text) {
 }
 
 // ---- DOM Helpers ----
-function addMessageToDOM(role, content, imageUrl) {
+function addMessageToDOM(role, content, imageUrl, meta = null) {
     const msg = document.createElement('div');
     msg.className = `message ${role}`;
 
@@ -2379,6 +2903,13 @@ function addMessageToDOM(role, content, imageUrl) {
     }
 
     body.appendChild(bubble);
+
+    if (role === 'assistant' && meta && trustLayerEnabled) {
+        const trust = document.createElement('div');
+        trust.innerHTML = renderTrustMetaHtml(meta);
+        body.appendChild(trust);
+    }
+
     msg.appendChild(avatar);
     msg.appendChild(body);
     messagesContainer.appendChild(msg);
@@ -2498,6 +3029,77 @@ function applyPromptPreset(presetId) {
     saveSettings();
 }
 
+function formatConversationAsMarkdown(conv) {
+    if (!conv) return '';
+    const lines = [];
+    lines.push(`# ${conv.title || 'Conversation'}`);
+    lines.push('');
+    lines.push(`- Exported: ${new Date().toISOString()}`);
+    lines.push(`- Model Selection: ${isAutoModelSelected() ? 'Auto' : getModelById(modelSelectionId).name}`);
+    lines.push(`- Workflow: ${getWorkflowById(workflowModeId).label}`);
+    lines.push(`- Deterministic: ${deterministicModeEnabled ? `on (seed ${deterministicSeed})` : 'off'}`);
+    lines.push('');
+    for (const msg of conv.messages || []) {
+        const roleLabel = msg.role === 'assistant' ? 'AI' : (msg.role === 'user' ? 'You' : String(msg.role || 'System'));
+        const renderable = getRenderableMessage(msg.role, msg.content);
+        const text = (renderable.text || '').trim();
+        lines.push(`## ${roleLabel}`);
+        lines.push('');
+        if (renderable.imageUrl) {
+            lines.push(`![Attached image](${renderable.imageUrl})`);
+            lines.push('');
+        }
+        if (text) {
+            lines.push(text);
+            lines.push('');
+        } else {
+            lines.push('_No text content_');
+            lines.push('');
+        }
+        if (msg.role === 'assistant' && msg.meta && trustLayerEnabled) {
+            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}_`);
+            lines.push('');
+        }
+    }
+    return lines.join('\n');
+}
+
+async function exportActiveConversationMarkdown() {
+    const conv = getActiveConversation();
+    if (!conv) {
+        setInlineNotice('Open a conversation first to export Markdown.', 'warn', 2200);
+        return;
+    }
+    const markdown = formatConversationAsMarkdown(conv);
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = url;
+    a.download = `neuralbox-${(conv.title || 'conversation').replace(/[^a-z0-9_-]+/ig, '-').slice(0, 48)}-${stamp}.md`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    setInlineNotice('Exported active conversation as Markdown.', 'info', 1800);
+}
+
+async function copyActiveConversationShareText() {
+    const conv = getActiveConversation();
+    if (!conv) {
+        setInlineNotice('Open a conversation first to copy share text.', 'warn', 2200);
+        return;
+    }
+    const markdown = formatConversationAsMarkdown(conv);
+    try {
+        await navigator.clipboard.writeText(markdown);
+        setInlineNotice('Copied conversation to clipboard.', 'info', 1800);
+    } catch (err) {
+        console.error('Clipboard copy failed:', err);
+        setInlineNotice('Clipboard copy failed in this browser context.', 'warn', 2200);
+    }
+}
+
 async function exportConversationsToFile() {
     const storedSettings = await loadSettingsRecord();
     const payload = {
@@ -2505,6 +3107,7 @@ async function exportConversationsToFile() {
         exportedAt: new Date().toISOString(),
         conversations,
         settings: storedSettings,
+        localRagDocs: ragDocuments,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -2533,6 +3136,11 @@ async function importConversationsFromFile(file) {
     if (parsed?.settings && typeof parsed.settings === 'object') {
         await saveSettingsRecord(parsed.settings);
         await loadSettings();
+    }
+
+    if (Array.isArray(parsed?.localRagDocs)) {
+        loadRagDocsIntoState(parsed.localRagDocs);
+        await saveRagDocsRecord(ragDocuments);
     }
 
     const visible = getVisibleConversations();
@@ -2568,13 +3176,36 @@ async function loadSettings() {
         }
         verboseVisionLogs = Boolean(settings.verboseVisionLogs);
         debugPanelEnabled = Boolean(settings.debugPanelEnabled);
+        workbenchEnabled = Boolean(settings.workbenchEnabled);
+        trustLayerEnabled = settings.trustLayerEnabled !== false;
+        deterministicModeEnabled = Boolean(settings.deterministicModeEnabled);
+        workflowModeId = getWorkflowById(settings.workflowModeId || workflowModeId).id;
+        const parsedSeed = parseInt(settings.deterministicSeed, 10);
+        deterministicSeed = Number.isFinite(parsedSeed) ? parsedSeed : deterministicSeed;
         if (visionVerboseSetting) {
             visionVerboseSetting.checked = verboseVisionLogs;
         }
         if (debugPanelSetting) {
             debugPanelSetting.checked = debugPanelEnabled;
         }
+        if (workbenchSetting) {
+            workbenchSetting.checked = workbenchEnabled;
+        }
+        if (trustLayerSetting) {
+            trustLayerSetting.checked = trustLayerEnabled;
+        }
+        if (deterministicSetting) {
+            deterministicSetting.checked = deterministicModeEnabled;
+        }
+        if (deterministicSeedInput) {
+            deterministicSeedInput.value = String(deterministicSeed);
+        }
+        renderWorkflowModes();
+        if (workflowSelect) {
+            workflowSelect.value = workflowModeId;
+        }
         renderDebugPanel();
+        renderWorkbenchPanel();
     } catch (e) { /* ignore */ }
 }
 
@@ -2586,6 +3217,11 @@ function saveSettings() {
         webSearch: webSearchEnabled,
         verboseVisionLogs: verboseVisionLogs,
         debugPanelEnabled: debugPanelEnabled,
+        workbenchEnabled: workbenchEnabled,
+        trustLayerEnabled: trustLayerEnabled,
+        deterministicModeEnabled: deterministicModeEnabled,
+        deterministicSeed: deterministicSeed,
+        workflowModeId: workflowModeId,
     };
     void saveSettingsRecord(snapshot).catch((err) => {
         console.error('[DB] Failed to save settings:', err);
@@ -2672,6 +3308,7 @@ if (conversationSearch) {
 // Settings
 settingsBtn.addEventListener('click', () => {
     renderPromptPresets();
+    renderWorkflowModes();
     settingsPanel.classList.add('open');
 });
 settingsOverlay.addEventListener('click', () => {
@@ -2721,10 +3358,38 @@ if (debugPanelSetting) {
         saveSettings();
     });
 }
+if (workbenchSetting) {
+    workbenchSetting.addEventListener('change', () => {
+        workbenchEnabled = Boolean(workbenchSetting.checked);
+        renderWorkbenchPanel();
+        saveSettings();
+    });
+}
 if (debugClearBtn) {
     debugClearBtn.addEventListener('click', () => {
         runtimeEvents.length = 0;
         logRuntimeEvent('debug_cleared', { source: 'user' });
+    });
+}
+if (workbenchClearBtn) {
+    workbenchClearBtn.addEventListener('click', () => {
+        clearWorkbenchEvents();
+        pushWorkbenchEvent('workbench_cleared', { source: 'user' });
+    });
+}
+if (ragAddBtn && ragFileInput) {
+    ragAddBtn.addEventListener('click', () => ragFileInput.click());
+}
+if (ragFileInput) {
+    ragFileInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files || []);
+        await ingestRagFiles(files);
+        ragFileInput.value = '';
+    });
+}
+if (ragClearBtn) {
+    ragClearBtn.addEventListener('click', () => {
+        clearRagDocs();
     });
 }
 if (promptPresetSelect && applyPresetBtn) {
@@ -2732,11 +3397,70 @@ if (promptPresetSelect && applyPresetBtn) {
         applyPromptPreset(promptPresetSelect.value);
     });
 }
+if (workflowSelect && applyWorkflowBtn) {
+    applyWorkflowBtn.addEventListener('click', () => {
+        applyWorkflowMode(workflowSelect.value);
+    });
+}
+if (workflowSelect) {
+    workflowSelect.addEventListener('change', () => {
+        workflowModeId = getWorkflowById(workflowSelect.value).id;
+    });
+}
+if (trustLayerSetting) {
+    trustLayerSetting.addEventListener('change', () => {
+        trustLayerEnabled = Boolean(trustLayerSetting.checked);
+        saveSettings();
+        const conv = getActiveConversation();
+        if (conv) switchToConversation(conv.id);
+    });
+}
+if (deterministicSetting) {
+    deterministicSetting.addEventListener('change', () => {
+        deterministicModeEnabled = Boolean(deterministicSetting.checked);
+        saveSettings();
+        setInlineNotice(
+            deterministicModeEnabled
+                ? 'Deterministic Team Mode enabled.'
+                : 'Deterministic Team Mode disabled.',
+            'info',
+            1800,
+        );
+    });
+}
+if (deterministicSeedInput) {
+    deterministicSeedInput.addEventListener('change', () => {
+        const parsed = parseInt(deterministicSeedInput.value, 10);
+        if (Number.isFinite(parsed)) {
+            deterministicSeed = parsed;
+            saveSettings();
+            return;
+        }
+        deterministicSeedInput.value = String(deterministicSeed);
+        setInlineNotice('Seed must be an integer.', 'warn', 1800);
+    });
+}
 if (exportChatsBtn) {
     exportChatsBtn.addEventListener('click', () => {
         void exportConversationsToFile().catch((err) => {
             console.error('Export failed:', err);
             alert(`Export failed: ${err.message}`);
+        });
+    });
+}
+if (exportMdBtn) {
+    exportMdBtn.addEventListener('click', () => {
+        void exportActiveConversationMarkdown().catch((err) => {
+            console.error('Markdown export failed:', err);
+            alert(`Markdown export failed: ${err.message}`);
+        });
+    });
+}
+if (copyShareBtn) {
+    copyShareBtn.addEventListener('click', () => {
+        void copyActiveConversationShareText().catch((err) => {
+            console.error('Copy share failed:', err);
+            alert(`Copy share failed: ${err.message}`);
         });
     });
 }
@@ -2999,19 +3723,15 @@ async function voiceChatListen() {
         // Generate response
         voiceChatText.textContent = `You: "${userText}"\n\nThinking...`;
 
-        const sysContent = getEffectiveSystemPrompt();
+        const sysContent = getEffectiveSystemPrompt() + getWorkflowInstruction();
         const messages = [
             { role: 'system', content: sysContent },
             ...conv.messages,
         ];
 
         let fullResponse = '';
-        const chunks = await engine.chat.completions.create({
-            messages,
-            temperature: parseFloat(temperatureSlider.value),
-            max_tokens: parseInt(maxTokensSlider.value),
-            stream: true,
-        });
+        const requestConfig = getGenerationRequestConfig();
+        const chunks = await createStreamingCompletion(messages, requestConfig);
 
         for await (const chunk of chunks) {
             const delta = chunk.choices?.[0]?.delta?.content || '';
@@ -3021,7 +3741,16 @@ async function voiceChatListen() {
             }
         }
 
-        conv.messages.push({ role: 'assistant', content: fullResponse });
+        const trustMeta = buildTrustMeta({
+            routeReason: 'Voice chat response',
+            modelId: selectedModelId,
+            modelName: getModelById(selectedModelId).name,
+            temperature: requestConfig.temperature,
+            maxTokens: requestConfig.maxTokens,
+            hasImage: false,
+            webSources: 0,
+        });
+        conv.messages.push({ role: 'assistant', content: fullResponse, meta: trustMeta });
         conv.updatedAt = Date.now();
         saveConversations();
         renderSidebar();
@@ -3160,6 +3889,12 @@ function attachImageFile(file) {
                 source: `${normalized.sourceWidth}x${normalized.sourceHeight}`,
                 target: `${normalized.targetWidth}x${normalized.targetHeight}`,
                 sourceOrientation: normalized.orientation,
+                crop: `${est.cropH}x${est.cropW}`,
+                embedEstimate: est.embedSize,
+            });
+            pushWorkbenchEvent('image_prepared', {
+                source: `${normalized.sourceWidth}x${normalized.sourceHeight}`,
+                target: `${normalized.targetWidth}x${normalized.targetHeight}`,
                 crop: `${est.cropH}x${est.cropW}`,
                 embedEstimate: est.embedSize,
             });

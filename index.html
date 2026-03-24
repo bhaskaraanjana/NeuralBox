@@ -116,6 +116,13 @@
           <div id="debug-state" class="debug-state"></div>
           <div id="debug-events" class="debug-events"></div>
         </div>
+        <div id="workbench-panel" class="workbench-panel" style="display:none;">
+          <div class="workbench-panel-header">
+            <div class="workbench-panel-title">Multimodal Workbench</div>
+            <button id="workbench-clear-btn" class="debug-clear-btn" type="button">Clear</button>
+          </div>
+          <div id="workbench-body" class="workbench-body"></div>
+        </div>
 
         <div id="messages" class="messages-container">
           <div class="welcome-message">
@@ -213,6 +220,33 @@
             </div>
           </div>
           <div class="setting-group">
+            <label for="workflow-select">Workflow Mode</label>
+            <div class="setting-inline-row">
+              <select id="workflow-select"></select>
+              <button id="apply-workflow-btn" class="btn-primary" type="button">Apply</button>
+            </div>
+            <p class="setting-hint">Adds task-specific instructions (for example: Structured JSON, Code Review, or Study mode).</p>
+          </div>
+          <div class="setting-group">
+            <label class="toggle-label">
+              <span>Trust Layer in Messages</span>
+              <input type="checkbox" id="trust-layer-setting" checked />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows why a model was used, route reason, and generation context under each assistant response.</p>
+          </div>
+          <div class="setting-group">
+            <label class="toggle-label">
+              <span>Deterministic Team Mode</span>
+              <input type="checkbox" id="deterministic-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <div class="setting-inline-row" style="margin-top:0.5rem;">
+              <input id="deterministic-seed" type="text" placeholder="Seed (e.g. 42)" />
+            </div>
+            <p class="setting-hint">When enabled, uses reproducible generation behavior (lower randomness) and applies the optional seed when supported.</p>
+          </div>
+          <div class="setting-group">
             <label class="toggle-label">
               <span>🌐 Web-Enhanced Mode</span>
               <input type="checkbox" id="web-search-setting" />
@@ -238,12 +272,33 @@
             <p class="setting-hint">Shows model routing, hot-swap, cancel, and error events in-app.</p>
           </div>
           <div class="setting-group">
+            <label class="toggle-label">
+              <span>Workbench Panel</span>
+              <input type="checkbox" id="workbench-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows actual request context: route reason, image prep, RAG matches, and generation diagnostics.</p>
+          </div>
+          <div class="setting-group">
+            <label>Local RAG (Document Q&A)</label>
+            <div class="setting-inline-row">
+              <button id="rag-add-btn" class="btn-primary" type="button">Add Docs</button>
+              <button id="rag-clear-btn" class="btn-primary" type="button">Clear Docs</button>
+            </div>
+            <input type="file" id="rag-file-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" />
+            <p id="rag-status" class="setting-hint">No local docs loaded.</p>
+          </div>
+          <div class="setting-group">
             <label>Conversation Backup</label>
             <div class="setting-inline-row">
               <button id="export-chats-btn" class="btn-primary" type="button">Export</button>
               <button id="import-chats-btn" class="btn-primary" type="button">Import</button>
             </div>
             <input type="file" id="import-chats-input" accept="application/json" style="display:none;" />
+            <div class="setting-inline-row" style="margin-top:0.5rem;">
+              <button id="export-md-btn" class="btn-primary" type="button">Export Markdown</button>
+              <button id="copy-share-btn" class="btn-primary" type="button">Copy Share Text</button>
+            </div>
           </div>
           <div class="setting-group">
             <button id="clear-history-btn" class="btn-danger">Clear All Conversations</button>
