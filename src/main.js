@@ -302,6 +302,18 @@ let modelSwitchPromise = null;
 let debugPanelEnabled = false;
 const DEBUG_EVENT_LIMIT = 100;
 const runtimeEvents = [];
+const BENCHMARK_MAX_TOKENS = 32;
+let runtimeBenchmark = null;
+let runtimeBenchmarkPromise = null;
+let benchmarkDeferredUntilIdle = false;
+let inlineNoticeTimer = null;
+const reliabilityStats = {
+    generationRetries: 0,
+    generationFailures: 0,
+    switchFailures: 0,
+    recoveries: 0,
+    lastError: '',
+};
 
 const SEND_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>';
 const STOP_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -314,6 +326,215 @@ function isVisionModel() {
 function isThinkingModel() {
     const model = getModelById(selectedModelId);
     return model?.thinking === true;
+}
+
+function getModelCapabilitiesLabel(model = getModelById(selectedModelId)) {
+    if (!model) return 'Text';
+    const caps = ['Text'];
+    if (model.vision) caps.push('Vision');
+    if (model.thinking) caps.push('Thinking');
+    return caps.join(' + ');
+}
+
+function isRetryableGenerationError(err) {
+    const msg = String(err?.message || err || '').toLowerCase();
+    if (!msg) return false;
+    return /(context|timeout|network|fetch|temporarily|interrupted|unavailable|reload|alloc|memory|outofmemory|gpu)/i.test(msg);
+}
+
+function toUserFriendlyError(err) {
+    const msg = String(err?.message || err || '');
+    if (/expect embed\.shape/i.test(msg)) {
+        return 'Vision preprocessing mismatch detected. We retried with compatibility settings, but this model/runtime combination still failed.';
+    }
+    if (/startsWith/i.test(msg)) {
+        return 'A malformed image payload was detected and blocked. Please re-attach the image and try again.';
+    }
+    if (/outofmemory|memory/i.test(msg)) {
+        return 'Model ran out of memory. Try a smaller model or reduce context length.';
+    }
+    if (/timeout|network|fetch/i.test(msg)) {
+        return 'Temporary runtime/network interruption. Please retry.';
+    }
+    return msg || 'Unexpected runtime error.';
+}
+
+function setInlineNotice(message, kind = 'info', durationMs = 2600) {
+    if (!inputDisclaimer) return;
+    if (inlineNoticeTimer) {
+        clearTimeout(inlineNoticeTimer);
+        inlineNoticeTimer = null;
+    }
+    inputDisclaimer.textContent = message || '';
+    inputDisclaimer.classList.remove('web-active', 'notice-error', 'notice-warn', 'notice-info');
+    inputDisclaimer.classList.add(`notice-${kind}`);
+    inlineNoticeTimer = setTimeout(() => {
+        inlineNoticeTimer = null;
+        updateInputDisclaimer();
+    }, durationMs);
+}
+
+function getModelFitGrade(model, capabilities = deviceCapabilities || { vramMB: 0 }) {
+    const modelVram = Number(model?.vramMB) || 0;
+    const deviceVram = Number(capabilities?.vramMB) || 0;
+    if (deviceVram <= 0 || modelVram <= 0) return 'unknown';
+    const ratio = modelVram / Math.max(1, deviceVram);
+    if (ratio <= 0.72) return 'perfect';
+    if (ratio <= 0.96) return 'good';
+    if (ratio <= 1.12) return 'marginal';
+    return 'unrunnable';
+}
+
+function getFitGradeRank(grade) {
+    const map = {
+        unrunnable: 0,
+        marginal: 1,
+        unknown: 1,
+        good: 2,
+        perfect: 3,
+    };
+    return map[String(grade || '').toLowerCase()] ?? 1;
+}
+
+function getFitGradeLabel(grade) {
+    const map = {
+        perfect: 'Perfect',
+        good: 'Good',
+        marginal: 'Tight',
+        unrunnable: 'Too large',
+        unknown: 'Unknown',
+    };
+    return map[String(grade || '').toLowerCase()] || 'Unknown';
+}
+
+function clampScore(value, min = 0, max = 100) {
+    return Math.max(min, Math.min(max, value));
+}
+
+function getCompositeWeights(profileMode = modelRoutingProfileMode) {
+    if (profileMode === 'speed') {
+        return { quality: 0.18, speed: 0.48, fit: 0.28, context: 0.06 };
+    }
+    if (profileMode === 'quality') {
+        return { quality: 0.46, speed: 0.1, fit: 0.24, context: 0.2 };
+    }
+    return { quality: 0.3, speed: 0.28, fit: 0.26, context: 0.16 };
+}
+
+function getModelScoreCard(model, profileMode = modelRoutingProfileMode, capabilities = deviceCapabilities || { vramMB: 0 }) {
+    const tierRank = getModelTierRank(model);
+    const qualityScore = clampScore(30 + (tierRank * 16) + (model?.thinking ? 8 : 0) + (model?.vision ? 3 : 0));
+    const deviceVram = Math.max(256, Number(capabilities?.vramMB) || 2048);
+    const speedScore = clampScore(100 - ((Number(model?.vramMB) || 0) / deviceVram) * 85 + (tierRank <= 1 ? 6 : 0));
+    const fitGrade = getModelFitGrade(model, capabilities);
+    const fitScoreMap = { perfect: 100, good: 78, marginal: 42, unrunnable: 0, unknown: 55 };
+    const fitScore = fitScoreMap[fitGrade] ?? 55;
+    const contextScore = clampScore(42 + (tierRank * 11) + (model?.thinking ? 8 : 0));
+    const weights = getCompositeWeights(profileMode);
+    const total = Math.round(
+        qualityScore * weights.quality +
+        speedScore * weights.speed +
+        fitScore * weights.fit +
+        contextScore * weights.context
+    );
+    return {
+        qualityScore,
+        speedScore,
+        fitScore,
+        contextScore,
+        total,
+        fitGrade,
+        fitLabel: getFitGradeLabel(fitGrade),
+        fitRank: getFitGradeRank(fitGrade),
+    };
+}
+
+function rankModelsByComposite(models = [], profileMode = modelRoutingProfileMode, capabilities = deviceCapabilities || { vramMB: 0 }) {
+    return models
+        .map((model) => ({ model, card: getModelScoreCard(model, profileMode, capabilities) }))
+        .sort((a, b) => {
+            if (b.card.total !== a.card.total) return b.card.total - a.card.total;
+            return (a.model?.vramMB || 0) - (b.model?.vramMB || 0);
+        });
+}
+
+function getBenchmarkSummary() {
+    if (!runtimeBenchmark) return 'pending';
+    return `${runtimeBenchmark.tokensPerSec.toFixed(1)} tok/s, ${Math.round(runtimeBenchmark.firstTokenMs)}ms first token`;
+}
+
+function applyRoutingProfileFromBenchmark(benchmark) {
+    if (!benchmark) return;
+    if (benchmark.tokensPerSec < 8) modelRoutingProfileMode = 'speed';
+    else if (benchmark.tokensPerSec > 24) modelRoutingProfileMode = 'quality';
+    else modelRoutingProfileMode = 'balanced';
+}
+
+function scheduleRuntimeBenchmarkCalibration() {
+    if (!engine || runtimeBenchmark || runtimeBenchmarkPromise || isGenerating) return;
+    const shouldDefer = !chatScreen.classList.contains('active');
+    if (shouldDefer) {
+        benchmarkDeferredUntilIdle = true;
+        return;
+    }
+
+    benchmarkDeferredUntilIdle = false;
+    runtimeBenchmarkPromise = (async () => {
+        const startedAt = performance.now();
+        let tokenCount = 0;
+        let firstTokenMs = 0;
+        try {
+            const stream = await engine.chat.completions.create({
+                messages: [
+                    { role: 'system', content: 'You are a concise benchmark responder.' },
+                    { role: 'user', content: 'Reply with exactly: ok' },
+                ],
+                temperature: 0,
+                max_tokens: BENCHMARK_MAX_TOKENS,
+                stream: true,
+            });
+            for await (const chunk of stream) {
+                const delta = chunk?.choices?.[0]?.delta?.content || '';
+                if (!delta) continue;
+                tokenCount++;
+                if (!firstTokenMs) {
+                    firstTokenMs = performance.now() - startedAt;
+                }
+                if (tokenCount >= BENCHMARK_MAX_TOKENS) break;
+            }
+            const elapsedSec = Math.max((performance.now() - startedAt) / 1000, 0.001);
+            runtimeBenchmark = {
+                tokensPerSec: tokenCount / elapsedSec,
+                firstTokenMs: firstTokenMs || (elapsedSec * 1000),
+                tokenCount,
+                elapsedSec,
+            };
+            applyRoutingProfileFromBenchmark(runtimeBenchmark);
+            logRuntimeEvent('device_benchmark_done', {
+                tokenCount,
+                elapsedSec: Number(elapsedSec.toFixed(2)),
+                tokensPerSec: Number(runtimeBenchmark.tokensPerSec.toFixed(2)),
+                firstTokenMs: Number(runtimeBenchmark.firstTokenMs.toFixed(0)),
+                profile: modelRoutingProfileMode,
+            });
+            renderModelSelector(deviceCapabilities || { vramMB: 0, gpuName: 'Unknown' }, autoSelectModel(deviceCapabilities || { vramMB: 0 }));
+            renderDebugPanel();
+        } catch (err) {
+            logRuntimeEvent('device_benchmark_fail', {
+                error: String(err?.message || err || ''),
+            });
+        } finally {
+            runtimeBenchmarkPromise = null;
+        }
+    })();
+}
+
+function scheduleDeferredBenchmarkIfIdle() {
+    if (!benchmarkDeferredUntilIdle || !engine || isGenerating) return;
+    const activeConv = getActiveConversation();
+    const hasHistory = Boolean(activeConv && Array.isArray(activeConv.messages) && activeConv.messages.length > 0);
+    if (hasHistory || userInput.value.trim().length > 0) return;
+    scheduleRuntimeBenchmarkCalibration();
 }
 
 async function detectDeviceCapabilities() {
@@ -360,8 +581,9 @@ function autoSelectModel(capabilities) {
     const curatedModels = MODEL_CATALOG.filter((m) => !m.advanced);
     // Find the best model that fits the detected VRAM
     const eligible = curatedModels.filter(m => m.vramMB <= capabilities.vramMB * 1.1); // 10% margin
-    if (eligible.length === 0) return curatedModels[0] || MODEL_CATALOG[0]; // fallback to smallest curated
-    return eligible[eligible.length - 1]; // pick the largest eligible
+    const pool = eligible.length === 0 ? (curatedModels[0] ? [curatedModels[0]] : [MODEL_CATALOG[0]]) : eligible;
+    const ranked = rankModelsByComposite(pool, modelRoutingProfileMode, capabilities);
+    return ranked[0]?.model || pool[pool.length - 1] || MODEL_CATALOG[0];
 }
 
 function getModelById(id) {
@@ -382,8 +604,11 @@ function renderModelOptions(models, options = {}) {
 
     return models.map((m) => {
         const isRec = m.id === recommendedId;
-        const tooLarge = m.vramMB > capabilities.vramMB * 1.2;
-        return `<option value="${m.id}" ${m.id === selectionId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>${m.name} (${m.size})${isRec ? ' - Recommended' : ''}${tooLarge ? ` - ${highVramLabel}` : ''}</option>`;
+        const card = getModelScoreCard(m, modelRoutingProfileMode, capabilities);
+        const tooLarge = card.fitGrade === 'unrunnable' || m.vramMB > capabilities.vramMB * 1.2;
+        const warningText = tooLarge ? ` - ${highVramLabel}` : (card.fitGrade === 'marginal' ? ' - Tight fit' : '');
+        const capText = m.vision ? 'Vision' : (m.thinking ? 'Thinking' : 'Text');
+        return `<option value="${m.id}" ${m.id === selectionId ? 'selected' : ''} ${tooLarge ? 'data-warning="true"' : ''}>${m.name} (${m.size})${isRec ? ' - Recommended' : ''} - ${capText} - Fit ${card.fitLabel} - Score ${card.total}${warningText}</option>`;
     }).join('');
 }
 
@@ -418,18 +643,24 @@ function syncModelSelectors() {
 
 function applyModelUiState() {
     const model = getModelById(selectedModelId);
+    const capabilityLabel = getModelCapabilitiesLabel(model);
     const modelBadge = $('#model-badge');
     if (modelBadge) {
         modelBadge.textContent = isAutoModelSelected()
             ? `Auto | ${model.name}`
             : model.name;
+        modelBadge.title = `Capabilities: ${capabilityLabel}`;
     }
 
     if (isVisionModel()) {
         imageBtn.style.display = 'flex';
     } else {
+        const hadImage = Boolean(pendingImage);
         imageBtn.style.display = 'none';
         clearPendingImage();
+        if (hadImage) {
+            setInlineNotice('Cleared image attachment: selected model is text-only.', 'warn', 2600);
+        }
     }
 
     if (isThinkingModel()) {
@@ -477,7 +708,7 @@ function getRuntimeStateSummary() {
         ? 'Auto'
         : getModelById(modelSelectionId).name;
     const activeLabel = getModelById(selectedModelId).name;
-    return `Selection: ${selectionLabel} | Active: ${activeLabel} | Generating: ${isGenerating ? 'yes' : 'no'} | GenerationId: ${activeGenerationId}`;
+    return `Selection: ${selectionLabel} | Active: ${activeLabel} | Profile: ${modelRoutingProfileMode} | Benchmark: ${getBenchmarkSummary()} | Retries: ${reliabilityStats.generationRetries} | Failures: ${reliabilityStats.generationFailures} | Generating: ${isGenerating ? 'yes' : 'no'} | GenerationId: ${activeGenerationId}`;
 }
 
 function renderDebugPanel() {
@@ -612,12 +843,15 @@ function chooseModelRoute(text, hasImage) {
             return {
                 targetModelId: selectedModelId,
                 reason: 'No compatible vision model available',
+                targetScore: null,
             };
         }
-        const target = visionChoices[visionChoices.length - 1];
+        const rankedVision = rankModelsByComposite(visionChoices, 'quality', deviceCapabilities || { vramMB: 0 });
+        const target = rankedVision[0]?.model || visionChoices[visionChoices.length - 1];
         return {
             targetModelId: target.id,
             reason: `Image detected. Routed to ${target.name}`,
+            targetScore: rankedVision[0]?.card?.total ?? null,
         };
     }
 
@@ -627,6 +861,7 @@ function chooseModelRoute(text, hasImage) {
         return {
             targetModelId: selectedModelId,
             reason: 'No compatible models available',
+            targetScore: null,
         };
     }
 
@@ -643,15 +878,19 @@ function chooseModelRoute(text, hasImage) {
     const currentModel = getModelById(selectedModelId);
     const currentScore = scoreModelForTask(currentModel, task, false);
     if (bestModel.id !== currentModel.id && bestScore - currentScore < 8) {
+        const currentCard = getModelScoreCard(currentModel, modelRoutingProfileMode, deviceCapabilities || { vramMB: 0 });
         return {
             targetModelId: currentModel.id,
-            reason: `Stayed on ${currentModel.name} (similar score)`,
+            reason: `Stayed on ${currentModel.name} (similar score, fit ${currentCard.fitLabel}, score ${currentCard.total})`,
+            targetScore: currentCard.total,
         };
     }
 
+    const bestCard = getModelScoreCard(bestModel, modelRoutingProfileMode, deviceCapabilities || { vramMB: 0 });
     return {
         targetModelId: bestModel.id,
-        reason: `Routed to ${bestModel.name} for this request`,
+        reason: `Routed to ${bestModel.name} for this request (fit ${bestCard.fitLabel}, score ${bestCard.total})`,
+        targetScore: bestCard.total,
     };
 }
 
@@ -707,8 +946,11 @@ async function switchModelById(newModelId, options = {}) {
             toModelId: newModelId,
             toModelName: targetModel.name,
         });
+        scheduleDeferredBenchmarkIfIdle();
         return { switched: true, reason: `Switched to ${targetModel.name}` };
     } catch (err) {
+        reliabilityStats.switchFailures += 1;
+        reliabilityStats.lastError = String(err?.message || err || '');
         setHotSwapStatus('Hot swap failed', null, true);
         setTimeout(() => {
             if (modelSwitchPromise) return;
@@ -1113,19 +1355,20 @@ function toggleWebSearch(enabled, options = {}) {
 }
 
 function updateInputDisclaimer() {
+    const capabilityLabel = getModelCapabilitiesLabel(getModelById(selectedModelId));
     if (webSearchEnabled) {
-        inputDisclaimer.textContent = 'Web-Enhanced mode is on. Search queries are sent to DuckDuckGo.';
+        inputDisclaimer.textContent = `Web-Enhanced mode is on. Search queries are sent to DuckDuckGo. Active model supports: ${capabilityLabel}.`;
         inputDisclaimer.classList.add('web-active');
         return;
     }
 
     if (isVisionModel()) {
-        inputDisclaimer.textContent = 'Vision ready. Attach, paste, or drop an image to analyze.';
+        inputDisclaimer.textContent = `Vision ready. Attach, paste, or drop an image to analyze. Supports: ${capabilityLabel}.`;
     } else {
-        inputDisclaimer.textContent = 'AI runs locally in your browser. Responses may vary in quality.';
+        inputDisclaimer.textContent = `AI runs locally in your browser. Supports: ${capabilityLabel}.`;
     }
 
-    inputDisclaimer.classList.remove('web-active');
+    inputDisclaimer.classList.remove('web-active', 'notice-error', 'notice-warn', 'notice-info');
 }
 
 async function webSearch(query) {
@@ -1303,6 +1546,8 @@ async function init() {
     logRuntimeEvent('app_init', {
         gpu: deviceCapabilities?.gpuName || 'unknown',
         vramMB: deviceCapabilities?.vramMB || 0,
+        profile: modelRoutingProfileMode,
+        benchmark: getBenchmarkSummary(),
     });
 
     // Render the initial model selector on the loading screen
@@ -1347,7 +1592,11 @@ function renderStartModelSelector(capabilities, recommended) {
         html += `</optgroup>`;
     }
     html += `</select>`;
+    const selected = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
+    const selectedCard = getModelScoreCard(selected, modelRoutingProfileMode, capabilities);
     html += `<p class="setting-hint" style="margin-top:0.4rem; text-align:center;">Your GPU: <strong>${capabilities.gpuName}</strong> (~${capabilities.vramMB}MB VRAM)</p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Profile: <strong>${modelRoutingProfileMode}</strong> • Benchmark: <strong>${getBenchmarkSummary()}</strong></p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Selected supports: <strong>${getModelCapabilitiesLabel(selected)}</strong> • Fit: <strong>${selectedCard.fitLabel}</strong> • Score: <strong>${selectedCard.total}</strong></p>`;
 
     container.innerHTML = html;
 
@@ -1356,7 +1605,7 @@ function renderStartModelSelector(capabilities, recommended) {
         select.addEventListener('change', async () => {
             modelSelectionId = select.value;
             saveModelSelectionId();
-            selectedModelId = isAutoModelSelected() ? recommended.id : modelSelectionId;
+            selectedModelId = isAutoModelSelected() ? resolveAutoModelCandidate().id : modelSelectionId;
             applyModelUiState();
 
             // Update cache status
@@ -1422,9 +1671,31 @@ async function loadModel() {
             }
         };
 
-        engine = await webllm.CreateMLCEngine(targetModel.id, {
-            initProgressCallback,
-        });
+        let lastLoadErr = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                engine = await webllm.CreateMLCEngine(targetModel.id, {
+                    initProgressCallback,
+                });
+                lastLoadErr = null;
+                break;
+            } catch (loadErr) {
+                lastLoadErr = loadErr;
+                if (attempt === 0 && isRetryableGenerationError(loadErr)) {
+                    reliabilityStats.recoveries += 1;
+                    logRuntimeEvent('model_load_retry', {
+                        modelId: targetModel.id,
+                        reason: String(loadErr?.message || loadErr || ''),
+                    });
+                    statusText.textContent = `Load hiccup detected. Retrying ${model.name}...`;
+                    continue;
+                }
+                throw loadErr;
+            }
+        }
+        if (!engine && lastLoadErr) {
+            throw lastLoadErr;
+        }
 
         progressFill.style.width = '100%';
         progressPercent.textContent = '100%';
@@ -1434,12 +1705,14 @@ async function loadModel() {
             modelId: selectedModelId,
             modelName: model.name,
         });
+        scheduleRuntimeBenchmarkCalibration();
 
         setTimeout(() => {
             void showChatScreen();
         }, 500);
     } catch (err) {
         console.error('Model loading failed:', err);
+        reliabilityStats.lastError = String(err?.message || err || '');
         statusText.textContent = 'Failed to load model: ' + err.message;
         startBtn.style.display = 'inline-flex';
         startBtn.textContent = 'Retry';
@@ -1473,8 +1746,12 @@ function renderModelSelector(capabilities, recommended) {
         html += `</optgroup>`;
     }
     html += `</select>`;
+    const selected = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
+    const selectedCard = getModelScoreCard(selected, modelRoutingProfileMode, capabilities);
     html += `<p class="setting-hint">`;
     html += `GPU: ${capabilities.gpuName} - Est. VRAM: ${capabilities.vramMB}MB`;
+    html += `<br/>Profile: ${modelRoutingProfileMode} - Benchmark: ${getBenchmarkSummary()}`;
+    html += `<br/>Selected supports: ${getModelCapabilitiesLabel(selected)} - Fit: ${selectedCard.fitLabel} - Score: ${selectedCard.total}`;
     html += `</p>`;
     html += `<button id="switch-model-btn" class="btn-primary" style="display:none; margin-top:0.5rem; width:100%;">Switch Model</button>`;
 
@@ -1554,6 +1831,7 @@ async function showChatScreen() {
     }
 
     renderSidebar();
+    scheduleRuntimeBenchmarkCalibration();
 }
 
 // ============================================
@@ -1726,6 +2004,15 @@ function closeSidebar() {
 
 async function sendMessage(text) {
     if ((!text.trim() && !pendingImage) || isGenerating || !engine) return;
+    if (pendingImage && !isVisionModel()) {
+        clearPendingImage();
+        setInlineNotice('Current model is text-only. Switch to a vision model to send images.', 'warn', 3200);
+        logRuntimeEvent('capability_guard_block', {
+            reason: 'vision_required_for_image',
+            modelId: selectedModelId,
+        });
+        return;
+    }
 
     const userText = text.trim();
     userInput.value = '';
@@ -1824,23 +2111,37 @@ async function sendMessage(text) {
                 reason: routing.reason,
                 targetModelId: routing.targetModelId,
                 currentModelId: selectedModelId,
+                targetScore: routing.targetScore,
+                profile: modelRoutingProfileMode,
             });
             if (routing.targetModelId !== selectedModelId) {
                 if (hasAssistantHistory) {
                     contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Preparing the best model for this request...</div>';
                     scrollToBottom();
                 }
-                await switchModelById(routing.targetModelId, {
-                    onProgress: () => {
-                        if (hasAssistantHistory) {
-                            contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Loading selected model...</div>';
-                        }
-                    },
-                });
-                visionDebug('Model routing switch', {
-                    routeReason: routing.reason,
-                    targetModel: routing.targetModelId,
-                });
+                try {
+                    await switchModelById(routing.targetModelId, {
+                        onProgress: () => {
+                            if (hasAssistantHistory) {
+                                contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Loading selected model...</div>';
+                            }
+                        },
+                    });
+                    reliabilityStats.recoveries += 1;
+                    visionDebug('Model routing switch', {
+                        routeReason: routing.reason,
+                        targetModel: routing.targetModelId,
+                    });
+                } catch (switchErr) {
+                    reliabilityStats.switchFailures += 1;
+                    reliabilityStats.lastError = String(switchErr?.message || switchErr || '');
+                    logRuntimeEvent('route_switch_failed', {
+                        targetModelId: routing.targetModelId,
+                        error: reliabilityStats.lastError,
+                    });
+                    contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Model switch failed, continuing on current model...</div>';
+                    scrollToBottom();
+                }
             }
         }
 
@@ -1882,7 +2183,8 @@ async function sendMessage(text) {
         let requestMessages = messages;
         let finalErr = null;
 
-        for (let attempt = 0; attempt < 3; attempt++) {
+        const maxAttempts = isVisionRequest ? 3 : 2;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
             if (generationCancelRequested || generationId !== activeGenerationId) {
                 throw new Error('Generation cancelled by user.');
             }
@@ -1896,6 +2198,23 @@ async function sendMessage(text) {
                 }
                 finalErr = err;
                 if (!isVisionRequest || !isVisionRecoverableError(err)) {
+                    const canRetry = attempt === 0 && isRetryableGenerationError(err);
+                    if (canRetry) {
+                        reliabilityStats.generationRetries += 1;
+                        reliabilityStats.recoveries += 1;
+                        logRuntimeEvent('generation_retry', {
+                            generationId,
+                            attempt: attempt + 1,
+                            reason: String(err?.message || err || ''),
+                        });
+                        contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Recovering from runtime issue, retrying...</div>';
+                        scrollToBottom();
+                        requestMessages = [
+                            { role: 'system', content: sysContent },
+                            ...conv.messages.slice(-8),
+                        ];
+                        continue;
+                    }
                     throw err;
                 }
 
@@ -2006,8 +2325,10 @@ async function sendMessage(text) {
                 reason: 'interrupted',
             });
         } else {
+            reliabilityStats.generationFailures += 1;
+            reliabilityStats.lastError = errText;
             console.error('Generation error:', err);
-            contentEl.innerHTML = `<span style="color: #f87171;">Error: ${err.message}</span>`;
+            contentEl.innerHTML = `<span style="color: #f87171;">Error: ${toUserFriendlyError(err)}</span>`;
             logRuntimeEvent('generation_error', {
                 generationId,
                 error: String(err?.message || err || ''),
@@ -2016,6 +2337,7 @@ async function sendMessage(text) {
     } finally {
         if (generationId === activeGenerationId) {
             setGeneratingState(false);
+            scheduleDeferredBenchmarkIfIdle();
         }
     }
 }
@@ -2768,7 +3090,16 @@ imagePreviewClear.addEventListener('click', () => {
 });
 
 userInput.addEventListener('paste', (e) => {
-    if (!isVisionModel()) return;
+    if (!isVisionModel()) {
+        if (getImageFromClipboard(e.clipboardData)) {
+            setInlineNotice('This model is text-only. Switch to a vision model before pasting images.', 'warn', 2800);
+            logRuntimeEvent('capability_guard_block', {
+                reason: 'paste_image_requires_vision',
+                modelId: selectedModelId,
+            });
+        }
+        return;
+    }
     const file = getImageFromClipboard(e.clipboardData);
     if (!file) return;
     e.preventDefault();
@@ -2788,7 +3119,17 @@ if (inputWrapper) {
     });
 
     inputWrapper.addEventListener('drop', (e) => {
-        if (!isVisionModel()) return;
+        if (!isVisionModel()) {
+            if (getImageFromDataTransfer(e.dataTransfer)) {
+                e.preventDefault();
+                setInlineNotice('This model is text-only. Switch to a vision model before dropping images.', 'warn', 2800);
+                logRuntimeEvent('capability_guard_block', {
+                    reason: 'drop_image_requires_vision',
+                    modelId: selectedModelId,
+                });
+            }
+            return;
+        }
         const file = getImageFromDataTransfer(e.dataTransfer);
         if (!file) return;
         e.preventDefault();
@@ -2800,7 +3141,14 @@ if (inputWrapper) {
 function attachImageFile(file) {
     const mimeType = typeof file?.type === 'string' ? file.type : '';
     if (!file || !safeStartsWith(mimeType, 'image/')) return;
-    if (!isVisionModel()) return;
+    if (!isVisionModel()) {
+        setInlineNotice('Current model is text-only. Switch to a vision model to attach images.', 'warn', 3000);
+        logRuntimeEvent('capability_guard_block', {
+            reason: 'attach_image_requires_vision',
+            modelId: selectedModelId,
+        });
+        return;
+    }
     normalizeVisionImage(file)
         .then((normalized) => {
             pendingImage = { dataUrl: normalized.dataUrl, file, meta: normalized };

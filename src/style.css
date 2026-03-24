@@ -1036,6 +1036,19 @@ body {
   max-width: 800px;
   margin-left: auto;
   margin-right: auto;
+  transition: color var(--transition);
+}
+
+.input-disclaimer.notice-info {
+  color: #93c5fd;
+}
+
+.input-disclaimer.notice-warn {
+  color: #fbbf24;
+}
+
+.input-disclaimer.notice-error {
+  color: #fca5a5;
 }
 
 /* ============= Settings Panel ============= */
