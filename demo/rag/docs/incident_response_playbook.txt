@@ -1,0 +1,28 @@
+NeuralBox Incident Response Playbook
+Version: 2026-03-01
+
+Purpose
+This document defines operational response guidelines for customer-facing outages and severe regressions.
+
+Critical Incident Rules
+1. Escalation code for critical incidents: AURORA-7712
+2. Primary command bridge: #neuralbox-critical
+3. First response target: within 10 minutes
+4. Incident commander role rotates weekly
+
+Regional Operations
+- Primary support region: Halifax
+- Secondary support region: Dublin
+- 24/7 paging starts only when severity is P0 or P1
+
+Customer Communication
+- First customer update target: 20 minutes
+- Update cadence during active incident: every 30 minutes
+- Final post-incident summary target: within 48 hours
+
+Data Handling During Incidents
+- Standard customer diagnostic logs are retained for 30 days
+- Logs are encrypted at rest and access is limited to incident responders
+
+Unique reference phrase
+When validating retrieval quality, search for phrase: north-harbor-circuit

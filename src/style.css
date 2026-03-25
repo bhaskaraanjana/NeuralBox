@@ -2288,3 +2288,154 @@ body {
     margin-bottom: 0.8rem;
   }
 }
+
+/* ---- Settings UX Refresh ---- */
+.settings-tabs {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 1rem 0.75rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.settings-tab {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 34, 0.6);
+  color: #aebed4;
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settings-tab.active {
+  color: #dbeafe;
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(37, 99, 235, 0.22);
+}
+
+.setting-group.hidden-by-tab {
+  display: none;
+}
+
+.rag-setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rag-dropzone {
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: rgba(13, 20, 30, 0.75);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.rag-dropzone:focus-visible,
+.rag-dropzone.drag-active {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.65);
+  background: rgba(30, 58, 95, 0.2);
+}
+
+.rag-dropzone-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #dbe8f8;
+}
+
+.rag-dropzone-subtitle {
+  margin-top: 0.2rem;
+  font-size: 0.73rem;
+  color: #8da4c2;
+}
+
+#rag-search-input {
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 10px;
+  background: #0d1521;
+  color: #e2e8f0;
+  padding: 0.55rem 0.65rem;
+}
+
+#rag-search-input:focus {
+  outline: none;
+  border-color: rgba(96, 165, 250, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.rag-doc-list {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 11px;
+  background: rgba(8, 13, 20, 0.5);
+  max-height: 180px;
+  overflow: auto;
+}
+
+.rag-doc-empty {
+  padding: 0.7rem;
+  font-size: 0.76rem;
+  color: #8ea6c4;
+}
+
+.rag-doc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.52rem 0.62rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.rag-doc-item:last-child {
+  border-bottom: none;
+}
+
+.rag-doc-main {
+  min-width: 0;
+}
+
+.rag-doc-name {
+  font-size: 0.78rem;
+  color: #d9e6f7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rag-doc-meta {
+  font-size: 0.71rem;
+  color: #8ca2bf;
+}
+
+.rag-doc-remove-btn {
+  border: 1px solid rgba(239, 68, 68, 0.38);
+  background: rgba(127, 29, 29, 0.3);
+  color: #fecaca;
+  border-radius: 8px;
+  padding: 0.28rem 0.48rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.rag-doc-remove-btn:hover {
+  background: rgba(153, 27, 27, 0.42);
+}
+
+@media (max-width: 640px) {
+  .settings-tabs {
+    padding: 0 0.75rem 0.6rem;
+  }
+
+  .settings-tab {
+    flex: 1;
+    text-align: center;
+  }
+
+  .rag-doc-list {
+    max-height: 150px;
+  }
+}

@@ -1,0 +1,26 @@
+NeuralBox Enterprise Data Policy
+Version: 2026-02-14
+
+Scope
+This policy applies only to Enterprise contract customers.
+
+Retention and Compliance
+- Enterprise audit logs are retained for 90 days
+- Backup snapshots are retained for 35 days
+- Compliance contact alias: compliance-enterprise@neuralbox.local
+
+Access Controls
+- All production access requires MFA
+- Privileged access sessions are recorded
+- Security review frequency: quarterly
+
+Data Regions
+- Enterprise default region: Canada East
+- Optional region pinning is available for approved contracts
+
+Operational Notes
+- Enterprise P1 support SLA: first response within 15 minutes
+- Dedicated escalation identifier for enterprise reviews: ORBIT-990
+
+Unique reference phrase
+When validating retrieval quality, search for phrase: enterprise-amber-window

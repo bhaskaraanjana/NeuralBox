@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:stability": "node scripts/stability-sprint-smoke.mjs"
+    "test:stability": "node scripts/stability-sprint-smoke.mjs",
+    "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",

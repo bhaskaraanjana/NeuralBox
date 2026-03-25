@@ -59,6 +59,8 @@ const settingsBtn = $('#settings-btn');
 const settingsPanel = $('#settings-panel');
 const settingsOverlay = $('#settings-overlay');
 const closeSettings = $('#close-settings');
+const settingsTabRegular = $('#settings-tab-regular');
+const settingsTabAdvanced = $('#settings-tab-advanced');
 const systemPrompt = $('#system-prompt');
 const temperatureSlider = $('#temperature');
 const tempValue = $('#temp-value');
@@ -89,6 +91,9 @@ const ragAddBtn = $('#rag-add-btn');
 const ragClearBtn = $('#rag-clear-btn');
 const ragFileInput = $('#rag-file-input');
 const ragStatus = $('#rag-status');
+const ragDocList = $('#rag-doc-list');
+const ragSearchInput = $('#rag-search-input');
+const ragDropzone = $('#rag-dropzone');
 const exportMdBtn = $('#export-md-btn');
 const copyShareBtn = $('#copy-share-btn');
 
@@ -324,6 +329,7 @@ let runtimeBenchmark = null;
 let runtimeBenchmarkPromise = null;
 let benchmarkDeferredUntilIdle = false;
 let inlineNoticeTimer = null;
+let activeSettingsTab = 'regular';
 let workflowModeId = 'general';
 let trustLayerEnabled = true;
 let deterministicModeEnabled = false;
@@ -333,6 +339,7 @@ const workbenchEntries = [];
 const WORKBENCH_LIMIT = 40;
 let ragDocuments = [];
 let ragChunks = [];
+let ragDocSearchQuery = '';
 const RAG_MAX_DOCS = 24;
 const RAG_MAX_CHARS_PER_DOC = 240000;
 const RAG_CHUNK_SIZE = 900;
@@ -529,15 +536,56 @@ function buildRagContext(matches) {
     return ctx;
 }
 
+function formatCompactNumber(value) {
+    const n = Number(value) || 0;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return String(n);
+}
+
+function renderRagDocList() {
+    if (!ragDocList) return;
+
+    const query = String(ragDocSearchQuery || '').trim().toLowerCase();
+    const docs = query
+        ? ragDocuments.filter((doc) => String(doc?.name || '').toLowerCase().includes(query))
+        : ragDocuments;
+
+    if (!docs.length) {
+        ragDocList.innerHTML = `<div class="rag-doc-empty">${ragDocuments.length ? 'No matching docs.' : 'No documents yet. Add files to start local RAG.'}</div>`;
+        return;
+    }
+
+    ragDocList.innerHTML = docs
+        .slice()
+        .sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0))
+        .map((doc) => {
+            const chunkCount = Array.isArray(doc?.chunks) ? doc.chunks.length : 0;
+            const charCount = Number(doc?.sizeChars) || String(doc?.text || '').length;
+            return `
+            <div class="rag-doc-item">
+                <div class="rag-doc-main">
+                    <div class="rag-doc-name">${escapeHtml(String(doc?.name || 'document'))}</div>
+                    <div class="rag-doc-meta">${chunkCount} chunks - ${formatCompactNumber(charCount)} chars</div>
+                </div>
+                <button class="rag-doc-remove-btn" type="button" data-rag-doc-id="${escapeHtml(String(doc?.id || ''))}" title="Remove document">Remove</button>
+            </div>
+            `;
+        })
+        .join('');
+}
+
 function renderRagStatus() {
     if (!ragStatus) return;
     const docCount = ragDocuments.length;
     const chunkCount = ragChunks.length;
     if (!docCount) {
         ragStatus.textContent = 'No local docs loaded.';
+        renderRagDocList();
         return;
     }
-    ragStatus.textContent = `${docCount} docs indexed • ${chunkCount} chunks ready for retrieval.`;
+    ragStatus.textContent = `${docCount} docs indexed - ${chunkCount} chunks ready. Retrieval runs automatically when relevant.`;
+    renderRagDocList();
 }
 
 function persistRagDocs() {
@@ -587,6 +635,9 @@ async function readFileAsText(file) {
 async function ingestRagFiles(files = []) {
     const list = Array.from(files || []);
     if (!list.length) return;
+    if (ragStatus) {
+        ragStatus.textContent = `Indexing ${list.length} file(s)...`;
+    }
     const docsToAdd = [];
     for (const file of list) {
         if (!file) continue;
@@ -606,24 +657,48 @@ async function ingestRagFiles(files = []) {
     }
     if (!docsToAdd.length) {
         setInlineNotice('No supported text content found in selected files.', 'warn', 2200);
+        renderRagStatus();
         return;
     }
-    const combined = [...ragDocuments, ...docsToAdd].slice(-RAG_MAX_DOCS);
+    const existingKeySet = new Set(ragDocuments.map((doc) => `${doc.name}::${doc.sizeChars}`));
+    const deduped = docsToAdd.filter((doc) => {
+        const key = `${doc.name}::${doc.sizeChars}`;
+        if (existingKeySet.has(key)) return false;
+        existingKeySet.add(key);
+        return true;
+    });
+    const combined = [...ragDocuments, ...deduped].slice(-RAG_MAX_DOCS);
     loadRagDocsIntoState(combined);
     persistRagDocs();
-    setInlineNotice(`Indexed ${docsToAdd.length} document(s) for local RAG.`, 'info', 2200);
+    if (deduped.length === 0) {
+        setInlineNotice('Skipped duplicates. Your RAG library is already up to date.', 'info', 2200);
+    } else {
+        setInlineNotice(`Indexed ${deduped.length} document(s) for local RAG.`, 'info', 2200);
+    }
     pushWorkbenchEvent('rag_docs_indexed', {
-        added: docsToAdd.length,
+        added: deduped.length,
         totalDocs: ragDocuments.length,
         totalChunks: ragChunks.length,
     });
 }
 
 function clearRagDocs() {
+    ragDocSearchQuery = '';
+    if (ragSearchInput) ragSearchInput.value = '';
     loadRagDocsIntoState([]);
     persistRagDocs();
     setInlineNotice('Cleared local RAG documents.', 'info', 1800);
     pushWorkbenchEvent('rag_docs_cleared', {});
+}
+
+function removeRagDocById(docId) {
+    const id = String(docId || '').trim();
+    if (!id) return;
+    const next = ragDocuments.filter((doc) => String(doc?.id || '') !== id);
+    if (next.length === ragDocuments.length) return;
+    loadRagDocsIntoState(next);
+    persistRagDocs();
+    setInlineNotice('Removed document from local RAG.', 'info', 1800);
 }
 
 function getModelFitGrade(model, capabilities = deviceCapabilities || { vramMB: 0 }) {
@@ -829,13 +904,37 @@ async function detectDeviceCapabilities() {
     return result;
 }
 
+function getAutoTargetUtilization() {
+    if (!runtimeBenchmark) return 0.8;
+    if (runtimeBenchmark.tokensPerSec >= 24) return 0.95;
+    if (runtimeBenchmark.tokensPerSec >= 16) return 0.9;
+    if (runtimeBenchmark.tokensPerSec >= 10) return 0.84;
+    return 0.72;
+}
+
 function autoSelectModel(capabilities) {
     const curatedModels = MODEL_CATALOG.filter((m) => !m.advanced);
-    // Find the best model that fits the detected VRAM
-    const eligible = curatedModels.filter(m => m.vramMB <= capabilities.vramMB * 1.1); // 10% margin
-    const pool = eligible.length === 0 ? (curatedModels[0] ? [curatedModels[0]] : [MODEL_CATALOG[0]]) : eligible;
+    const deviceVram = Number(capabilities?.vramMB) || 0;
+    const runnable = curatedModels.filter((m) => m.vramMB <= deviceVram * 1.1);
+    const pool = runnable.length ? runnable : (curatedModels[0] ? [curatedModels[0]] : [MODEL_CATALOG[0]]);
     const ranked = rankModelsByComposite(pool, modelRoutingProfileMode, capabilities);
-    return ranked[0]?.model || pool[pool.length - 1] || MODEL_CATALOG[0];
+    const bestByScore = ranked[0]?.model || pool[pool.length - 1] || MODEL_CATALOG[0];
+
+    // Keep auto mode practical: bias toward the largest still-safe model.
+    const targetUtil = getAutoTargetUtilization();
+    const safeUpperBound = deviceVram > 0 ? Math.floor(deviceVram * targetUtil) : 0;
+    const biggerSafe = pool
+        .filter((m) => {
+            if (safeUpperBound <= 0) return true;
+            const fit = getModelFitGrade(m, capabilities);
+            return m.vramMB <= safeUpperBound && (fit === 'perfect' || fit === 'good' || fit === 'unknown');
+        })
+        .sort((a, b) => b.vramMB - a.vramMB)[0];
+
+    if (!biggerSafe) return bestByScore;
+    const biggerCard = getModelScoreCard(biggerSafe, modelRoutingProfileMode, capabilities);
+    const bestCard = getModelScoreCard(bestByScore, modelRoutingProfileMode, capabilities);
+    return biggerCard.total >= bestCard.total - 12 ? biggerSafe : bestByScore;
 }
 
 function getModelById(id) {
@@ -891,6 +990,21 @@ function syncModelSelectors() {
     if (settingsSelect) settingsSelect.value = modelSelectionId;
     const startSelect = document.getElementById('start-model-select');
     if (startSelect) startSelect.value = modelSelectionId;
+}
+
+function setSettingsTab(tab = 'regular', options = {}) {
+    const nextTab = tab === 'advanced' ? 'advanced' : 'regular';
+    activeSettingsTab = nextTab;
+
+    if (settingsTabRegular) settingsTabRegular.classList.toggle('active', nextTab === 'regular');
+    if (settingsTabAdvanced) settingsTabAdvanced.classList.toggle('active', nextTab === 'advanced');
+
+    document.querySelectorAll('.setting-group[data-setting-level]').forEach((group) => {
+        const level = group.getAttribute('data-setting-level') || 'regular';
+        group.classList.toggle('hidden-by-tab', level !== nextTab);
+    });
+
+    if (options.persist) saveSettings();
 }
 
 function applyModelUiState() {
@@ -3179,6 +3293,7 @@ async function loadSettings() {
         workbenchEnabled = Boolean(settings.workbenchEnabled);
         trustLayerEnabled = settings.trustLayerEnabled !== false;
         deterministicModeEnabled = Boolean(settings.deterministicModeEnabled);
+        activeSettingsTab = settings.activeSettingsTab === 'advanced' ? 'advanced' : 'regular';
         workflowModeId = getWorkflowById(settings.workflowModeId || workflowModeId).id;
         const parsedSeed = parseInt(settings.deterministicSeed, 10);
         deterministicSeed = Number.isFinite(parsedSeed) ? parsedSeed : deterministicSeed;
@@ -3204,6 +3319,7 @@ async function loadSettings() {
         if (workflowSelect) {
             workflowSelect.value = workflowModeId;
         }
+        setSettingsTab(activeSettingsTab, { persist: false });
         renderDebugPanel();
         renderWorkbenchPanel();
     } catch (e) { /* ignore */ }
@@ -3222,6 +3338,7 @@ function saveSettings() {
         deterministicModeEnabled: deterministicModeEnabled,
         deterministicSeed: deterministicSeed,
         workflowModeId: workflowModeId,
+        activeSettingsTab: activeSettingsTab,
     };
     void saveSettingsRecord(snapshot).catch((err) => {
         console.error('[DB] Failed to save settings:', err);
@@ -3309,6 +3426,7 @@ if (conversationSearch) {
 settingsBtn.addEventListener('click', () => {
     renderPromptPresets();
     renderWorkflowModes();
+    setSettingsTab(activeSettingsTab, { persist: false });
     settingsPanel.classList.add('open');
 });
 settingsOverlay.addEventListener('click', () => {
@@ -3319,6 +3437,16 @@ closeSettings.addEventListener('click', () => {
     settingsPanel.classList.remove('open');
     saveSettings();
 });
+if (settingsTabRegular) {
+    settingsTabRegular.addEventListener('click', () => {
+        setSettingsTab('regular', { persist: true });
+    });
+}
+if (settingsTabAdvanced) {
+    settingsTabAdvanced.addEventListener('click', () => {
+        setSettingsTab('advanced', { persist: true });
+    });
+}
 
 // Temperature slider
 temperatureSlider.addEventListener('input', () => {
@@ -3380,6 +3508,29 @@ if (workbenchClearBtn) {
 if (ragAddBtn && ragFileInput) {
     ragAddBtn.addEventListener('click', () => ragFileInput.click());
 }
+if (ragDropzone && ragFileInput) {
+    ragDropzone.addEventListener('click', () => ragFileInput.click());
+    ragDropzone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            ragFileInput.click();
+        }
+    });
+    ragDropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        ragDropzone.classList.add('drag-active');
+    });
+    ragDropzone.addEventListener('dragleave', () => {
+        ragDropzone.classList.remove('drag-active');
+    });
+    ragDropzone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        ragDropzone.classList.remove('drag-active');
+        const files = Array.from(e.dataTransfer?.files || []);
+        if (!files.length) return;
+        await ingestRagFiles(files);
+    });
+}
 if (ragFileInput) {
     ragFileInput.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files || []);
@@ -3390,6 +3541,21 @@ if (ragFileInput) {
 if (ragClearBtn) {
     ragClearBtn.addEventListener('click', () => {
         clearRagDocs();
+    });
+}
+if (ragSearchInput) {
+    ragSearchInput.addEventListener('input', () => {
+        ragDocSearchQuery = String(ragSearchInput.value || '');
+        renderRagDocList();
+    });
+}
+if (ragDocList) {
+    ragDocList.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!(target instanceof HTMLElement)) return;
+        const id = target.getAttribute('data-rag-doc-id');
+        if (!id) return;
+        removeRagDocById(id);
     });
 }
 if (promptPresetSelect && applyPresetBtn) {

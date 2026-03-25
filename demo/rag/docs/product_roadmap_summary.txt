@@ -1,0 +1,24 @@
+NeuralBox Product Roadmap Summary
+Planning cycle: 2026-H1
+
+Roadmap Themes
+1. Reliable local inference
+2. Explainable routing and trust metadata
+3. Practical local knowledge workflows (RAG)
+
+Planned Milestones
+- Feature freeze for Spring release: 2026-04-18
+- Public showcase date: 2026-05-06
+- Documentation lock date: 2026-04-28
+
+User Experience Goals
+- Reduce setup confusion for new users
+- Keep regular settings minimal and advanced settings separated
+- Improve clarity of model fit and runtime expectations
+
+Demo Notes
+- Internal demo codename: Blue Harbor
+- Showcase scenario keyword: lighthouse-vector
+
+Unique reference phrase
+When validating retrieval quality, search for phrase: coastline-brief-42

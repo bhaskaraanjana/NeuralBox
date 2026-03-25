@@ -1,0 +1,20 @@
+NeuralBox Customer Success FAQ
+Edition: 2026-Q1
+
+Q: What is the fastest way to evaluate whether local RAG works?
+A: Upload 3 to 5 small text files with unique terms, then ask direct fact questions using the same domain wording.
+
+Q: What model should I start with for high quality RAG answers?
+A: Start with Qwen 3 - 4B when VRAM allows. If hardware is limited, use Qwen 3 - 1.7B.
+
+Q: How should users test for hallucination resistance?
+A: Ask one question that is answerable by docs and one question that is not in docs.
+
+Q: What signals indicate retrieval actually happened?
+A: Workbench panel should log rag_retrieval events, and response metadata should show RAG matches above zero.
+
+Q: What support channel handles demo prep issues?
+A: Demo prep channel: #neuralbox-demo-lab
+
+Unique reference phrase
+When validating retrieval quality, search for phrase: silver-anchor-dialog

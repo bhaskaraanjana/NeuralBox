@@ -25,7 +25,7 @@
         <p class="tagline">Private AI. Runs in your browser.</p>
 
         <div id="webgpu-error" class="error-card" style="display:none;">
-          <div class="error-icon">⚠️</div>
+          <div class="error-icon">!</div>
           <h3>WebGPU Not Available</h3>
           <p>Your browser doesn't support WebGPU, which is required to run AI models locally.</p>
           <p class="error-hint">Try the latest version of <strong>Chrome</strong>, <strong>Edge</strong>, or
@@ -43,7 +43,7 @@
             <span id="progress-percent" class="progress-percent">0%</span>
           </div>
           <button id="start-btn" class="btn-primary" style="display:none; width: 100%;">
-            <span class="btn-icon">⚡</span> Load AI Model
+            <span class="btn-icon">&gt;</span> Load AI Model
           </button>
           <p id="cache-status-note" class="download-note">Powered by WebGPU</p>
         </div>
@@ -67,7 +67,7 @@
         </div>
         <div id="conversation-list" class="conversation-list"></div>
         <div class="sidebar-footer">
-          <div class="sidebar-footer-info">🔒 All stored locally</div>
+          <div class="sidebar-footer-info">All stored locally</div>
         </div>
       </aside>
       <div id="sidebar-overlay" class="sidebar-overlay"></div>
@@ -126,7 +126,7 @@
 
         <div id="messages" class="messages-container">
           <div class="welcome-message">
-            <div class="welcome-icon">🧠</div>
+            <div class="welcome-icon">AI</div>
             <h3>Welcome to NeuralBox</h3>
             <p>Your AI is running <strong>entirely in your browser</strong>. No data ever leaves your device.</p>
             <div class="welcome-suggestions">
@@ -174,7 +174,7 @@
           </div>
           <div id="image-preview" class="image-preview" style="display:none;">
             <img id="image-preview-img" src="" alt="Attached image" />
-            <button id="image-preview-clear" class="image-preview-clear" title="Remove image">✕</button>
+            <button id="image-preview-clear" class="image-preview-clear" title="Remove image">X</button>
           </div>
           <div id="voice-status" class="voice-status" style="display:none;"></div>
           <p id="input-disclaimer" class="input-disclaimer">AI runs locally in your browser. Responses may vary in
@@ -195,31 +195,22 @@
             </svg>
           </button>
         </div>
+        <div class="settings-tabs">
+          <button id="settings-tab-regular" class="settings-tab active" type="button">Regular</button>
+          <button id="settings-tab-advanced" class="settings-tab" type="button">Advanced</button>
+        </div>
         <div class="settings-body">
-          <div id="model-selector-group" class="setting-group">
+          <div id="model-selector-group" class="setting-group" data-setting-level="regular">
             <!-- Populated dynamically by renderModelSelector() -->
           </div>
-          <div class="setting-group">
-            <label for="system-prompt">System Prompt</label>
-            <textarea id="system-prompt" rows="4"
-              placeholder="You are a helpful assistant...">You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. If the active model supports vision, you can analyze user-provided images. You cannot browse the web unless the app explicitly provides search results, and you cannot run code, access local files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.</textarea>
-          </div>
-          <div class="setting-group">
-            <label for="temperature">Temperature: <span id="temp-value">0.7</span></label>
-            <input type="range" id="temperature" min="0" max="1.5" step="0.1" value="0.7" />
-          </div>
-          <div class="setting-group">
-            <label for="max-tokens">Max Response Tokens: <span id="tokens-value">1024</span></label>
-            <input type="range" id="max-tokens" min="128" max="4096" step="128" value="1024" />
-          </div>
-          <div class="setting-group">
+          <div class="setting-group" data-setting-level="regular">
             <label for="prompt-preset-select">Prompt Presets</label>
             <div class="setting-inline-row">
               <select id="prompt-preset-select"></select>
               <button id="apply-preset-btn" class="btn-primary" type="button">Apply</button>
             </div>
           </div>
-          <div class="setting-group">
+          <div class="setting-group" data-setting-level="regular">
             <label for="workflow-select">Workflow Mode</label>
             <div class="setting-inline-row">
               <select id="workflow-select"></select>
@@ -227,68 +218,30 @@
             </div>
             <p class="setting-hint">Adds task-specific instructions (for example: Structured JSON, Code Review, or Study mode).</p>
           </div>
-          <div class="setting-group">
+          <div class="setting-group" data-setting-level="regular">
             <label class="toggle-label">
-              <span>Trust Layer in Messages</span>
-              <input type="checkbox" id="trust-layer-setting" checked />
-              <span class="toggle-switch"></span>
-            </label>
-            <p class="setting-hint">Shows why a model was used, route reason, and generation context under each assistant response.</p>
-          </div>
-          <div class="setting-group">
-            <label class="toggle-label">
-              <span>Deterministic Team Mode</span>
-              <input type="checkbox" id="deterministic-setting" />
-              <span class="toggle-switch"></span>
-            </label>
-            <div class="setting-inline-row" style="margin-top:0.5rem;">
-              <input id="deterministic-seed" type="text" placeholder="Seed (e.g. 42)" />
-            </div>
-            <p class="setting-hint">When enabled, uses reproducible generation behavior (lower randomness) and applies the optional seed when supported.</p>
-          </div>
-          <div class="setting-group">
-            <label class="toggle-label">
-              <span>🌐 Web-Enhanced Mode</span>
+              <span>Web-Enhanced Mode</span>
               <input type="checkbox" id="web-search-setting" />
               <span class="toggle-switch"></span>
             </label>
-            <p class="setting-hint">When enabled, searches the web to improve answers. Search queries are sent to
-              DuckDuckGo.</p>
+            <p class="setting-hint">When enabled, searches the web to improve answers. Search queries are sent to DuckDuckGo.</p>
           </div>
-          <div class="setting-group">
-            <label class="toggle-label">
-              <span>Verbose Vision Logs</span>
-              <input type="checkbox" id="vision-verbose-setting" />
-              <span class="toggle-switch"></span>
-            </label>
-            <p class="setting-hint">Adds extra diagnostics to the console for image requests and retries.</p>
-          </div>
-          <div class="setting-group">
-            <label class="toggle-label">
-              <span>Runtime Debug Panel</span>
-              <input type="checkbox" id="debug-panel-setting" />
-              <span class="toggle-switch"></span>
-            </label>
-            <p class="setting-hint">Shows model routing, hot-swap, cancel, and error events in-app.</p>
-          </div>
-          <div class="setting-group">
-            <label class="toggle-label">
-              <span>Workbench Panel</span>
-              <input type="checkbox" id="workbench-setting" />
-              <span class="toggle-switch"></span>
-            </label>
-            <p class="setting-hint">Shows actual request context: route reason, image prep, RAG matches, and generation diagnostics.</p>
-          </div>
-          <div class="setting-group">
-            <label>Local RAG (Document Q&A)</label>
+          <div class="setting-group rag-setting-group" data-setting-level="regular">
+            <label>Local RAG (Document Q&amp;A)</label>
+            <div id="rag-dropzone" class="rag-dropzone" tabindex="0">
+              <div class="rag-dropzone-title">Drop docs here or use Add Docs</div>
+              <div class="rag-dropzone-subtitle">Accepted: txt, md, csv, json, code, logs</div>
+            </div>
             <div class="setting-inline-row">
               <button id="rag-add-btn" class="btn-primary" type="button">Add Docs</button>
-              <button id="rag-clear-btn" class="btn-primary" type="button">Clear Docs</button>
+              <button id="rag-clear-btn" class="btn-primary" type="button">Clear All</button>
             </div>
             <input type="file" id="rag-file-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" />
             <p id="rag-status" class="setting-hint">No local docs loaded.</p>
+            <input id="rag-search-input" type="text" placeholder="Search loaded docs..." />
+            <div id="rag-doc-list" class="rag-doc-list"></div>
           </div>
-          <div class="setting-group">
+          <div class="setting-group" data-setting-level="regular">
             <label>Conversation Backup</label>
             <div class="setting-inline-row">
               <button id="export-chats-btn" class="btn-primary" type="button">Export</button>
@@ -300,12 +253,66 @@
               <button id="copy-share-btn" class="btn-primary" type="button">Copy Share Text</button>
             </div>
           </div>
-          <div class="setting-group">
+          <div class="setting-group" data-setting-level="advanced">
+            <label for="system-prompt">System Prompt</label>
+            <textarea id="system-prompt" rows="4"
+              placeholder="You are a helpful assistant...">You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. If the active model supports vision, you can analyze user-provided images. You cannot browse the web unless the app explicitly provides search results, and you cannot run code, access local files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.</textarea>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label for="temperature">Temperature: <span id="temp-value">0.7</span></label>
+            <input type="range" id="temperature" min="0" max="1.5" step="0.1" value="0.7" />
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label for="max-tokens">Max Response Tokens: <span id="tokens-value">1024</span></label>
+            <input type="range" id="max-tokens" min="128" max="4096" step="128" value="1024" />
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Trust Layer in Messages</span>
+              <input type="checkbox" id="trust-layer-setting" checked />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows why a model was used, route reason, and generation context under each assistant response.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Deterministic Team Mode</span>
+              <input type="checkbox" id="deterministic-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <div class="setting-inline-row" style="margin-top:0.5rem;">
+              <input id="deterministic-seed" type="text" placeholder="Seed (e.g. 42)" />
+            </div>
+            <p class="setting-hint">When enabled, uses reproducible generation behavior (lower randomness) and applies the optional seed when supported.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Verbose Vision Logs</span>
+              <input type="checkbox" id="vision-verbose-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Adds extra diagnostics to the console for image requests and retries.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Runtime Debug Panel</span>
+              <input type="checkbox" id="debug-panel-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows model routing, hot-swap, cancel, and error events in-app.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Workbench Panel</span>
+              <input type="checkbox" id="workbench-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows actual request context: route reason, image prep, RAG matches, and generation diagnostics.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
             <button id="clear-history-btn" class="btn-danger">Clear All Conversations</button>
           </div>
-          <div class="setting-info">
-            <p>🔒 All data stays in your browser. Nothing is sent to any server.</p>
-          </div>
+          <div class="setting-info"><p>All data stays in your browser. Nothing is sent to any server.</p></div>
         </div>
       </div>
     </div>
@@ -313,9 +320,9 @@
 
   <!-- Voice Chat Overlay -->
   <div id="voice-chat-overlay" class="voice-chat-overlay">
-    <button id="voice-chat-close" class="voice-chat-close" title="Exit voice chat">✕</button>
+    <button id="voice-chat-close" class="voice-chat-close" title="Exit voice chat">X</button>
     <div id="voice-orb" class="voice-orb">
-      <span class="voice-orb-icon">🎙️</span>
+      <span class="voice-orb-icon">Mic</span>
     </div>
     <div id="voice-chat-label" class="voice-chat-label">Tap to start talking</div>
     <div id="voice-chat-text" class="voice-chat-text"></div>
