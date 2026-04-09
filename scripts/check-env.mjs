@@ -22,6 +22,7 @@ const requiredFiles = [
   'src/lib/rag.js',
   'src/lib/routing.js',
   'src/lib/device.js',
+  'src/lib/trust.js',
   'src/db/database.js',
   'PROGRESS.md',
   'core/task.md',

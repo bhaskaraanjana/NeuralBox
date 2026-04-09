@@ -4,6 +4,24 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-08 - Trust metadata module extraction and validation
+- Continued deep-scan execution with focused P1 refactor completion:
+  - Extracted trust-layer renderer from `src/main.js` into `src/lib/trust.js`.
+  - Updated `src/main.js` to import `renderTrustMetaHtml` from shared trust module.
+- Added dedicated trust metadata regression test:
+  - New script: `scripts/trust-metadata-test.mjs`
+  - New npm command: `npm run test:trust`
+  - Updated environment guard script to require trust module presence.
+- Validation run after trust extraction:
+  - `npm run env:check` (pass)
+  - `npm run test:trust` (pass)
+  - `npm run test:rendering` (pass)
+  - `npm run test:routing` (pass)
+  - `npm run test:device` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:rag:web` (pass)
+  - `npm run build` (pass)
+
 ### 2026-04-08 - Stability deepscan execution (P0 start)
 - Ran repo-wide deep scan and validated current baseline:
   - `npm run build`
@@ -126,6 +144,15 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Stability smoke: pass
   - RAG extensive test: pass
   - Build: pass
+- Verification after trust module extraction:
+  - Env check: pass
+  - Trust metadata test: pass
+  - Rendering safety test: pass
+  - Routing sanity test: pass
+  - Device heuristics test: pass
+  - Stability smoke: pass
+  - RAG extensive test: pass
+  - Build: pass
 
 ## Known Issues And Gotchas
 
@@ -138,7 +165,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
 ## What To Work On Next
 
 1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
-2. Add targeted tests around trust metadata and model-switch fallback/cancellation.
+2. Add targeted tests around model-switch fallback/cancellation (trust metadata coverage now added).
 3. Add browser-level smoke for conversation import/export and send-stop lifecycle.
 4. Continue UI density cleanup on mobile settings and composer flows.
 
@@ -150,10 +177,11 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - RAG helpers: `src/lib/rag.js`
 - Routing helpers: `src/lib/routing.js`
 - Device helpers: `src/lib/device.js`
+- Trust-layer helpers: `src/lib/trust.js`
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
-- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/rag-web-extensive-test.mjs`
+- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/rag-web-extensive-test.mjs`
 - Docs: `doc/`
 
 ## Tech Stack

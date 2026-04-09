@@ -17,6 +17,7 @@
 - [x] Extract shared RAG helpers to `src/lib/rag.js` and reuse in app + test flows.
 - [x] Extract shared routing helpers to `src/lib/routing.js` and add routing sanity tests.
 - [x] Extract shared device heuristics to `src/lib/device.js` and add device sanity tests.
+- [x] Extract trust-layer renderer to `src/lib/trust.js` and add trust metadata sanity tests.
 - [ ] Split remaining `src/main.js` domains into focused modules (routing, RAG, voice, UI events).
 - [ ] Add pure-function unit test paths for routing/retrieval/render helpers.
 - [ ] Keep behavior parity with current smoke tests.
@@ -30,5 +31,5 @@
 
 ## Progress Summary
 
-- Completed this session: core P0 hardening implementation plus docs/process sync.
-- Validation status: env check + build + rendering + stability + RAG web tests all passing.
+- Completed this session: trust-layer module extraction (`src/lib/trust.js`) + trust regression lane (`npm run test:trust`) + handoff docs sync.
+- Validation status: env check + trust + rendering + routing + device + stability + RAG web + build all passing.
