@@ -162,6 +162,15 @@ This file documents the functional API of `src/main.js`, `src/db/database.js`, a
 - `getFileExtension(filename)`
   - Extension extraction utility used by RAG file guards.
 
+## `src/lib/routing.js`
+
+- `getModelTierRank(model)`
+  - Converts model tier label to a numeric ranking for scoring.
+- `analyzeRoutingTask(text)`
+  - Detects coding/reasoning/creative/complexity signals from a prompt.
+- `scoreModelForTask(model, task, options)`
+  - Composite routing score used by auto-model route selection.
+
 ## `src/db/database.js`
 
 - `initDatabase()`

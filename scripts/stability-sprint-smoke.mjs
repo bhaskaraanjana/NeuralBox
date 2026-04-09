@@ -48,6 +48,8 @@ async function main() {
   assert(/const RAG_MAX_FILE_BYTES =/.test(mainJs), 'RAG max file-size guard missing');
   assert(/function isSupportedRagFile\(/.test(mainJs), 'RAG file-type guard helper missing');
   assert(/skippedTooLarge/.test(mainJs), 'RAG skipped-too-large reporting missing');
+  assert(/id="rag-guidance"/.test(html), 'RAG guidance element missing in settings UI');
+  assert(/function renderRagGuidance\(/.test(mainJs), 'RAG guidance renderer missing');
 
   console.log('Stability sprint smoke test passed.');
 }

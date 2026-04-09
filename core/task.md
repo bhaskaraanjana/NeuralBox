@@ -15,6 +15,7 @@
 
 - [x] Extract rendering/safety helpers to `src/lib/rendering.js`.
 - [x] Extract shared RAG helpers to `src/lib/rag.js` and reuse in app + test flows.
+- [x] Extract shared routing helpers to `src/lib/routing.js` and add routing sanity tests.
 - [ ] Split remaining `src/main.js` domains into focused modules (routing, RAG, voice, UI events).
 - [ ] Add pure-function unit test paths for routing/retrieval/render helpers.
 - [ ] Keep behavior parity with current smoke tests.

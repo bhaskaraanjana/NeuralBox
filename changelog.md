@@ -15,6 +15,7 @@
   - device-memory fallback
 - Runtime debug summary now includes VRAM estimate source metadata.
 - Extracted rendering and URL safety helpers into `src/lib/rendering.js`.
+- Extracted routing heuristics into `src/lib/routing.js`.
 - Added RAG ingestion guardrails (type checks, 5MB file limit, skip reporting).
 - Trust Layer now shows retrieved RAG document names when available.
 - Added Vite manual chunk split for large runtime dependencies.
@@ -25,6 +26,7 @@
   - escaped render path
   - non-blocking switch guard
 - Added rendering safety test script (`npm run test:rendering`).
+- Added routing sanity test script (`npm run test:routing`).
 
 ## [1.5.0] - 2026-03-10
 

@@ -57,6 +57,12 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Added `src/lib/rag.js` for normalization, chunking, scoring, and retrieval utilities.
   - Updated `src/main.js` to consume shared RAG utilities.
   - Updated `scripts/rag-web-extensive-test.mjs` to reuse the same shared retrieval logic.
+- Shared routing module extraction:
+  - Added `src/lib/routing.js` for task analysis, tier ranking, and model route scoring.
+  - Updated `src/main.js` to consume routing helpers.
+  - Added `npm run test:routing` (`scripts/routing-sanity-test.mjs`).
+- Added regression coverage for RAG guidance UX:
+  - Stability smoke now asserts `#rag-guidance` presence and `renderRagGuidance()` implementation.
 - Re-ran full validation after modular extraction and trust updates:
   - `npm run env:check` (pass)
   - `npm run build` (pass)
@@ -101,6 +107,13 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Stability smoke: pass
   - RAG extensive test: pass
   - Build: pass
+- Verification after routing module extraction:
+  - Env check: pass
+  - Routing sanity test: pass
+  - Rendering safety test: pass
+  - Stability smoke: pass
+  - RAG extensive test: pass
+  - Build: pass
 
 ## Known Issues And Gotchas
 
@@ -112,9 +125,9 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## What To Work On Next
 
-1. Continue P1 modular split of `src/main.js` (routing and voice flows next).
-2. Add targeted tests around routing heuristics and trust metadata.
-3. Add defensive tests for model-switch fallback and cancellation paths.
+1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
+2. Add targeted tests around trust metadata and model-switch fallback/cancellation.
+3. Add browser-level smoke for RAG guidance/limit UX.
 4. Continue UI density cleanup on mobile settings and composer flows.
 
 ## File Map
@@ -123,6 +136,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Main runtime/orchestration: `src/main.js`
 - Rendering/safety helpers: `src/lib/rendering.js`
 - RAG helpers: `src/lib/rag.js`
+- Routing helpers: `src/lib/routing.js`
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`

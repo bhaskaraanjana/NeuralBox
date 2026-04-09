@@ -10,6 +10,7 @@ Source: `changelog.md`
 - Replaced key blocking `alert()` paths with inline notices.
 - Expanded stability smoke assertions for render/citation safety.
 - Extracted render/URL safety helpers into `src/lib/rendering.js` and added `test:rendering`.
+- Extracted routing helpers into `src/lib/routing.js` and added `test:routing`.
 - Added RAG ingestion guardrails (type/size checks + skip reporting).
 - Added RAG doc provenance in Trust Layer metadata.
 - Added Vite manual chunk split for `webllm` and `transformers`.

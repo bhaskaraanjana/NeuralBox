@@ -20,6 +20,7 @@ const requiredFiles = [
   'src/main.js',
   'src/lib/rendering.js',
   'src/lib/rag.js',
+  'src/lib/routing.js',
   'src/db/database.js',
   'PROGRESS.md',
   'core/task.md',

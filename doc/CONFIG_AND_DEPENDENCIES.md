@@ -17,6 +17,7 @@
     "preview": "vite preview",
     "test:stability": "node scripts/stability-sprint-smoke.mjs",
     "test:rendering": "node scripts/rendering-safety-test.mjs",
+    "test:routing": "node scripts/routing-sanity-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
   }
 }
@@ -36,6 +37,8 @@
   - Stability smoke checks for core UI/runtime contracts.
 - `npm run test:rendering`
   - Rendering/URL-safety checks for extracted helper module.
+- `npm run test:routing`
+  - Routing heuristic sanity checks for extracted routing helper module.
 - `npm run test:rag:web`
   - Extensive RAG ingest/retrieval test with downloaded web docs.
 

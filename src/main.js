@@ -24,6 +24,11 @@ import {
     retrieveRagChunksFromIndex,
     splitTextIntoRagChunks,
 } from './lib/rag.js';
+import {
+    analyzeRoutingTask,
+    getModelTierRank,
+    scoreModelForTask,
+} from './lib/routing.js';
 let whisperModulePromise = null;
 let whisperApi = null;
 
@@ -1234,18 +1239,6 @@ function parseProgressPercent(reportText) {
     return parsed;
 }
 
-function getModelTierRank(model) {
-    const rank = {
-        nano: 0,
-        lite: 1,
-        standard: 2,
-        performance: 3,
-        vision: 3,
-        premium: 4,
-    };
-    return rank[model?.tier] ?? 1;
-}
-
 function getEligibleModels(options = {}) {
     const requireVision = options.requireVision === true;
     const excludeVision = options.excludeVision === true;
@@ -1273,41 +1266,6 @@ function getEligibleModels(options = {}) {
     }
 
     return models.sort((a, b) => a.vramMB - b.vramMB);
-}
-
-function analyzeRoutingTask(text) {
-    const raw = String(text || '');
-    const t = raw.toLowerCase();
-    const qCount = (raw.match(/\?/g) || []).length;
-    const longPrompt = raw.length > 500;
-    const coding = /(code|debug|bug|stack trace|exception|typescript|javascript|python|refactor|algorithm|sql|api)/i.test(t);
-    const reasoning = /(analy[sz]e|compare|tradeoff|root cause|plan|strategy|prove|derive|optimi[sz]e|diagnose)/i.test(t);
-    const creative = /(poem|story|creative|brainstorm|lyrics|name ideas)/i.test(t);
-    const complex = longPrompt || qCount > 1 || coding || reasoning;
-    return { coding, reasoning, creative, complex, shortPrompt: raw.length < 100 };
-}
-
-function scoreModelForTask(model, task, hasImage) {
-    let score = getModelTierRank(model) * 20;
-
-    if (model.thinking && (task.reasoning || task.coding || task.complex)) score += 25;
-    if (!model.thinking && task.shortPrompt) score += 4;
-    if (task.creative && getModelTierRank(model) >= 2) score += 6;
-    if (hasImage && model.vision) score += 100;
-    if (!hasImage && model.vision) score -= 15;
-
-    if (modelRoutingProfileMode === 'speed') {
-        score -= model.vramMB / 150;
-        if (task.shortPrompt) score += 6;
-    } else if (modelRoutingProfileMode === 'quality') {
-        score += model.vramMB / 300;
-        if (model.thinking) score += 10;
-    } else {
-        score -= model.vramMB / 350;
-        if (!task.complex && getModelTierRank(model) >= 4) score -= 8;
-    }
-
-    return score;
 }
 
 function chooseModelRoute(text, hasImage) {
@@ -1342,7 +1300,11 @@ function chooseModelRoute(text, hasImage) {
     let bestModel = eligible[0];
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const model of eligible) {
-        const score = scoreModelForTask(model, task, false);
+        const score = scoreModelForTask(model, task, {
+            hasImage: false,
+            profileMode: modelRoutingProfileMode,
+            deviceVramMB: deviceCapabilities?.vramMB || 0,
+        });
         if (score > bestScore) {
             bestModel = model;
             bestScore = score;
@@ -1350,7 +1312,11 @@ function chooseModelRoute(text, hasImage) {
     }
 
     const currentModel = getModelById(selectedModelId);
-    const currentScore = scoreModelForTask(currentModel, task, false);
+    const currentScore = scoreModelForTask(currentModel, task, {
+        hasImage: false,
+        profileMode: modelRoutingProfileMode,
+        deviceVramMB: deviceCapabilities?.vramMB || 0,
+    });
     if (bestModel.id !== currentModel.id && bestScore - currentScore < 8) {
         const currentCard = getModelScoreCard(currentModel, modelRoutingProfileMode, deviceCapabilities || { vramMB: 0 });
         return {

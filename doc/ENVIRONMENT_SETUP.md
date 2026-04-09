@@ -35,6 +35,7 @@ npm run env:check
 npm run build
 npm run test:stability
 npm run test:rendering
+npm run test:routing
 npm run test:rag:web
 ```
 

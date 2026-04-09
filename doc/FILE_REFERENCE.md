@@ -46,6 +46,11 @@ This section documents every tracked repository file.
     - chunk splitting
     - retrieval scoring
     - file-extension utility
+- `src/lib/routing.js`
+  - Shared routing helpers:
+    - task analysis
+    - model tier ranking
+    - route score calculation
 - `src/db/database.js`
   - IndexedDB-first persistence module with localStorage fallback and legacy migration.
 - `src/whisper.js`
@@ -61,6 +66,8 @@ This section documents every tracked repository file.
   - Runtime contract smoke checks.
 - `scripts/rendering-safety-test.mjs`
   - Pure rendering + URL safety checks.
+- `scripts/routing-sanity-test.mjs`
+  - Pure routing-heuristic sanity checks.
 - `scripts/rag-web-extensive-test.mjs`
   - Extensive RAG ingest/retrieval test with downloaded web docs.
 
