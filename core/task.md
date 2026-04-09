@@ -40,11 +40,12 @@
 - [x] Create a feature roadmap document with themes, milestones, and sprint sequencing.
 - [x] Execute a complete UI rehaul pass while preserving runtime behavior contracts.
 - [x] Revalidate stability/build/browser lifecycle after visual system rewrite.
-- [ ] Implement Wave 2 manual model-switch UX redesign in settings.
-- [ ] Add browser smoke coverage for manual model-switch flow.
+- [x] Implement Wave 2 manual model-switch UX redesign in settings.
+- [x] Add browser smoke coverage for manual model-switch flow.
 - [ ] Run focused accessibility pass for settings + RAG controls.
+- [ ] Add recovery UX for web-search offline/network failures.
 
 ## Progress Summary
 
-- Completed this session: added `doc/FEATURE_ROADMAP.md`, shipped a full `src/style.css` UI system rewrite, and preserved existing behavior/test contracts.
+- Completed this session: added roadmap + full UI rehaul, then delivered Wave 2 model-switch UX redesign (clear current/pending state, apply flow, rollback on failure) plus smoke-test coverage.
 - Validation status for this session: `env:check`, `test:stability`, `test:ascii-ui`, `build`, and `test:browser:lifecycle` all passing.

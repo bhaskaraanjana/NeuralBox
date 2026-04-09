@@ -61,6 +61,9 @@ async function main() {
   assert(/getDeviceTier/.test(mainJs), 'Device tier helper usage missing in main runtime');
   assert(/formatVoiceTimer/.test(mainJs), 'Voice timer helper usage missing');
   assert(/normalizeSettingsTab/.test(mainJs), 'Settings tab normalization helper usage missing');
+  assert(/function getModelSelectionHint\(/.test(mainJs), 'Model selection hint helper missing');
+  assert(/id="model-selection-summary"/.test(mainJs), 'Model selection summary UI missing');
+  assert(/id="model-switch-live-status"/.test(mainJs), 'Model switch live-status UI missing');
 
   console.log('Stability sprint smoke test passed.');
 }

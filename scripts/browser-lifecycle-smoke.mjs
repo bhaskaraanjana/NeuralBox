@@ -70,6 +70,44 @@ await page.waitForFunction(() => {
   return Boolean(panel && panel.classList.contains('open'));
 });
 
+const pendingManualSwitch = await page.evaluate(() => {
+  const select = document.querySelector('#model-select');
+  const switchBtn = document.querySelector('#switch-model-btn');
+  if (!select || !switchBtn) {
+    return { ok: false };
+  }
+  const optionValues = Array.from(select.options || []).map((opt) => opt.value).filter(Boolean);
+  const currentValue = select.value;
+  const nextValue = optionValues.find((value) => value !== currentValue) || '';
+  if (!nextValue) {
+    return { ok: false };
+  }
+  select.value = nextValue;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  return {
+    ok: true,
+    nextValue,
+    buttonDisabled: Boolean(switchBtn.disabled),
+    noteText: String(document.querySelector('#model-switch-note')?.textContent || '').trim(),
+  };
+});
+assert(pendingManualSwitch.ok === true, 'Model selector should provide at least one alternative option.');
+assert(pendingManualSwitch.buttonDisabled === false, 'Switch model button should be enabled for pending selection.');
+assert(/pending/i.test(pendingManualSwitch.noteText), 'Pending switch note should be shown after selection change.');
+
+await page.click('#switch-model-btn');
+await page.waitForFunction(() => {
+  const btn = document.querySelector('#switch-model-btn');
+  return Boolean(btn && /Selection Up To Date/i.test(btn.textContent || ''));
+}, null, { timeout: 10000 });
+
+const postManualSwitch = await page.evaluate(() => {
+  return {
+    noteText: String(document.querySelector('#model-switch-note')?.textContent || '').trim(),
+  };
+});
+assert(!/pending/i.test(postManualSwitch.noteText), 'Pending switch note should clear after applying selection.');
+
 const importPayload = {
   version: 1,
   exportedAt: new Date().toISOString(),

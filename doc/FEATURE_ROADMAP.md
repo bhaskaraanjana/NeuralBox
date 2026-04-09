@@ -12,7 +12,7 @@ Last updated: 2026-04-09
 
 ### Theme A: UI and UX Rehaul
 
-Status: In progress (Wave 1 implemented)
+Status: In progress (Wave 1 complete, Wave 2 model-switch UX complete)
 
 Goals:
 - Remove visual clutter across desktop and mobile.
@@ -23,7 +23,7 @@ Milestones:
 - [x] Wave 1: Complete visual re-skin with a single coherent design system.
 - [x] Wave 1: Mobile density reduction for composer and settings.
 - [x] Wave 1: Preserve all existing runtime IDs and behavior contracts.
-- [ ] Wave 2: Manual model-switch flow redesign in settings with clearer state and confirmation.
+- [x] Wave 2: Manual model-switch flow redesign in settings with clearer state and confirmation.
 - [ ] Wave 2: Accessibility pass (focus order, keyboard affordances, contrast audit).
 
 ### Theme B: Reliability and Runtime Safety
@@ -37,7 +37,7 @@ Goals:
 Milestones:
 - [x] Cancellation and switch fallback helper extraction with tests.
 - [x] Browser lifecycle smoke (import/export + send/stop + switch fallback banner).
-- [ ] Add browser smoke for manual model-switch button flow.
+- [x] Add browser smoke for manual model-switch button flow.
 - [ ] Add recovery UX for network/offline web-search failure modes.
 
 ### Theme C: RAG and Retrieval Quality
@@ -79,9 +79,8 @@ Delivered:
 ### Sprint 2 (next)
 
 Planned:
-- Redesign manual model switching in settings panel.
-- Add browser smoke test for the manual model-switch control path.
 - Accessibility pass for settings and RAG controls.
+- Recovery UX for network/offline web-search failure modes.
 
 ### Sprint 3
 

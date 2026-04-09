@@ -2284,7 +2284,8 @@ function renderStartModelSelector(capabilities, recommended) {
     if (!container) return;
     const groups = getModelGroups();
 
-    let html = `<select id="start-model-select" style="width: 100%; padding: 0.7rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); font-family: var(--font); cursor: pointer; outline: none;">`;
+    let html = `<label for="start-model-select" class="start-model-select-label">Startup Model</label>`;
+    html += `<select id="start-model-select" class="start-model-select">`;
     html += `<option value="${AUTO_MODEL_ID}" ${modelSelectionId === AUTO_MODEL_ID ? 'selected' : ''}>Auto (smart per request)</option>`;
     html += `<optgroup label="Curated Models">`;
     html += renderModelOptions(groups.curated, {
@@ -2307,11 +2308,13 @@ function renderStartModelSelector(capabilities, recommended) {
     html += `</select>`;
     const selected = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
     const selectedCard = getModelScoreCard(selected, modelRoutingProfileMode, capabilities);
-    html += `<p class="setting-hint" style="margin-top:0.4rem; text-align:center;">Your GPU: <strong>${capabilities.gpuName}</strong> (~${capabilities.vramMB}MB VRAM)</p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Profile: <strong>${modelRoutingProfileMode}</strong> | Benchmark: <strong>${getBenchmarkSummary()}</strong></p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Workflow: <strong>${getWorkflowById(workflowModeId).label}</strong> | Deterministic: <strong>${deterministicModeEnabled ? 'on' : 'off'}</strong></p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Local RAG: <strong>${ragDocuments.length} docs</strong> | Workbench: <strong>${workbenchEnabled ? 'on' : 'off'}</strong></p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Selected supports: <strong>${getModelCapabilitiesLabel(selected)}</strong> | Fit: <strong>${selectedCard.fitLabel}</strong> | Score: <strong>${selectedCard.total}</strong></p>`;
+    html += `<div class="start-model-meta">`;
+    html += `<p class="setting-hint">GPU: <strong>${capabilities.gpuName}</strong> (~${capabilities.vramMB}MB VRAM)</p>`;
+    html += `<p class="setting-hint">Profile: <strong>${modelRoutingProfileMode}</strong> | Benchmark: <strong>${getBenchmarkSummary()}</strong></p>`;
+    html += `<p class="setting-hint">Workflow: <strong>${getWorkflowById(workflowModeId).label}</strong> | Deterministic: <strong>${deterministicModeEnabled ? 'on' : 'off'}</strong></p>`;
+    html += `<p class="setting-hint">Local RAG: <strong>${ragDocuments.length} docs</strong> | Workbench: <strong>${workbenchEnabled ? 'on' : 'off'}</strong></p>`;
+    html += `<p class="setting-hint">Selected supports: <strong>${getModelCapabilitiesLabel(selected)}</strong> | Fit: <strong>${selectedCard.fitLabel}</strong> | Score: <strong>${selectedCard.total}</strong></p>`;
+    html += `</div>`;
 
     container.innerHTML = html;
 
@@ -2434,12 +2437,46 @@ async function loadModel() {
     }
 }
 
+function getModelSelectionModeLabel(selectionId, targetModel) {
+    if (selectionId === AUTO_MODEL_ID) {
+        return `Auto (starts with ${targetModel.name})`;
+    }
+    return `Manual (${targetModel.name})`;
+}
+
+function getModelSelectionHint({ currentSelectionId, draftSelectionId, targetModel, activeModel, targetCard }) {
+    const hasPending = draftSelectionId !== currentSelectionId;
+    const isAutoDraft = draftSelectionId === AUTO_MODEL_ID;
+    let fitHint = 'Fit looks safe for this device.';
+    if (targetCard.fitGrade === 'marginal') {
+        fitHint = 'Tight VRAM fit; heavy multitasking can cause failures.';
+    } else if (targetCard.fitGrade === 'unrunnable') {
+        fitHint = 'Likely too large for current VRAM.';
+    }
+
+    if (!hasPending) {
+        if (isAutoDraft) {
+            return `Auto mode is active. NeuralBox can hot-swap by request complexity. ${fitHint}`;
+        }
+        return `Manual mode is active. ${targetModel.name} stays pinned until changed. ${fitHint}`;
+    }
+
+    if (isAutoDraft) {
+        return `Pending: enable Auto mode. Active model may change per request after apply. ${fitHint}`;
+    }
+    if (targetModel.id === activeModel.id) {
+        return `Pending: keep ${activeModel.name} active and lock selection to Manual mode. ${fitHint}`;
+    }
+    return `Pending: hot swap from ${activeModel.name} to ${targetModel.name}. ${fitHint}`;
+}
+
 function renderModelSelector(capabilities, recommended) {
     const container = document.getElementById('model-selector-group');
     if (!container) return;
     const groups = getModelGroups();
+    let draftSelectionId = modelSelectionId;
 
-    let html = `<label for="model-select">AI Model</label>`;
+    let html = `<label for="model-select">Model Selection</label>`;
     html += `<select id="model-select">`;
     html += `<option value="${AUTO_MODEL_ID}" ${modelSelectionId === AUTO_MODEL_ID ? 'selected' : ''}>Auto (smart per request)</option>`;
     html += `<optgroup label="Curated Models">`;
@@ -2461,70 +2498,128 @@ function renderModelSelector(capabilities, recommended) {
         html += `</optgroup>`;
     }
     html += `</select>`;
-    const selected = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
-    const selectedCard = getModelScoreCard(selected, modelRoutingProfileMode, capabilities);
-    html += `<p class="setting-hint">`;
-    html += `GPU: ${capabilities.gpuName} - Est. VRAM: ${capabilities.vramMB}MB`;
-    html += `<br/>Profile: ${modelRoutingProfileMode} - Benchmark: ${getBenchmarkSummary()}`;
-    html += `<br/>Workflow: ${getWorkflowById(workflowModeId).label} - Deterministic: ${deterministicModeEnabled ? 'on' : 'off'}`;
-    html += `<br/>Local RAG: ${ragDocuments.length} docs - Workbench: ${workbenchEnabled ? 'on' : 'off'}`;
-    html += `<br/>Selected supports: ${getModelCapabilitiesLabel(selected)} - Fit: ${selectedCard.fitLabel} - Score: ${selectedCard.total}`;
-    html += `</p>`;
-    html += `<button id="switch-model-btn" class="btn-primary" style="display:none; margin-top:0.5rem; width:100%;">Switch Model</button>`;
+    html += `<div id="model-selection-summary" class="model-selection-summary"></div>`;
+    html += `<p id="model-switch-note" class="setting-hint model-switch-note"></p>`;
+    html += `<button id="switch-model-btn" class="btn-primary model-switch-btn" type="button" style="width:100%;">Apply Selection</button>`;
+    html += `<p id="model-switch-live-status" class="setting-hint model-switch-live-status" aria-live="polite"></p>`;
 
     container.innerHTML = html;
 
-    // Listen for changes
     const select = document.getElementById('model-select');
     const switchBtn = document.getElementById('switch-model-btn');
+    const summaryEl = document.getElementById('model-selection-summary');
+    const switchNote = document.getElementById('model-switch-note');
+    const switchLiveStatus = document.getElementById('model-switch-live-status');
+
+    const updateSelectorUi = () => {
+        const targetModel = draftSelectionId === AUTO_MODEL_ID
+            ? resolveAutoModelCandidate()
+            : getModelById(draftSelectionId);
+        const activeModel = getModelById(selectedModelId);
+        const targetCard = getModelScoreCard(targetModel, modelRoutingProfileMode, capabilities);
+        const hasPending = draftSelectionId !== modelSelectionId;
+        const currentModeTarget = isAutoModelSelected()
+            ? resolveAutoModelCandidate()
+            : getModelById(modelSelectionId);
+        const currentMode = getModelSelectionModeLabel(modelSelectionId, currentModeTarget);
+        const draftMode = getModelSelectionModeLabel(draftSelectionId, targetModel);
+
+        if (summaryEl) {
+            summaryEl.innerHTML = `
+                <div class="model-selection-row"><span class="model-selection-key">Active</span><strong class="model-selection-value">${activeModel.name}</strong></div>
+                <div class="model-selection-row"><span class="model-selection-key">Current mode</span><strong class="model-selection-value">${currentMode}</strong></div>
+                <div class="model-selection-row"><span class="model-selection-key">Pending mode</span><strong class="model-selection-value">${draftMode}</strong></div>
+                <div class="model-selection-row"><span class="model-selection-key">Capabilities</span><strong class="model-selection-value">${getModelCapabilitiesLabel(targetModel)}</strong></div>
+                <div class="model-selection-row"><span class="model-selection-key">Fit</span><strong class="model-selection-value">${targetCard.fitLabel} (score ${targetCard.total})</strong></div>
+                <div class="model-selection-row"><span class="model-selection-key">Device</span><strong class="model-selection-value">${capabilities.gpuName} | ${capabilities.vramMB}MB</strong></div>
+                <div class="model-selection-row"><span class="model-selection-key">Benchmark</span><strong class="model-selection-value">${getBenchmarkSummary()} | ${modelRoutingProfileMode}</strong></div>
+            `;
+        }
+        if (switchNote) {
+            switchNote.textContent = getModelSelectionHint({
+                currentSelectionId: modelSelectionId,
+                draftSelectionId,
+                targetModel,
+                activeModel,
+                targetCard,
+            });
+        }
+        if (switchBtn) {
+            switchBtn.disabled = !hasPending || isGenerating;
+            switchBtn.textContent = hasPending
+                ? (targetModel.id === selectedModelId ? 'Apply Selection' : 'Apply + Hot Swap')
+                : 'Selection Up To Date';
+        }
+    };
 
     if (select) {
         select.addEventListener('change', () => {
-            const newSelection = select.value;
-            if (newSelection !== modelSelectionId) {
-                switchBtn.style.display = 'block';
-            } else {
-                switchBtn.style.display = 'none';
+            draftSelectionId = select.value;
+            if (switchLiveStatus) {
+                switchLiveStatus.textContent = '';
             }
+            updateSelectorUi();
         });
     }
 
     if (switchBtn) {
         switchBtn.addEventListener('click', async () => {
-            const requestedSelection = select.value;
+            if (!select) return;
+            const requestedSelection = draftSelectionId;
             const targetModel = requestedSelection === AUTO_MODEL_ID
                 ? resolveAutoModelCandidate()
                 : getModelById(requestedSelection);
             if (requestedSelection === modelSelectionId && targetModel.id === selectedModelId) {
-                switchBtn.style.display = 'none';
+                updateSelectorUi();
                 return;
             }
             if (isGenerating) {
                 setInlineNotice('Please wait for generation to finish before switching models.', 'warn', 2200);
                 return;
             }
+            const previousSelectionId = modelSelectionId;
             modelSelectionId = requestedSelection;
             saveModelSelectionId();
-            const model = targetModel;
-
-            // Close settings
-            const settingsPanel = $('#settings-panel');
-            if (settingsPanel) settingsPanel.classList.remove('open');
+            applyModelUiState();
+            if (switchLiveStatus) {
+                switchLiveStatus.textContent = targetModel.id === selectedModelId
+                    ? 'Selection saved.'
+                    : `Switching active model to ${targetModel.name}...`;
+            }
 
             try {
                 switchBtn.disabled = true;
-                switchBtn.textContent = `Hot swapping to ${model.name}...`;
-                await switchModelById(targetModel.id);
-                switchBtn.style.display = 'none';
+                switchBtn.textContent = `Applying ${targetModel.name}...`;
+                const result = await switchModelById(targetModel.id);
+                if (switchLiveStatus) {
+                    if (result?.switched) {
+                        switchLiveStatus.textContent = `Now active: ${targetModel.name}.`;
+                    } else {
+                        switchLiveStatus.textContent = targetModel.id === selectedModelId
+                            ? 'Selection saved.'
+                            : `Selection saved. ${targetModel.name} will apply when model runtime is ready.`;
+                    }
+                }
+                setInlineNotice(`Model selection updated to ${getModelSelectionModeLabel(modelSelectionId, targetModel)}.`, 'success', 2200);
             } catch (err) {
                 console.error('Model switch failed:', err);
+                modelSelectionId = previousSelectionId;
+                saveModelSelectionId();
+                draftSelectionId = previousSelectionId;
+                if (select) select.value = previousSelectionId;
+                applyModelUiState();
                 setInlineNotice(`Model switch failed: ${toUserFriendlyError(err)}`, 'error', 3200);
+                if (switchLiveStatus) {
+                    switchLiveStatus.textContent = 'Switch failed. Selection rolled back.';
+                }
             } finally {
                 switchBtn.disabled = false;
-                switchBtn.textContent = 'Switch Model';
+                renderModelSelector(capabilities, recommended);
             }
         });
     }
+
+    updateSelectorUi();
 }
 
 // ---- Screen Management ----

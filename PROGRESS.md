@@ -4,6 +4,26 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-09 - Wave 2 manual model-switch UX + smoke coverage
+- Continued roadmap execution after Wave 1 rehaul with focused model-selection UX cleanup.
+- Updated `src/main.js` model selection flows:
+  - Reworked settings model selector to show clear Active / Current mode / Pending mode summaries.
+  - Added explicit pending-state guidance and live status updates for model apply/hot-swap.
+  - Kept manual apply model-change behavior, added rollback on switch failure, and removed auto-close confusion from settings.
+  - Added explicit startup selector classes and removed legacy inline style variables from the start screen model select.
+- Updated `src/style.css` for new model-selector UI components:
+  - Added dedicated styles for startup selector and model summary/status rows.
+  - Preserved responsive behavior and existing runtime IDs.
+- Extended regression coverage:
+  - Updated `scripts/browser-lifecycle-smoke.mjs` to validate pending model switch state and apply flow.
+  - Updated `scripts/stability-sprint-smoke.mjs` contracts for model selection summary/status helper presence.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run build` (pass)
+  - `npm run test:browser:lifecycle` (pass)
+
 ### 2026-04-09 - Feature roadmap + complete UI rehaul wave kickoff
 - Created product roadmap artifact:
   - Added `doc/FEATURE_ROADMAP.md` with themes, milestones, sprint plan, and success metrics.
@@ -280,6 +300,12 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## What's Been Verified
 
+- Verification after Wave 2 model-switch UX pass:
+  - Env check: pass
+  - Stability smoke: pass
+  - ASCII UI guard test: pass
+  - Build: pass
+  - Browser lifecycle smoke test: pass
 - Verification after roadmap + UI rehaul pass:
   - Env check: pass
   - Stability smoke: pass
@@ -430,11 +456,10 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## What To Work On Next
 
-1. Implement Theme A Wave 2: redesign manual model-switch UX in settings (state clarity + explicit action confirmation).
-2. Add browser smoke for manual model-switch flow to prevent regressions after settings UX changes.
-3. Run accessibility pass on chat/settings/RAG controls (focus order, keyboard navigation, contrast checks).
-4. Continue startup performance work: defer heavy optional runtimes and monitor chunk pressure.
-5. Monitor upstream WebLLM Phi-3.5 vision embed-size bug and remove compatibility retries when fixed upstream.
+1. Run accessibility pass on chat/settings/RAG controls (focus order, keyboard navigation, contrast checks).
+2. Add recovery UX for web-search failures (offline/network endpoint errors) with actionable retry guidance.
+3. Continue startup performance work: defer heavy optional runtimes and monitor chunk pressure.
+4. Monitor upstream WebLLM Phi-3.5 vision embed-size bug and remove compatibility retries when fixed upstream.
 
 ## File Map
 
