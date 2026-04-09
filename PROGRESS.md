@@ -4,6 +4,35 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-08 - Browser smoke harness for import/export and send-stop lifecycle
+- Continued deep-scan execution by adding browser-level lifecycle verification.
+- Added opt-in test API hook in `src/main.js`:
+  - New `attachTestApiIfEnabled()` exposes `window.__NB_TEST_API` when `localStorage.neuralbox_test_api=1` or `?nb_test=1`.
+  - Provides test-safe accessors for send-button state, cancellation flag, runtime events, and conversation count.
+- Added Playwright smoke test:
+  - New script: `scripts/browser-lifecycle-smoke.mjs`
+  - New npm command: `npm run test:browser:lifecycle`
+  - Covers settings open/close, import chats, export chats download naming, and send-stop lifecycle behavior.
+  - Uses fake WebGPU adapter + test-mode chat-screen activation in headless runs.
+- Updated project checks/docs:
+  - Added browser smoke script to `scripts/check-env.mjs` required files.
+  - Updated `doc/CONFIG_AND_DEPENDENCIES.md` script listing and test descriptions.
+  - Extended stability smoke contract to require `attachTestApiIfEnabled()` presence.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:events` (pass)
+  - `npm run test:generation` (pass)
+  - `npm run test:composer` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run test:rendering` (pass)
+  - `npm run test:trust` (pass)
+  - `npm run test:routing` (pass)
+  - `npm run test:device` (pass)
+  - `npm run test:rag:web` (pass)
+  - `npm run build` (pass)
+  - `npm run test:browser:lifecycle` against local preview server on `http://127.0.0.1:4173` (pass)
+
 ### 2026-04-08 - Tap event dedupe helper for mobile interaction stability
 - Continued deep-scan execution for mobile interaction correctness and duplicate touch/click handling.
 - Added shared event utility: `src/lib/events.js`
@@ -293,6 +322,20 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Device heuristics test: pass
   - RAG extensive test: pass
   - Build: pass
+- Verification after browser lifecycle smoke harness:
+  - Env check: pass
+  - Stability smoke: pass
+  - Events test: pass
+  - Generation lifecycle test: pass
+  - Composer action test: pass
+  - ASCII UI guard test: pass
+  - Rendering safety test: pass
+  - Trust metadata test: pass
+  - Routing sanity test: pass
+  - Device heuristics test: pass
+  - RAG extensive test: pass
+  - Build: pass
+  - Browser lifecycle smoke test: pass
 
 ## Known Issues And Gotchas
 
@@ -305,8 +348,8 @@ Last Updated: 2026-04-08 (America/St_Johns)
 ## What To Work On Next
 
 1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
-2. Add browser-level smoke for conversation import/export and send-stop lifecycle.
-3. Add targeted browser smoke for model-switch fallback messaging path.
+2. Add targeted browser smoke for model-switch fallback messaging path.
+3. Continue extracting voice and settings orchestration from `src/main.js`.
 4. Continue UI density cleanup on mobile settings and composer flows.
 
 ## File Map
@@ -321,10 +364,11 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Composer helpers: `src/lib/composer.js`
 - Generation lifecycle helpers: `src/lib/generation.js`
 - Event binding helpers: `src/lib/events.js`
+- Test harness hook: `attachTestApiIfEnabled()` in `src/main.js` (`window.__NB_TEST_API` in opt-in mode)
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
-- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/events-bindings-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
+- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/events-bindings-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`, `scripts/browser-lifecycle-smoke.mjs`
 - Docs: `doc/`
 
 ## Tech Stack

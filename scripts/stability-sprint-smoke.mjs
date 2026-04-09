@@ -21,6 +21,7 @@ async function main() {
   assert(/function handleComposerPrimaryAction\(/.test(mainJs), 'Composer primary action handler missing');
   assert(/const action = resolvePrimaryComposerAction\(\{/.test(mainJs), 'Composer action resolver usage missing');
   assert(/if \(action === 'cancel'\)\s*{\s*requestGenerationCancel\(\);/.test(mainJs), 'Send button should cancel generation when active');
+  assert(/function attachTestApiIfEnabled\(/.test(mainJs), 'Test API attach helper missing');
 
   // Routing should only run behind auto selection.
   assert(/if \(isAutoModelSelected\(\)\)\s*{\s*const routing = chooseModelRoute/.test(mainJs), 'Routing must be gated by Auto selection');

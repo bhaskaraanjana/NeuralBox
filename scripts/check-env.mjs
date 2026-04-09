@@ -29,6 +29,7 @@ const requiredFiles = [
   'scripts/composer-actions-test.mjs',
   'scripts/generation-lifecycle-test.mjs',
   'scripts/events-bindings-test.mjs',
+  'scripts/browser-lifecycle-smoke.mjs',
   'scripts/ascii-ui-strings-test.mjs',
   'src/db/database.js',
   'PROGRESS.md',

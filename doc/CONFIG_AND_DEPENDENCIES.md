@@ -24,7 +24,8 @@
     "test:generation": "node scripts/generation-lifecycle-test.mjs",
     "test:events": "node scripts/events-bindings-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
-    "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
+    "test:rag:web": "node scripts/rag-web-extensive-test.mjs",
+    "test:browser:lifecycle": "node scripts/browser-lifecycle-smoke.mjs"
   }
 }
 ```
@@ -59,6 +60,8 @@
   - Guards UI source strings against non-ASCII regressions that can surface as mojibake.
 - `npm run test:rag:web`
   - Extensive RAG ingest/retrieval test with downloaded web docs.
+- `npm run test:browser:lifecycle`
+  - Playwright browser smoke for import/export and send/stop lifecycle controls (requires running app URL via `BASE_URL` or default `http://127.0.0.1:4173`).
 
 ## direct dependencies
 

@@ -1925,6 +1925,49 @@ function toggleWebSearch(enabled, options = {}) {
     }
 }
 
+function attachTestApiIfEnabled() {
+    if (typeof window === 'undefined') return;
+    let enabled = false;
+    try {
+        enabled = window.localStorage?.getItem('neuralbox_test_api') === '1';
+    } catch {
+        enabled = false;
+    }
+    if (!enabled && /(?:\?|&)nb_test=1(?:&|$)/.test(window.location.search)) {
+        enabled = true;
+    }
+    if (!enabled) return;
+
+    window.__NB_TEST_API = {
+        setGeneratingStateForTest(active) {
+            setGeneratingState(Boolean(active));
+        },
+        getSendButtonState() {
+            return {
+                disabled: Boolean(sendBtn?.disabled),
+                title: String(sendBtn?.title || ''),
+                generatingClass: Boolean(sendBtn?.classList?.contains('generating')),
+                html: String(sendBtn?.innerHTML || ''),
+            };
+        },
+        getGenerationCancelRequested() {
+            return Boolean(generationCancelRequested);
+        },
+        resetGenerationCancelRequested() {
+            generationCancelRequested = false;
+        },
+        getConversationCount() {
+            return Array.isArray(conversations) ? conversations.length : 0;
+        },
+        getActiveConversationId() {
+            return activeConversationId;
+        },
+        getRuntimeEvents() {
+            return Array.isArray(runtimeEvents) ? [...runtimeEvents] : [];
+        },
+    };
+}
+
 function shouldAutoWebSearch(query) {
     const text = String(query || '').trim().toLowerCase();
     if (!text) return false;
@@ -4317,4 +4360,5 @@ thinkToggle.addEventListener('click', () => {
 
 // ---- Start ----
 setGeneratingState(false);
+attachTestApiIfEnabled();
 init();

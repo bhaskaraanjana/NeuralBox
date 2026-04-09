@@ -11,6 +11,7 @@
 - [x] Run full post-change validation (`build`, `test:stability`, `test:rag:web`).
 - [x] Add RAG ingestion guardrails (file-type + file-size + skip reporting).
 - [x] Normalize UI separators to ASCII-safe strings and add a non-ASCII regression guard.
+- [x] Add browser-level smoke coverage for import/export and send-stop lifecycle.
 
 ## P1 - Architecture Refactor
 
@@ -35,5 +36,5 @@
 
 ## Progress Summary
 
-- Completed this session: tap-event dedupe helper extraction + send/chip integration + tap binding regression tests.
-- Validation status: env check + events + generation + composer + ascii-ui + rendering + stability + trust + routing + device + RAG web + build all passing.
+- Completed this session: browser lifecycle smoke harness + opt-in test API hook + full regression validation.
+- Validation status: env check + stability + events + generation + composer + ascii-ui + rendering + trust + routing + device + RAG web + build + browser lifecycle smoke all passing.
