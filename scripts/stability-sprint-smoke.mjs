@@ -51,6 +51,10 @@ async function main() {
   assert(/id="rag-guidance"/.test(html), 'RAG guidance element missing in settings UI');
   assert(/function renderRagGuidance\(/.test(mainJs), 'RAG guidance renderer missing');
 
+  // Device heuristics extraction contract.
+  assert(/estimateVramMB/.test(mainJs), 'Device heuristic module usage missing in main runtime');
+  assert(/getDeviceTier/.test(mainJs), 'Device tier helper usage missing in main runtime');
+
   console.log('Stability sprint smoke test passed.');
 }
 

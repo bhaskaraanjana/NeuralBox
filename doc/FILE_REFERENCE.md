@@ -51,6 +51,11 @@ This section documents every tracked repository file.
     - task analysis
     - model tier ranking
     - route score calculation
+- `src/lib/device.js`
+  - Shared device heuristics:
+    - GPU class inference
+    - VRAM estimate logic
+    - device tier mapping
 - `src/db/database.js`
   - IndexedDB-first persistence module with localStorage fallback and legacy migration.
 - `src/whisper.js`
@@ -68,6 +73,8 @@ This section documents every tracked repository file.
   - Pure rendering + URL safety checks.
 - `scripts/routing-sanity-test.mjs`
   - Pure routing-heuristic sanity checks.
+- `scripts/device-heuristics-test.mjs`
+  - Device/VRAM heuristic sanity checks.
 - `scripts/rag-web-extensive-test.mjs`
   - Extensive RAG ingest/retrieval test with downloaded web docs.
 

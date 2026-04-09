@@ -171,6 +171,17 @@ This file documents the functional API of `src/main.js`, `src/db/database.js`, a
 - `scoreModelForTask(model, task, options)`
   - Composite routing score used by auto-model route selection.
 
+## `src/lib/device.js`
+
+- `inferGpuClass(gpuName)`
+  - Infers integrated/discrete/unknown class from adapter name.
+- `estimateGpuVramFromName(gpuName)`
+  - Name-based VRAM hinting for common GPU families.
+- `estimateVramMB(signals)`
+  - Combines adapter limits, name hints, and memory fallback into final VRAM estimate.
+- `getDeviceTier(vramMB)`
+  - Converts estimated VRAM into app tier (`lite`, `standard`, `performance`, `premium`).
+
 ## `src/db/database.js`
 
 - `initDatabase()`

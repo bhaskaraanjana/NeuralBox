@@ -14,6 +14,7 @@
     "test:stability": "node scripts/stability-sprint-smoke.mjs",
     "test:rendering": "node scripts/rendering-safety-test.mjs",
     "test:routing": "node scripts/routing-sanity-test.mjs",
+    "test:device": "node scripts/device-heuristics-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
   },
   "dependencies": {

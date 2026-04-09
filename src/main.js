@@ -29,6 +29,11 @@ import {
     getModelTierRank,
     scoreModelForTask,
 } from './lib/routing.js';
+import {
+    estimateVramMB,
+    getDeviceTier,
+    inferGpuClass,
+} from './lib/device.js';
 let whisperModulePromise = null;
 let whisperApi = null;
 
@@ -382,17 +387,6 @@ const reliabilityStats = {
     recoveries: 0,
     lastError: '',
 };
-const GPU_VRAM_NAME_HINTS = [
-    { pattern: /rtx 5090/i, vramMB: 32768 },
-    { pattern: /rtx 4090|rtx 6000 ada|rtx a6000/i, vramMB: 24576 },
-    { pattern: /rtx 5080|rtx 4080/i, vramMB: 16384 },
-    { pattern: /rtx 5070|rtx 4070 ti|rtx 4070 super/i, vramMB: 12288 },
-    { pattern: /rtx 4070|rtx 3080|rtx 2080 ti/i, vramMB: 10240 },
-    { pattern: /rtx 3070|rtx 4060 ti|rtx 3060 ti|rtx 2080|rtx a4000/i, vramMB: 8192 },
-    { pattern: /rtx 4060|rtx 3060|rtx 2070|rtx 2060|gtx 1080 ti|radeon rx 6700/i, vramMB: 8192 },
-    { pattern: /gtx 1660|gtx 1070|radeon rx 6600|radeon rx 7600|arc a770/i, vramMB: 6144 },
-    { pattern: /arc a750|arc a580|gtx 1060|radeon rx 580/i, vramMB: 6144 },
-];
 
 const SEND_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>';
 const STOP_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -913,34 +907,6 @@ function scheduleDeferredBenchmarkIfIdle() {
     scheduleRuntimeBenchmarkCalibration();
 }
 
-function inferGpuClass(gpuName = '') {
-    const lower = String(gpuName || '').toLowerCase();
-    if (!lower) return 'unknown';
-    if (
-        /uhd|iris|intel\(r\) hd|intel\(r\) uhd|intel\(r\) iris|radeon\(tm\) graphics|vega \d/i.test(lower)
-    ) {
-        return 'integrated';
-    }
-    if (/nvidia|rtx|gtx|radeon rx|rx \d{3,4}|arc a\d{3}/i.test(lower)) {
-        return 'discrete';
-    }
-    return 'unknown';
-}
-
-function estimateGpuVramFromName(gpuName = '') {
-    const lower = String(gpuName || '').toLowerCase();
-    if (!lower) return null;
-    for (const hint of GPU_VRAM_NAME_HINTS) {
-        if (hint.pattern.test(lower)) return hint.vramMB;
-    }
-    if (/rtx 30\d{2}/i.test(lower)) return 8192;
-    if (/rtx 40\d{2}/i.test(lower)) return 8192;
-    if (/gtx 16\d{2}/i.test(lower)) return 6144;
-    if (/radeon rx/i.test(lower)) return 8192;
-    if (/arc a\d{3}/i.test(lower)) return 8192;
-    return null;
-}
-
 async function detectDeviceCapabilities() {
     const result = {
         vramMB: 0,
@@ -971,39 +937,16 @@ async function detectDeviceCapabilities() {
         const maxStorageBuffer = Number(adapter.limits?.maxStorageBufferBindingSize || 0);
         const reportedLimitMB = Math.round(Math.max(maxBuffer, maxStorageBuffer) / (1024 * 1024));
         const deviceMemGB = Number(navigator.deviceMemory) || 0;
-        const hintedByNameMB = estimateGpuVramFromName(result.gpuName);
+        const estimated = estimateVramMB({
+            adapterLimitMB: reportedLimitMB,
+            gpuName: result.gpuName,
+            deviceMemGB,
+            gpuClass: result.gpuClass,
+        });
 
-        let estimatedMB = reportedLimitMB;
-        let estimateSource = 'adapter_limits';
-
-        const fallbackByMemoryMB = result.gpuClass === 'integrated'
-            ? clampScore(Math.round(Math.max(4, deviceMemGB || 4) * 256), 1024, 4096)
-            : clampScore(Math.round(Math.max(4, deviceMemGB || 8) * 512), 3072, 12288);
-
-        if (!estimatedMB || estimatedMB < 768) {
-            estimatedMB = fallbackByMemoryMB;
-            estimateSource = 'device_memory_fallback';
-        }
-
-        if (hintedByNameMB && estimatedMB < Math.round(hintedByNameMB * 0.65)) {
-            estimatedMB = hintedByNameMB;
-            estimateSource = 'gpu_name_hint';
-        } else if (result.gpuClass === 'discrete' && estimatedMB < 3072) {
-            estimatedMB = Math.max(estimatedMB, 6144);
-            estimateSource = 'discrete_floor';
-        } else if (result.gpuClass === 'integrated' && estimatedMB < 1024) {
-            estimatedMB = Math.max(estimatedMB, 2048);
-            estimateSource = 'integrated_floor';
-        }
-
-        result.vramMB = Math.round(estimatedMB);
-        result.vramEstimateSource = estimateSource;
-
-        // Determine tier
-        if (result.vramMB >= 6000) result.tier = 'premium';
-        else if (result.vramMB >= 3000) result.tier = 'performance';
-        else if (result.vramMB >= 1500) result.tier = 'standard';
-        else result.tier = 'lite';
+        result.vramMB = estimated.vramMB;
+        result.vramEstimateSource = estimated.source;
+        result.tier = getDeviceTier(result.vramMB);
 
     } catch (err) {
         console.warn('GPU detection failed:', err);

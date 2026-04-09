@@ -63,6 +63,10 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Added `npm run test:routing` (`scripts/routing-sanity-test.mjs`).
 - Added regression coverage for RAG guidance UX:
   - Stability smoke now asserts `#rag-guidance` presence and `renderRagGuidance()` implementation.
+- Shared device module extraction:
+  - Added `src/lib/device.js` for GPU class inference, VRAM estimation, and tier mapping.
+  - Updated `src/main.js` to consume device helpers in runtime capability detection.
+  - Added `npm run test:device` (`scripts/device-heuristics-test.mjs`).
 - Re-ran full validation after modular extraction and trust updates:
   - `npm run env:check` (pass)
   - `npm run build` (pass)
@@ -114,6 +118,14 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Stability smoke: pass
   - RAG extensive test: pass
   - Build: pass
+- Verification after device module extraction:
+  - Env check: pass
+  - Device heuristics test: pass
+  - Routing sanity test: pass
+  - Rendering safety test: pass
+  - Stability smoke: pass
+  - RAG extensive test: pass
+  - Build: pass
 
 ## Known Issues And Gotchas
 
@@ -127,7 +139,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
 2. Add targeted tests around trust metadata and model-switch fallback/cancellation.
-3. Add browser-level smoke for RAG guidance/limit UX.
+3. Add browser-level smoke for conversation import/export and send-stop lifecycle.
 4. Continue UI density cleanup on mobile settings and composer flows.
 
 ## File Map
@@ -137,6 +149,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Rendering/safety helpers: `src/lib/rendering.js`
 - RAG helpers: `src/lib/rag.js`
 - Routing helpers: `src/lib/routing.js`
+- Device helpers: `src/lib/device.js`
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`

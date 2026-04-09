@@ -11,6 +11,7 @@ Source: `changelog.md`
 - Expanded stability smoke assertions for render/citation safety.
 - Extracted render/URL safety helpers into `src/lib/rendering.js` and added `test:rendering`.
 - Extracted routing helpers into `src/lib/routing.js` and added `test:routing`.
+- Extracted device heuristics into `src/lib/device.js` and added `test:device`.
 - Added RAG ingestion guardrails (type/size checks + skip reporting).
 - Added RAG doc provenance in Trust Layer metadata.
 - Added Vite manual chunk split for `webllm` and `transformers`.

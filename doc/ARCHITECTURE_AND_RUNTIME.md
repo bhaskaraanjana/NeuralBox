@@ -12,6 +12,8 @@
   - Pure RAG text/chunking/retrieval helpers reused by runtime and tests.
 - `src/lib/routing.js`
   - Pure auto-routing heuristics reused by runtime and tests.
+- `src/lib/device.js`
+  - Pure device capability heuristics reused by runtime and tests.
 - `src/whisper.js`
   - Encapsulates speech-to-text initialization/transcription.
 - `src/style.css`
