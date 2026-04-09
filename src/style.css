@@ -1,5 +1,5 @@
 /* ============================================
-   NeuralBox — Premium Dark Theme
+   NeuralBox - Premium Dark Theme
    ============================================ */
 
 :root {
@@ -1020,7 +1020,7 @@ body {
 }
 
 .conv-item.pinned .conv-title::before {
-  content: 'Pinned • ';
+  content: 'Pinned | ';
   color: #facc15;
   font-weight: 600;
 }
@@ -2480,3 +2480,4 @@ body {
     max-height: 150px;
   }
 }
+

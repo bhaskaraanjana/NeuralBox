@@ -23,6 +23,7 @@ const requiredFiles = [
   'src/lib/routing.js',
   'src/lib/device.js',
   'src/lib/trust.js',
+  'scripts/ascii-ui-strings-test.mjs',
   'src/db/database.js',
   'PROGRESS.md',
   'core/task.md',

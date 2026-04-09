@@ -4,6 +4,23 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-08 - UI encoding hardening and ASCII guard
+- Continued deep-scan execution on UI corruption risk ("random characters" / mojibake symptoms).
+- Replaced non-ASCII separators in runtime UI strings:
+  - `src/main.js`: replaced bullet/em-dash separators with ASCII-safe `|` and `-` in workbench and start-screen status text.
+  - `src/style.css`: replaced non-ASCII characters in header comment and pinned-label pseudo-content.
+- Added regression guard:
+  - New script: `scripts/ascii-ui-strings-test.mjs`
+  - New npm command: `npm run test:ascii-ui`
+  - Updated `scripts/check-env.mjs` to require the ASCII guard file.
+  - Updated `doc/CONFIG_AND_DEPENDENCIES.md` with new test command and rationale.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run test:rendering` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run build` (pass)
+
 ### 2026-04-08 - Trust metadata module extraction and validation
 - Continued deep-scan execution with focused P1 refactor completion:
   - Extracted trust-layer renderer from `src/main.js` into `src/lib/trust.js`.
@@ -153,6 +170,12 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Stability smoke: pass
   - RAG extensive test: pass
   - Build: pass
+- Verification after UI encoding hardening:
+  - Env check: pass
+  - ASCII UI guard test: pass
+  - Rendering safety test: pass
+  - Stability smoke: pass
+  - Build: pass
 
 ## Known Issues And Gotchas
 
@@ -181,7 +204,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
-- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/rag-web-extensive-test.mjs`
+- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
 - Docs: `doc/`
 
 ## Tech Stack

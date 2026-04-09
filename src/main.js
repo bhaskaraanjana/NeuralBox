@@ -477,7 +477,7 @@ function renderWorkbenchPanel() {
             const payloadStr = Object.entries(entry.payload || {})
                 .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
                 .join(' | ');
-            return `<div class="workbench-row"><div class="workbench-row-title">${escapeHtml(time)} • ${escapeHtml(entry.kind)}</div><div class="workbench-row-meta">${escapeHtml(payloadStr || '—')}</div></div>`;
+            return `<div class="workbench-row"><div class="workbench-row-title">${escapeHtml(time)} | ${escapeHtml(entry.kind)}</div><div class="workbench-row-meta">${escapeHtml(payloadStr || '-')}</div></div>`;
         })
         .join('');
 }
@@ -2210,10 +2210,10 @@ function renderStartModelSelector(capabilities, recommended) {
     const selected = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
     const selectedCard = getModelScoreCard(selected, modelRoutingProfileMode, capabilities);
     html += `<p class="setting-hint" style="margin-top:0.4rem; text-align:center;">Your GPU: <strong>${capabilities.gpuName}</strong> (~${capabilities.vramMB}MB VRAM)</p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Profile: <strong>${modelRoutingProfileMode}</strong> • Benchmark: <strong>${getBenchmarkSummary()}</strong></p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Workflow: <strong>${getWorkflowById(workflowModeId).label}</strong> • Deterministic: <strong>${deterministicModeEnabled ? 'on' : 'off'}</strong></p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Local RAG: <strong>${ragDocuments.length} docs</strong> • Workbench: <strong>${workbenchEnabled ? 'on' : 'off'}</strong></p>`;
-    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Selected supports: <strong>${getModelCapabilitiesLabel(selected)}</strong> • Fit: <strong>${selectedCard.fitLabel}</strong> • Score: <strong>${selectedCard.total}</strong></p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Profile: <strong>${modelRoutingProfileMode}</strong> | Benchmark: <strong>${getBenchmarkSummary()}</strong></p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Workflow: <strong>${getWorkflowById(workflowModeId).label}</strong> | Deterministic: <strong>${deterministicModeEnabled ? 'on' : 'off'}</strong></p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Local RAG: <strong>${ragDocuments.length} docs</strong> | Workbench: <strong>${workbenchEnabled ? 'on' : 'off'}</strong></p>`;
+    html += `<p class="setting-hint" style="margin-top:0.2rem; text-align:center;">Selected supports: <strong>${getModelCapabilitiesLabel(selected)}</strong> | Fit: <strong>${selectedCard.fitLabel}</strong> | Score: <strong>${selectedCard.total}</strong></p>`;
 
     container.innerHTML = html;
 

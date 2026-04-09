@@ -10,6 +10,7 @@
 - [x] Synchronize key docs with current runtime behavior.
 - [x] Run full post-change validation (`build`, `test:stability`, `test:rag:web`).
 - [x] Add RAG ingestion guardrails (file-type + file-size + skip reporting).
+- [x] Normalize UI separators to ASCII-safe strings and add a non-ASCII regression guard.
 
 ## P1 - Architecture Refactor
 
@@ -31,5 +32,5 @@
 
 ## Progress Summary
 
-- Completed this session: trust-layer module extraction (`src/lib/trust.js`) + trust regression lane (`npm run test:trust`) + handoff docs sync.
-- Validation status: env check + trust + rendering + routing + device + stability + RAG web + build all passing.
+- Completed this session: UI encoding hardening + new `npm run test:ascii-ui` guard + handoff/docs sync.
+- Validation status: env check + ascii-ui + rendering + stability + build all passing.
