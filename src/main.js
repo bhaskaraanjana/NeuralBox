@@ -34,6 +34,10 @@ import {
     getDeviceTier,
     inferGpuClass,
 } from './lib/device.js';
+import {
+    resolvePrimaryComposerAction,
+    shouldDisableSendButton,
+} from './lib/composer.js';
 import { renderTrustMetaHtml } from './lib/trust.js';
 let whisperModulePromise = null;
 let whisperApi = null;
@@ -1550,11 +1554,31 @@ async function getWhisperApi() {
 
 function setGeneratingState(active) {
     isGenerating = active;
-    sendBtn.disabled = !active && (!userInput.value.trim() && !pendingImage);
+    sendBtn.disabled = shouldDisableSendButton({
+        isGenerating: active,
+        inputText: userInput.value,
+        hasPendingImage: Boolean(pendingImage),
+    });
     sendBtn.classList.toggle('generating', active);
     sendBtn.title = active ? 'Stop generation' : 'Send message';
     sendBtn.innerHTML = active ? STOP_ICON_SVG : SEND_ICON_SVG;
     renderDebugPanel();
+}
+
+function handleComposerPrimaryAction() {
+    const action = resolvePrimaryComposerAction({
+        isGenerating,
+        inputText: userInput.value,
+        hasPendingImage: Boolean(pendingImage),
+        hasEngine: Boolean(engine),
+    });
+    if (action === 'cancel') {
+        requestGenerationCancel();
+        return;
+    }
+    if (action === 'send') {
+        sendMessage(userInput.value);
+    }
 }
 
 function requestGenerationCancel() {
@@ -3432,33 +3456,37 @@ function bindSuggestionChips() {
 
 // Send message
 sendBtn.addEventListener('click', () => {
-    if (isGenerating) {
-        requestGenerationCancel();
-        return;
-    }
-    sendMessage(userInput.value);
+    handleComposerPrimaryAction();
 });
 sendBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
-    if (isGenerating) {
-        requestGenerationCancel();
-        return;
-    }
-    sendMessage(userInput.value);
+    handleComposerPrimaryAction();
 });
 
 // Enter to send
 userInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendMessage(userInput.value);
+        const action = resolvePrimaryComposerAction({
+            isGenerating,
+            inputText: userInput.value,
+            hasPendingImage: Boolean(pendingImage),
+            hasEngine: Boolean(engine),
+        });
+        if (action === 'send') {
+            sendMessage(userInput.value);
+        }
     }
 });
 
 // Auto-resize
 userInput.addEventListener('input', () => {
     autoResizeInput();
-    sendBtn.disabled = !isGenerating && (!userInput.value.trim() && !pendingImage);
+    sendBtn.disabled = shouldDisableSendButton({
+        isGenerating,
+        inputText: userInput.value,
+        hasPendingImage: Boolean(pendingImage),
+    });
 });
 
 // New chat (header button)
@@ -4141,7 +4169,11 @@ function attachImageFile(file) {
             pendingImage = { dataUrl: normalized.dataUrl, file, meta: normalized };
             imagePreviewImg.src = normalized.dataUrl;
             imagePreview.style.display = 'flex';
-            sendBtn.disabled = false; // Allow sending with just image
+            sendBtn.disabled = shouldDisableSendButton({
+                isGenerating,
+                inputText: userInput.value,
+                hasPendingImage: true,
+            });
             const est = estimatePhiVisionEmbedSize(normalized.targetHeight, normalized.targetWidth);
             visionDebug('Image prepared', {
                 source: `${normalized.sourceWidth}x${normalized.sourceHeight}`,
@@ -4166,7 +4198,11 @@ function clearPendingImage() {
     pendingImage = null;
     imagePreview.style.display = 'none';
     imagePreviewImg.src = '';
-    if (!userInput.value.trim()) sendBtn.disabled = true;
+    sendBtn.disabled = shouldDisableSendButton({
+        isGenerating,
+        inputText: userInput.value,
+        hasPendingImage: false,
+    });
 }
 
 function getImageFromClipboard(clipboardData) {

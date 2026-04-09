@@ -4,6 +4,33 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-08 - Composer lifecycle refactor and coverage
+- Continued deep-scan execution on send/stop lifecycle robustness.
+- Added new shared composer helper module: `src/lib/composer.js`
+  - `resolvePrimaryComposerAction()` centralizes send vs stop vs no-op behavior.
+  - `shouldDisableSendButton()` centralizes composer button disabled state rules.
+- Updated `src/main.js` to use shared composer helpers:
+  - `setGeneratingState()` now uses shared disabled-state helper.
+  - Added `handleComposerPrimaryAction()` and wired send button click/touch to a single action path.
+  - Enter-to-send path now resolves action using shared helper and only sends on `send`.
+  - Image attach and image clear paths now use shared disabled-state helper.
+- Added dedicated test coverage:
+  - New script: `scripts/composer-actions-test.mjs`
+  - New npm command: `npm run test:composer`
+  - Updated stability smoke contract to assert helper-driven cancellation wiring.
+  - Updated env check + docs for new helper/test files.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:composer` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run test:rendering` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:trust` (pass)
+  - `npm run test:routing` (pass)
+  - `npm run test:device` (pass)
+  - `npm run test:rag:web` (pass)
+  - `npm run build` (pass)
+
 ### 2026-04-08 - UI encoding hardening and ASCII guard
 - Continued deep-scan execution on UI corruption risk ("random characters" / mojibake symptoms).
 - Replaced non-ASCII separators in runtime UI strings:
@@ -176,6 +203,17 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Rendering safety test: pass
   - Stability smoke: pass
   - Build: pass
+- Verification after composer lifecycle refactor:
+  - Env check: pass
+  - Composer action test: pass
+  - ASCII UI guard test: pass
+  - Rendering safety test: pass
+  - Stability smoke: pass
+  - Trust metadata test: pass
+  - Routing sanity test: pass
+  - Device heuristics test: pass
+  - RAG extensive test: pass
+  - Build: pass
 
 ## Known Issues And Gotchas
 
@@ -188,7 +226,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
 ## What To Work On Next
 
 1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
-2. Add targeted tests around model-switch fallback/cancellation (trust metadata coverage now added).
+2. Add targeted tests around model-switch fallback/cancellation (composer send/stop coverage now added).
 3. Add browser-level smoke for conversation import/export and send-stop lifecycle.
 4. Continue UI density cleanup on mobile settings and composer flows.
 
@@ -201,10 +239,11 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Routing helpers: `src/lib/routing.js`
 - Device helpers: `src/lib/device.js`
 - Trust-layer helpers: `src/lib/trust.js`
+- Composer helpers: `src/lib/composer.js`
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
-- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
+- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
 - Docs: `doc/`
 
 ## Tech Stack

@@ -19,6 +19,7 @@
 - [x] Extract shared routing helpers to `src/lib/routing.js` and add routing sanity tests.
 - [x] Extract shared device heuristics to `src/lib/device.js` and add device sanity tests.
 - [x] Extract trust-layer renderer to `src/lib/trust.js` and add trust metadata sanity tests.
+- [x] Extract composer action helpers to `src/lib/composer.js` and add composer lifecycle tests.
 - [ ] Split remaining `src/main.js` domains into focused modules (routing, RAG, voice, UI events).
 - [ ] Add pure-function unit test paths for routing/retrieval/render helpers.
 - [ ] Keep behavior parity with current smoke tests.
@@ -32,5 +33,5 @@
 
 ## Progress Summary
 
-- Completed this session: UI encoding hardening + new `npm run test:ascii-ui` guard + handoff/docs sync.
-- Validation status: env check + ascii-ui + rendering + stability + build all passing.
+- Completed this session: composer lifecycle helper extraction + send/stop action tests + stability smoke contract update.
+- Validation status: env check + composer + ascii-ui + rendering + stability + trust + routing + device + RAG web + build all passing.

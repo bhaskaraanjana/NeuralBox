@@ -23,6 +23,8 @@ const requiredFiles = [
   'src/lib/routing.js',
   'src/lib/device.js',
   'src/lib/trust.js',
+  'src/lib/composer.js',
+  'scripts/composer-actions-test.mjs',
   'scripts/ascii-ui-strings-test.mjs',
   'src/db/database.js',
   'PROGRESS.md',

@@ -20,6 +20,7 @@
     "test:routing": "node scripts/routing-sanity-test.mjs",
     "test:device": "node scripts/device-heuristics-test.mjs",
     "test:trust": "node scripts/trust-metadata-test.mjs",
+    "test:composer": "node scripts/composer-actions-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
   }
@@ -46,6 +47,8 @@
   - Device/VRAM heuristic checks for extracted device helper module.
 - `npm run test:trust`
   - Trust-layer metadata rendering sanity checks.
+- `npm run test:composer`
+  - Composer send/stop/no-op decision and send-button-disable logic checks.
 - `npm run test:ascii-ui`
   - Guards UI source strings against non-ASCII regressions that can surface as mojibake.
 - `npm run test:rag:web`

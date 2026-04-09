@@ -18,7 +18,9 @@ async function main() {
   assert(!/id="stop-btn"/.test(html), 'Legacy #stop-btn should not exist');
   assert(/sendBtn\.classList\.toggle\('generating', active\)/.test(mainJs), 'Send button generating state toggle missing');
   assert(/sendBtn\.innerHTML = active \? STOP_ICON_SVG : SEND_ICON_SVG;/.test(mainJs), 'Send/stop icon swap missing');
-  assert(/if \(isGenerating\)\s*{\s*requestGenerationCancel\(\);/.test(mainJs), 'Send button should cancel generation when active');
+  assert(/function handleComposerPrimaryAction\(/.test(mainJs), 'Composer primary action handler missing');
+  assert(/const action = resolvePrimaryComposerAction\(\{/.test(mainJs), 'Composer action resolver usage missing');
+  assert(/if \(action === 'cancel'\)\s*{\s*requestGenerationCancel\(\);/.test(mainJs), 'Send button should cancel generation when active');
 
   // Routing should only run behind auto selection.
   assert(/if \(isAutoModelSelected\(\)\)\s*{\s*const routing = chooseModelRoute/.test(mainJs), 'Routing must be gated by Auto selection');
