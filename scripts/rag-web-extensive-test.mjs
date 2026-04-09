@@ -1,6 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {
+  normalizeRagDocText,
+  retrieveRagChunksFromIndex,
+  splitTextIntoRagChunks,
+} from '../src/lib/rag.js';
 
 const RAG_MAX_DOCS = 24;
 const RAG_MAX_CHARS_PER_DOC = 240000;
@@ -53,62 +58,6 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function normalizeRagDocText(text) {
-  return String(text || '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\t/g, '  ')
-    .replace(/[ \u00a0]{2,}/g, ' ')
-    .trim();
-}
-
-function splitTextIntoRagChunks(text, chunkSize = RAG_CHUNK_SIZE, overlap = RAG_CHUNK_OVERLAP) {
-  const normalized = normalizeRagDocText(text);
-  if (!normalized) return [];
-  const chunks = [];
-  let cursor = 0;
-  while (cursor < normalized.length) {
-    const end = Math.min(normalized.length, cursor + chunkSize);
-    const chunk = normalized.slice(cursor, end).trim();
-    if (chunk) chunks.push(chunk);
-    if (end >= normalized.length) break;
-    cursor = Math.max(end - overlap, cursor + 1);
-  }
-  return chunks;
-}
-
-function tokenizeRagQuery(text) {
-  return normalizeRagDocText(text)
-    .toLowerCase()
-    .split(/[^a-z0-9_]+/i)
-    .filter((t) => t.length > 2)
-    .slice(0, 24);
-}
-
-function getRagMatchScore(queryTokens, chunkText) {
-  if (!queryTokens.length || !chunkText) return 0;
-  const hay = chunkText.toLowerCase();
-  let score = 0;
-  for (const token of queryTokens) {
-    const hits = hay.split(token).length - 1;
-    if (hits > 0) score += Math.min(6, hits) * (token.length >= 6 ? 2 : 1);
-  }
-  return score;
-}
-
-function retrieveRagChunks(query, ragChunks, maxMatches = RAG_MAX_MATCHES) {
-  if (!ragChunks.length) return [];
-  const tokens = tokenizeRagQuery(query);
-  if (!tokens.length) return [];
-  return ragChunks
-    .map((chunk) => ({
-      ...chunk,
-      score: getRagMatchScore(tokens, chunk.text),
-    }))
-    .filter((c) => c.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxMatches);
-}
-
 function rebuildRagChunkIndex(ragDocuments) {
   const next = [];
   for (const doc of ragDocuments) {
@@ -131,7 +80,7 @@ function ingestDocs(currentDocs, docsToIngest) {
     const rawText = normalizeRagDocText(fileDoc.text || '');
     const text = rawText.slice(0, RAG_MAX_CHARS_PER_DOC);
     if (!text) continue;
-    const chunks = splitTextIntoRagChunks(text);
+    const chunks = splitTextIntoRagChunks(text, RAG_CHUNK_SIZE, RAG_CHUNK_OVERLAP);
     if (!chunks.length) continue;
     docsToAdd.push({
       id: `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
@@ -233,7 +182,7 @@ async function run() {
 
   // Retrieval quality checks per document query.
   for (const doc of downloaded) {
-    const matches = retrieveRagChunks(doc.query, ragChunks);
+    const matches = retrieveRagChunksFromIndex(ragChunks, doc.query, RAG_MAX_MATCHES);
     assert(matches.length > 0, `No retrieval matches for query: ${doc.query}`);
     assert(matches.length <= RAG_MAX_MATCHES, 'Returned more than max retrieval matches');
     const joinedNames = matches.map((m) => m.docName.toLowerCase()).join(' | ');
@@ -246,9 +195,9 @@ async function run() {
   summarize('Retrieval relevance', { status: 'pass', maxMatches: RAG_MAX_MATCHES });
 
   // Query tokenization guardrails.
-  const shortTokenOnly = retrieveRagChunks('a an to if by', ragChunks);
+  const shortTokenOnly = retrieveRagChunksFromIndex(ragChunks, 'a an to if by', RAG_MAX_MATCHES);
   assert(shortTokenOnly.length === 0, 'Short-token-only query should return no matches');
-  const punctuationOnly = retrieveRagChunks('... !!! ???', ragChunks);
+  const punctuationOnly = retrieveRagChunksFromIndex(ragChunks, '... !!! ???', RAG_MAX_MATCHES);
   assert(punctuationOnly.length === 0, 'Punctuation-only query should return no matches');
   summarize('Tokenization edge cases', { status: 'pass' });
 

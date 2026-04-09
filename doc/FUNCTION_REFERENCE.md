@@ -91,13 +91,11 @@ This file documents the functional API of `src/main.js`, `src/db/database.js`, a
   - Main text/image send flow, optional auto-route+hot-swap, streaming generation, save cycle.
 - `addMessageToDOM(role, content, imageUrl)`
   - Renders single message bubble.
-- `formatMarkdown(text)`
-  - Basic markdown-like formatting + `<think>` block support.
-- `formatBasicHTML(text)`
-  - Regex-based inline formatting.
 - `scrollToBottom()`
 - `autoResizeInput()`
 - `renderWelcome()`
+
+`formatMarkdown` / `formatBasicHTML` and URL-safety helpers are now imported from `src/lib/rendering.js`.
 
 ## Persistence and settings
 
@@ -141,6 +139,28 @@ This file documents the functional API of `src/main.js`, `src/db/database.js`, a
   - Returns whether transcriber is initialized.
 - `isWhisperLoading()`
   - Returns whether initialization is currently in progress.
+
+## `src/lib/rendering.js`
+
+- `safeParseHttpUrl(rawUrl)`
+  - Strict `http/https` URL parser used by citation rendering.
+- `formatBasicHTML(text)`
+  - Escapes raw text first, then applies markdown-like inline formatting.
+- `formatMarkdown(text)`
+  - Supports `<think>` block rendering and standard escaped markdown-like output.
+
+## `src/lib/rag.js`
+
+- `normalizeRagDocText(text)`
+  - Normalizes whitespace and line endings for RAG ingest/query.
+- `splitTextIntoRagChunks(text, chunkSize, overlap)`
+  - Splits normalized text into overlapped chunks.
+- `getRagMatchScore(queryTokens, chunkText)`
+  - Keyword-hit scoring function for current local retrieval.
+- `retrieveRagChunksFromIndex(ragChunks, query, maxMatches)`
+  - Ranks indexed chunks for a query.
+- `getFileExtension(filename)`
+  - Extension extraction utility used by RAG file guards.
 
 ## `src/db/database.js`
 

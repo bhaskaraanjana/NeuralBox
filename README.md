@@ -1,76 +1,81 @@
 # NeuralBox
 
-**Run AI in your browser. No server. No sign-up. Private by design.**
+Local-first AI chat in the browser using WebGPU and WebLLM.
 
-NeuralBox runs powerful LLMs entirely in your browser using WebGPU. Your data never leaves your device.
+NeuralBox runs models on-device, stores conversations locally, supports optional web lookup, optional document-grounded responses (RAG), optional voice input, and vision input for supported models.
 
-![NeuralBox Banner](app-screenshot-placeholder.png) 
+## Current capabilities
 
+- Local chat with streaming responses and perf stats.
+- Model selection:
+  - Manual model selection.
+  - `Auto` mode with per-request routing and hot swap.
+- Vision input for supported models (image attach, paste, drag/drop).
+- Local document attach for RAG (text/code/log-style files).
+- Optional web-enhanced answers (DuckDuckGo via proxy).
+- Voice input (Whisper tiny.en via Transformers.js).
+- Voice chat overlay mode (listen -> generate -> speak loop).
+- Conversation export/import, Markdown export, and share-text copy.
+- Runtime debug panel and workbench panel for diagnostics.
 
-## ✨ Features
+## Tech stack
 
-- 🧠 **Fully Local AI** — AI runs entirely in-browser via WebGPU, with zero server dependency.
-- 🔒 **Private by Design** — No data is ever sent anywhere. Conversations are stored locally.
-- ⚡ **Real-Time Generation** — Streaming token generation with performance stats (tok/s).
-- 📴 **Offline Capable** — After the first model download, the app works entirely without internet connection.
-- 🎙️ **Voice Chat Mode** — Continuous hands-free voice conversations using a local Whisper model for Speech-to-Text and browser Text-to-Speech APIs.
-- 🌐 **Web-Enhanced Mode** — (Optional) Inject real-time knowledge via DuckDuckGo Instant Answers. 
-- 🎛️ **Hardware-Optimized Models** — Auto-detects your GPU VRAM and recommends the best model. Choose from 6 different models (from 0.5B to 7B parameters) based on your device limits.
-- 💬 **Conversation Management** — Multi-conversation sidebar to easily manage, switch, and delete chats.
-- 📱 **Responsive & Premium UI** — Dark glassmorphic theme with smooth animations, optimized for desktop, tablet, and mobile. Touch-friendly interface.
+- Vite
+- `@mlc-ai/web-llm`
+- `@huggingface/transformers` (Whisper ASR)
+- Vanilla JavaScript + CSS
 
-## 🚀 Quick Start
+## Requirements
 
-### Prerequisites
-- **Browser**: Chrome, Edge, Firefox, or Safari with **WebGPU support** enabled.
-- **GPU**: Any discrete or integrated GPU with WebGPU drivers.
-- **RAM**: 4GB+ available. 
+- Node.js `>=20 <26`
+- A browser with WebGPU support (latest Chrome/Edge recommended)
 
-### Installation
+## Setup
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/bhaskaraanjana/NeuralBox.git
-   cd NeuralBox
-   ```
+```bash
+npm install
+npm run env:check
+```
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+## Run
 
-3. **Run the development server:**
-   ```bash
-   npm run dev
-   ```
+Default dev server (configured in `vite.config.js`):
 
-4. **Open in Browser:**
-   Navigate to the URL shown in your terminal (usually `http://localhost:5173`).
+```bash
+npm run dev
+```
 
-*Note: The first time you load a model or use Voice Chat, the application will download the necessary model files (~350MB to ~4.5GB depending on the model, ~40MB for Whisper). These files are cached in your browser's IndexedDB for instant offline loading on subsequent visits.*
+Override port when needed:
 
-## 🧩 Tech Stack
+```bash
+npm run dev -- --port 5174 --host
+```
 
-- **[Vite](https://vitejs.dev/)** — Lightning-fast build tool.
-- **[@mlc-ai/web-llm](https://github.com/mlc-ai/web-llm)** — High-performance in-browser LLM inference utilizing ONNX WASM & WebGPU.
-- **Transformers.js / Whisper** — In-browser local speech-to-text.
-- **Vanilla JS/CSS** — Zero framework overhead for pure performance.
+## Validate
 
-## 🗃️ Available Models
+```bash
+npm run build
+npm run test:stability
+npm run test:rendering
+npm run test:rag:web
+```
 
-NeuralBox allows you to choose the LLM that best fits your hardware directly from the settings menu:
+## Model catalog
 
-- **Qwen 2.5 — 0.5B** (Lite, ~350MB, ~1GB VRAM) - *Fastest, great for constrained devices*
-- **Qwen 2.5 — 1.5B** (Standard, ~1GB, ~1.5GB VRAM)
-- **Qwen 2.5 — 3B** (Performance, ~2GB, ~3GB VRAM)
-- **Llama 3.2 — 3B** (Performance, ~2GB, ~3GB VRAM)
-- **Phi 3.5 Mini — 3.8B** (Performance, ~2.4GB, ~3.5GB VRAM)
-- **Qwen 2.5 — 7B** (Premium, ~4.5GB, ~6GB+ VRAM) - *Highest quality reasoning*
+Model definitions live in [src/main.js](C:/DEV/NeuralBox/src/main.js) (`MODEL_CATALOG`) and are split in UI as:
 
-## 🛡️ Privacy
+- Curated models (default/recommended path)
+- Advanced models (opt-in)
 
-NeuralBox is designed for absolute privacy. All AI inference runs locally on your device. Your conversation history is stored entirely in your browser's `localStorage`. Unless you explicitly enable the "Web-Enhanced Mode" (which pings DuckDuckGo for search results), zero network requests are made after the initial model download.
+Use the in-app selector for the canonical, current list.
 
-## 📜 License
+## Privacy and network behavior
 
-This project is licensed under the MIT License.
+- Inference and conversation storage are local to the browser.
+- Web-enhanced mode and auto web search send the query to DuckDuckGo endpoints (through allorigins proxy).
+- First model load downloads model assets and caches them locally.
+
+## Notes
+
+- Vision support currently includes compatibility workarounds for known WebLLM Phi-3.5 embedding-shape constraints; see `doc/VISION_EMBED_SHAPE_INCIDENT_2026-03-19.md`.
+- RAG document ingestion currently enforces a per-file size cap of 5MB for predictable browser performance.

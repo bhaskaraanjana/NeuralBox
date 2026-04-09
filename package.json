@@ -1,6 +1,6 @@
 {
   "name": "neuralbox",
-  "version": "1.0.0",
+  "version": "1.6.0",
   "description": "Run AI in your browser. No server. No sign-up. Private by design.",
   "type": "module",
   "engines": {
@@ -12,6 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:stability": "node scripts/stability-sprint-smoke.mjs",
+    "test:rendering": "node scripts/rendering-safety-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
   },
   "dependencies": {

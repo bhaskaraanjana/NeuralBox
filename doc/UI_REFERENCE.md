@@ -1,165 +1,99 @@
 # UI Reference
 
-## HTML Structure (`index.html`)
+## Layout overview
 
-Top-level app node:
-
-- `#app`
-
-Primary screens:
-
-- `#loading-screen.screen.active`
-- `#chat-screen.screen`
+- `#loading-screen`
+  - WebGPU checks, model preselect, cache/download status, start button.
+- `#chat-screen`
+  - Sidebar, chat header, debug/workbench panels, message list, input composer.
 - `#voice-chat-overlay`
+  - Full-screen voice loop interaction mode.
 
-### Loading Screen Region
+## Key UI regions
 
-Important IDs:
+## Loading screen
 
-- `#webgpu-error`
-- `#download-section`
+- `#start-model-selector-group`
 - `#status-text`
 - `#progress-fill`
 - `#progress-percent`
 - `#start-btn`
 - `#cache-status-note`
-- `#start-model-selector-group`
 
-### Chat Screen Region
-
-Sidebar:
+## Sidebar
 
 - `#sidebar`
+- `#conversation-search`
 - `#conversation-list`
 - `#sidebar-new-chat`
-- `#sidebar-overlay`
 
-Header:
+## Chat header and diagnostics
 
-- `#sidebar-toggle`
 - `#model-badge`
 - `#hot-swap-status`
 - `#new-chat-btn`
 - `#voice-chat-btn`
 - `#settings-btn`
+- `#debug-panel`, `#debug-state`, `#debug-events`
+- `#workbench-panel`, `#workbench-body`
 
-Debug:
-
-- `#debug-panel`
-- `#debug-state`
-- `#debug-events`
-- `#debug-clear-btn`
-
-Messages:
-
-- `#messages`
-
-Input and controls:
+## Composer controls
 
 - `#web-search-toggle`
 - `#think-toggle`
 - `#mic-btn`
-- `#image-btn`
-- `#image-input`
+- `#image-btn`, `#image-input`, `#image-preview`, `#image-preview-clear`
+- `#doc-btn`, `#doc-input`, `#doc-preview`, `#doc-preview-clear`
 - `#user-input`
-- `#send-btn`
-- `#image-preview`
-- `#image-preview-img`
-- `#image-preview-clear`
+- `#send-btn` (send/stop dual-state)
 - `#voice-status`
 - `#input-disclaimer`
 
-Settings panel:
+## Settings panel
 
-- `#settings-panel`
-- `#settings-overlay`
-- `#close-settings`
-- `#model-selector-group`
-- `#system-prompt`
-- `#temperature`
-- `#temp-value`
-- `#max-tokens`
-- `#tokens-value`
-- `#web-search-setting`
-- `#debug-panel-setting`
-- `#clear-history-btn`
+- Tabs:
+  - `#settings-tab-regular`
+  - `#settings-tab-advanced`
+- Model and generation:
+  - `#model-selector-group`
+  - `#system-prompt`
+  - `#temperature`
+  - `#max-tokens`
+- Toggles:
+  - `#web-search-setting`
+  - `#auto-web-search-setting`
+  - `#trust-layer-setting`
+  - `#deterministic-setting`
+  - `#vision-verbose-setting`
+  - `#debug-panel-setting`
+  - `#workbench-setting`
+- RAG controls:
+  - `#rag-dropzone`
+  - `#rag-add-btn`
+  - `#rag-clear-btn`
+  - `#rag-file-input`
+  - `#rag-status`
+  - `#rag-guidance`
+  - `#rag-search-input`
+  - `#rag-doc-list`
+- Backup/export:
+  - `#export-chats-btn`
+  - `#import-chats-btn`
+  - `#export-md-btn`
+  - `#copy-share-btn`
 
-Voice overlay:
+## Styling notes (`src/style.css`)
 
-- `#voice-chat-close`
-- `#voice-orb`
-- `#voice-chat-label`
-- `#voice-chat-text`
+- Theme and tokens in `:root`.
+- Layered overrides are used for current Jan-inspired visual direction.
+- Responsive behavior has breakpoints at:
+  - `980px`
+  - `768px`
+  - `640px`
+  - `480px`
 
-## CSS Architecture (`src/style.css`)
+## Interaction notes
 
-## 1) Design Tokens (`:root`)
-
-- Color tokens for backgrounds, text, accents, and borders.
-- Radius, shadow, motion, and font variables.
-
-## 2) Section Layout
-
-Main sections are clearly separated with comments:
-
-- reset/base
-- loading screen
-- chat screen and sidebar
-- messages and input
-- settings panel
-- responsive blocks
-- feature-specific sections (search, mic, voice mode, image preview, think blocks)
-
-## 3) Reusable UI Patterns
-
-- `.icon-btn` for header actions
-- `.btn-primary` and `.btn-danger`
-- `.message`, `.message-content`, `.typing-indicator`
-- `.web-toggle`
-- `.voice-status`
-
-## 4) Feature Visual States
-
-- Web search:
-  - `.web-toggle.active`
-  - `.input-disclaimer.web-active`
-  - `.search-badge`
-  - `.search-sources`
-- Mic:
-  - `.mic-btn.recording`
-  - `.mic-btn.loading`
-  - `.voice-status.recording`
-  - `.voice-status.transcribing`
-- Voice chat orb:
-  - `.voice-orb.listening`
-  - `.voice-orb.thinking`
-  - `.voice-orb.speaking`
-- Think output:
-  - `.think-block`
-  - `.think-content`
-
-## 5) Responsive Breakpoints
-
-- `@media (max-width: 768px)`
-  - sidebar becomes off-canvas drawer
-  - settings panel becomes full-width
-  - message typography and spacing tighten
-- `@media (max-width: 480px)`
-  - tighter header/input spacing
-  - smaller avatars/logo
-
-## Animation Inventory
-
-Keyframes:
-
-- `ambientPulse` (loading background)
-- `logoGlow`
-- `fadeInUp` (welcome)
-- `messageIn` (chat entries)
-- `typingBounce`
-- `fadeIn` (settings overlay)
-- `slideIn` (settings panel)
-- `spin` (search/voice spinners)
-- `pulse-mic`
-- `orb-pulse`
-- `orb-spin`
+- Most controls bind both click and touch paths.
+- RAG and image controls support drag/drop.
+- Runtime events feed both debug panel and workbench views.

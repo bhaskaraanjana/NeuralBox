@@ -122,3 +122,29 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
 
 - Click + `touchend` handlers for many interactive controls.
 - Sidebar slide-in behavior for smaller viewports.
+
+## 13) Local RAG Document Attach
+
+- Documents are attached directly from chat/settings (`doc` button and RAG panel).
+- Current RAG pipeline is local keyword scoring:
+  - text normalization
+  - chunking with overlap
+  - token-hit score ranking
+- Indexed docs are persisted in browser storage.
+- Retrieval runs automatically when user query and indexed chunks overlap.
+- Ingestion safety guards:
+  - extension/MIME allow-list checks
+  - per-file size cap (`RAG_MAX_FILE_BYTES`, currently 5MB)
+  - clear skip reporting (unsupported / too large / empty)
+
+## 14) Trust Layer Metadata
+
+- Optional per-response trust block in assistant messages.
+- Includes:
+  - selected model
+  - route reason
+  - workflow
+  - deterministic mode
+  - web result count/mode
+  - RAG match count
+  - retrieved RAG doc names (when present)

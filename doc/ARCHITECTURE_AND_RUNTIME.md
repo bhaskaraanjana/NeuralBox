@@ -6,6 +6,10 @@
   - Defines all UI containers and control IDs.
 - `src/main.js`
   - Owns app state, event wiring, orchestration, and rendering.
+- `src/lib/rendering.js`
+  - Pure rendering/safety helpers (escaped markdown-like formatting and URL parsing).
+- `src/lib/rag.js`
+  - Pure RAG text/chunking/retrieval helpers reused by runtime and tests.
 - `src/whisper.js`
   - Encapsulates speech-to-text initialization/transcription.
 - `src/style.css`

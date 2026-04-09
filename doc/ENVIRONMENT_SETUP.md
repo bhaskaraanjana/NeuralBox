@@ -19,6 +19,13 @@ npm run env:check
 npm run dev
 ```
 
+Default dev port is `6969` (from `vite.config.js`).
+Override when needed:
+
+```bash
+npm run dev -- --port 5174 --host
+```
+
 Open the Vite URL in a browser with WebGPU enabled.
 
 ## Validation Workflow
@@ -27,6 +34,8 @@ Open the Vite URL in a browser with WebGPU enabled.
 npm run env:check
 npm run build
 npm run test:stability
+npm run test:rendering
+npm run test:rag:web
 ```
 
 ## Notes

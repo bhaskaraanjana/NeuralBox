@@ -2,19 +2,26 @@
 
 Source: `changelog.md`
 
-## Unreleased (local workspace)
+## 1.6.0 (2026-04-08)
+
+- Hardened source citation rendering to avoid malformed-URL runtime crashes.
+- Escaped raw text before markdown-style rendering to reduce XSS risk.
+- Improved VRAM detection using adapter limits + GPU-name hints + memory fallback.
+- Replaced key blocking `alert()` paths with inline notices.
+- Expanded stability smoke assertions for render/citation safety.
+- Extracted render/URL safety helpers into `src/lib/rendering.js` and added `test:rendering`.
+- Added RAG ingestion guardrails (type/size checks + skip reporting).
+- Added RAG doc provenance in Trust Layer metadata.
+- Added Vite manual chunk split for `webllm` and `transformers`.
+- Updated docs and package metadata to `1.6.0`.
+
+## 1.5.0 (2026-03-10)
 
 - Added explicit `Auto` model selection mode; manual model selection no longer routes by default.
 - Added always-on model hot swap with header progress/status indicator.
 - Changed send control to dual-mode send/stop behavior during generation.
 - Added optional in-app runtime debug panel with recent lifecycle events.
 - Added `npm run test:stability` smoke test for new routing/hot-swap/send-stop contracts.
-
-## 1.5.0 (2026-03-10)
-
-- Added multi-model selector with VRAM-based recommendation.
-- Added GPU info display.
-- Added persisted model preference and dynamic header badge updates.
 
 ## 1.4.0 (2026-03-09)
 

@@ -39,4 +39,4 @@ npm install
 npm run dev
 ```
 
-Then open the local Vite URL (usually `http://localhost:5173`).
+Then open the local Vite URL (default config uses port `6969` unless overridden).

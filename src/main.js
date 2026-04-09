@@ -14,6 +14,16 @@ import {
     loadRagDocsRecord,
     saveRagDocsRecord,
 } from './db/database.js';
+import {
+    formatMarkdown,
+    safeParseHttpUrl,
+} from './lib/rendering.js';
+import {
+    getFileExtension,
+    normalizeRagDocText,
+    retrieveRagChunksFromIndex,
+    splitTextIntoRagChunks,
+} from './lib/rag.js';
 let whisperModulePromise = null;
 let whisperApi = null;
 
@@ -92,6 +102,7 @@ const ragAddBtn = $('#rag-add-btn');
 const ragClearBtn = $('#rag-clear-btn');
 const ragFileInput = $('#rag-file-input');
 const ragStatus = $('#rag-status');
+const ragGuidance = $('#rag-guidance');
 const ragDocList = $('#rag-doc-list');
 const ragSearchInput = $('#rag-search-input');
 const ragDropzone = $('#rag-dropzone');
@@ -352,6 +363,13 @@ const RAG_MAX_CHARS_PER_DOC = 240000;
 const RAG_CHUNK_SIZE = 900;
 const RAG_CHUNK_OVERLAP = 160;
 const RAG_MAX_MATCHES = 4;
+const RAG_MAX_FILE_BYTES = 5 * 1024 * 1024;
+const RAG_ALLOWED_EXTENSIONS = new Set([
+    'txt', 'md', 'markdown', 'json', 'csv', 'log',
+    'js', 'ts', 'html', 'htm', 'xml',
+    'yml', 'yaml', 'ini', 'cfg',
+    'py', 'java', 'c', 'cpp', 'rs', 'go', 'sql',
+]);
 const reliabilityStats = {
     generationRetries: 0,
     generationFailures: 0,
@@ -359,6 +377,17 @@ const reliabilityStats = {
     recoveries: 0,
     lastError: '',
 };
+const GPU_VRAM_NAME_HINTS = [
+    { pattern: /rtx 5090/i, vramMB: 32768 },
+    { pattern: /rtx 4090|rtx 6000 ada|rtx a6000/i, vramMB: 24576 },
+    { pattern: /rtx 5080|rtx 4080/i, vramMB: 16384 },
+    { pattern: /rtx 5070|rtx 4070 ti|rtx 4070 super/i, vramMB: 12288 },
+    { pattern: /rtx 4070|rtx 3080|rtx 2080 ti/i, vramMB: 10240 },
+    { pattern: /rtx 3070|rtx 4060 ti|rtx 3060 ti|rtx 2080|rtx a4000/i, vramMB: 8192 },
+    { pattern: /rtx 4060|rtx 3060|rtx 2070|rtx 2060|gtx 1080 ti|radeon rx 6700/i, vramMB: 8192 },
+    { pattern: /gtx 1660|gtx 1070|radeon rx 6600|radeon rx 7600|arc a770/i, vramMB: 6144 },
+    { pattern: /arc a750|arc a580|gtx 1060|radeon rx 580/i, vramMB: 6144 },
+];
 
 const SEND_ICON_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>';
 const STOP_ICON_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
@@ -458,37 +487,6 @@ function clearWorkbenchEvents() {
     renderWorkbenchPanel();
 }
 
-function normalizeRagDocText(text) {
-    return String(text || '')
-        .replace(/\r\n/g, '\n')
-        .replace(/\t/g, '  ')
-        .replace(/[ \u00a0]{2,}/g, ' ')
-        .trim();
-}
-
-function splitTextIntoRagChunks(text, chunkSize = RAG_CHUNK_SIZE, overlap = RAG_CHUNK_OVERLAP) {
-    const normalized = normalizeRagDocText(text);
-    if (!normalized) return [];
-    const chunks = [];
-    let cursor = 0;
-    while (cursor < normalized.length) {
-        const end = Math.min(normalized.length, cursor + chunkSize);
-        const chunk = normalized.slice(cursor, end).trim();
-        if (chunk) chunks.push(chunk);
-        if (end >= normalized.length) break;
-        cursor = Math.max(end - overlap, cursor + 1);
-    }
-    return chunks;
-}
-
-function tokenizeRagQuery(text) {
-    return normalizeRagDocText(text)
-        .toLowerCase()
-        .split(/[^a-z0-9_]+/i)
-        .filter((t) => t.length > 2)
-        .slice(0, 24);
-}
-
 function rebuildRagChunkIndex() {
     const next = [];
     for (const doc of ragDocuments) {
@@ -505,32 +503,8 @@ function rebuildRagChunkIndex() {
     ragChunks = next;
 }
 
-function getRagMatchScore(queryTokens, chunkText) {
-    if (!queryTokens.length || !chunkText) return 0;
-    const hay = chunkText.toLowerCase();
-    let score = 0;
-    for (const token of queryTokens) {
-        const hits = hay.split(token).length - 1;
-        if (hits > 0) {
-            score += Math.min(6, hits) * (token.length >= 6 ? 2 : 1);
-        }
-    }
-    return score;
-}
-
 function retrieveRagChunks(query, maxMatches = RAG_MAX_MATCHES) {
-    if (!ragChunks.length) return [];
-    const tokens = tokenizeRagQuery(query);
-    if (!tokens.length) return [];
-    const ranked = ragChunks
-        .map((chunk) => ({
-            ...chunk,
-            score: getRagMatchScore(tokens, chunk.text),
-        }))
-        .filter((c) => c.score > 0)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, maxMatches);
-    return ranked;
+    return retrieveRagChunksFromIndex(ragChunks, query, maxMatches);
 }
 
 function buildRagContext(matches) {
@@ -612,6 +586,11 @@ function renderRagStatus() {
     renderDocAttachmentPreview();
 }
 
+function renderRagGuidance() {
+    if (!ragGuidance) return;
+    ragGuidance.textContent = `Best quality with Qwen 3 1.7B+ or larger. Limits: ${RAG_MAX_DOCS} docs, ${formatCompactNumber(RAG_MAX_CHARS_PER_DOC)} chars/doc, ${(RAG_MAX_FILE_BYTES / (1024 * 1024)).toFixed(0)}MB/file.`;
+}
+
 function persistRagDocs() {
     void saveRagDocsRecord(ragDocuments).catch((err) => {
         console.error('[DB] Failed to save RAG docs:', err);
@@ -623,7 +602,9 @@ function sanitizeRagDoc(raw) {
     const id = String(raw.id || '').trim();
     const name = String(raw.name || '').trim();
     const text = normalizeRagDocText(raw.text || '');
-    const chunksRaw = Array.isArray(raw.chunks) ? raw.chunks : splitTextIntoRagChunks(text);
+    const chunksRaw = Array.isArray(raw.chunks)
+        ? raw.chunks
+        : splitTextIntoRagChunks(text, RAG_CHUNK_SIZE, RAG_CHUNK_OVERLAP);
     const chunks = chunksRaw
         .map((c) => normalizeRagDocText(c))
         .filter(Boolean);
@@ -647,6 +628,15 @@ function loadRagDocsIntoState(docs = []) {
     renderRagStatus();
 }
 
+function isSupportedRagFile(file) {
+    if (!file) return false;
+    const ext = getFileExtension(file.name || '');
+    if (RAG_ALLOWED_EXTENSIONS.has(ext)) return true;
+    const mime = String(file.type || '').toLowerCase();
+    if (!mime) return false;
+    return mime.startsWith('text/') || mime === 'application/json';
+}
+
 async function readFileAsText(file) {
     if (!file) return '';
     try {
@@ -663,13 +653,30 @@ async function ingestRagFiles(files = []) {
         ragStatus.textContent = `Indexing ${list.length} file(s)...`;
     }
     const docsToAdd = [];
+    let skippedUnsupported = 0;
+    let skippedTooLarge = 0;
+    let skippedEmpty = 0;
     for (const file of list) {
         if (!file) continue;
+        if (!isSupportedRagFile(file)) {
+            skippedUnsupported += 1;
+            continue;
+        }
+        if (Number(file.size || 0) > RAG_MAX_FILE_BYTES) {
+            skippedTooLarge += 1;
+            continue;
+        }
         const rawText = await readFileAsText(file);
         const text = normalizeRagDocText(rawText).slice(0, RAG_MAX_CHARS_PER_DOC);
-        if (!text) continue;
-        const chunks = splitTextIntoRagChunks(text);
-        if (!chunks.length) continue;
+        if (!text) {
+            skippedEmpty += 1;
+            continue;
+        }
+        const chunks = splitTextIntoRagChunks(text, RAG_CHUNK_SIZE, RAG_CHUNK_OVERLAP);
+        if (!chunks.length) {
+            skippedEmpty += 1;
+            continue;
+        }
         docsToAdd.push({
             id: `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
             name: file.name || 'document',
@@ -680,7 +687,12 @@ async function ingestRagFiles(files = []) {
         });
     }
     if (!docsToAdd.length) {
-        setInlineNotice('No supported text content found in selected files.', 'warn', 2200);
+        const reasons = [];
+        if (skippedUnsupported > 0) reasons.push(`${skippedUnsupported} unsupported`);
+        if (skippedTooLarge > 0) reasons.push(`${skippedTooLarge} too large`);
+        if (skippedEmpty > 0) reasons.push(`${skippedEmpty} empty`);
+        const suffix = reasons.length ? ` (${reasons.join(', ')})` : '';
+        setInlineNotice(`No indexable text documents found${suffix}.`, 'warn', 2600);
         renderRagStatus();
         return;
     }
@@ -694,15 +706,23 @@ async function ingestRagFiles(files = []) {
     const combined = [...ragDocuments, ...deduped].slice(-RAG_MAX_DOCS);
     loadRagDocsIntoState(combined);
     persistRagDocs();
+    const skipSummary = [];
+    if (skippedUnsupported > 0) skipSummary.push(`${skippedUnsupported} unsupported`);
+    if (skippedTooLarge > 0) skipSummary.push(`${skippedTooLarge} too large`);
+    if (skippedEmpty > 0) skipSummary.push(`${skippedEmpty} empty`);
+    const skipSuffix = skipSummary.length ? ` Skipped ${skipSummary.join(', ')}.` : '';
     if (deduped.length === 0) {
-        setInlineNotice('Skipped duplicates. Your RAG library is already up to date.', 'info', 2200);
+        setInlineNotice(`Skipped duplicates. Your RAG library is already up to date.${skipSuffix}`, 'info', 2600);
     } else {
-        setInlineNotice(`Indexed ${deduped.length} document(s) for local RAG.`, 'info', 2200);
+        setInlineNotice(`Indexed ${deduped.length} document(s) for local RAG.${skipSuffix}`, 'info', 2600);
     }
     pushWorkbenchEvent('rag_docs_indexed', {
         added: deduped.length,
         totalDocs: ragDocuments.length,
         totalChunks: ragChunks.length,
+        skippedUnsupported,
+        skippedTooLarge,
+        skippedEmpty,
     });
 }
 
@@ -888,8 +908,42 @@ function scheduleDeferredBenchmarkIfIdle() {
     scheduleRuntimeBenchmarkCalibration();
 }
 
+function inferGpuClass(gpuName = '') {
+    const lower = String(gpuName || '').toLowerCase();
+    if (!lower) return 'unknown';
+    if (
+        /uhd|iris|intel\(r\) hd|intel\(r\) uhd|intel\(r\) iris|radeon\(tm\) graphics|vega \d/i.test(lower)
+    ) {
+        return 'integrated';
+    }
+    if (/nvidia|rtx|gtx|radeon rx|rx \d{3,4}|arc a\d{3}/i.test(lower)) {
+        return 'discrete';
+    }
+    return 'unknown';
+}
+
+function estimateGpuVramFromName(gpuName = '') {
+    const lower = String(gpuName || '').toLowerCase();
+    if (!lower) return null;
+    for (const hint of GPU_VRAM_NAME_HINTS) {
+        if (hint.pattern.test(lower)) return hint.vramMB;
+    }
+    if (/rtx 30\d{2}/i.test(lower)) return 8192;
+    if (/rtx 40\d{2}/i.test(lower)) return 8192;
+    if (/gtx 16\d{2}/i.test(lower)) return 6144;
+    if (/radeon rx/i.test(lower)) return 8192;
+    if (/arc a\d{3}/i.test(lower)) return 8192;
+    return null;
+}
+
 async function detectDeviceCapabilities() {
-    const result = { vramMB: 0, tier: 'lite', gpuName: 'Unknown' };
+    const result = {
+        vramMB: 0,
+        tier: 'lite',
+        gpuName: 'Unknown',
+        gpuClass: 'unknown',
+        vramEstimateSource: 'none',
+    };
 
     try {
         if (!navigator.gpu) return result;
@@ -897,23 +951,48 @@ async function detectDeviceCapabilities() {
         const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
         if (!adapter) return result;
 
-        const info = adapter.info || {};
-        result.gpuName = info.description || info.device || info.vendor || 'Unknown GPU';
-
-        // maxBufferSize is a good proxy for available VRAM
-        const maxBuffer = adapter.limits?.maxBufferSize || 0;
-        const maxStorageBuffer = adapter.limits?.maxStorageBufferBindingSize || 0;
-        const estimatedVRAM = Math.max(maxBuffer, maxStorageBuffer);
-
-        // Convert to MB - maxBufferSize is in bytes
-        result.vramMB = Math.round(estimatedVRAM / (1024 * 1024));
-
-        // Fallback heuristic if limits are too small (some browsers cap reported values)
-        if (result.vramMB < 256) {
-            // Use device memory as a fallback
-            const deviceMem = navigator.deviceMemory || 4; // GB
-            result.vramMB = deviceMem * 512; // rough estimate: half of system RAM
+        let info = adapter.info || {};
+        if ((!info || !info.description) && typeof adapter.requestAdapterInfo === 'function') {
+            try {
+                info = await adapter.requestAdapterInfo();
+            } catch (_err) {
+                // Keep best-effort adapter.info values.
+            }
         }
+        result.gpuName = info.description || info.device || info.vendor || 'Unknown GPU';
+        result.gpuClass = inferGpuClass(result.gpuName);
+
+        const maxBuffer = Number(adapter.limits?.maxBufferSize || 0);
+        const maxStorageBuffer = Number(adapter.limits?.maxStorageBufferBindingSize || 0);
+        const reportedLimitMB = Math.round(Math.max(maxBuffer, maxStorageBuffer) / (1024 * 1024));
+        const deviceMemGB = Number(navigator.deviceMemory) || 0;
+        const hintedByNameMB = estimateGpuVramFromName(result.gpuName);
+
+        let estimatedMB = reportedLimitMB;
+        let estimateSource = 'adapter_limits';
+
+        const fallbackByMemoryMB = result.gpuClass === 'integrated'
+            ? clampScore(Math.round(Math.max(4, deviceMemGB || 4) * 256), 1024, 4096)
+            : clampScore(Math.round(Math.max(4, deviceMemGB || 8) * 512), 3072, 12288);
+
+        if (!estimatedMB || estimatedMB < 768) {
+            estimatedMB = fallbackByMemoryMB;
+            estimateSource = 'device_memory_fallback';
+        }
+
+        if (hintedByNameMB && estimatedMB < Math.round(hintedByNameMB * 0.65)) {
+            estimatedMB = hintedByNameMB;
+            estimateSource = 'gpu_name_hint';
+        } else if (result.gpuClass === 'discrete' && estimatedMB < 3072) {
+            estimatedMB = Math.max(estimatedMB, 6144);
+            estimateSource = 'discrete_floor';
+        } else if (result.gpuClass === 'integrated' && estimatedMB < 1024) {
+            estimatedMB = Math.max(estimatedMB, 2048);
+            estimateSource = 'integrated_floor';
+        }
+
+        result.vramMB = Math.round(estimatedMB);
+        result.vramEstimateSource = estimateSource;
 
         // Determine tier
         if (result.vramMB >= 6000) result.tier = 'premium';
@@ -1102,7 +1181,8 @@ function getRuntimeStateSummary() {
     const deterministicLabel = deterministicModeEnabled
         ? `on${Number.isFinite(parseInt(deterministicSeed, 10)) ? ` (seed ${parseInt(deterministicSeed, 10)})` : ''}`
         : 'off';
-    return `Selection: ${selectionLabel} | Active: ${activeLabel} | Workflow: ${getWorkflowById(workflowModeId).label} | Deterministic: ${deterministicLabel} | RAG: ${ragDocuments.length} docs/${ragChunks.length} chunks | Profile: ${modelRoutingProfileMode} | Benchmark: ${getBenchmarkSummary()} | Retries: ${reliabilityStats.generationRetries} | Failures: ${reliabilityStats.generationFailures} | Generating: ${isGenerating ? 'yes' : 'no'} | GenerationId: ${activeGenerationId}`;
+    const vramSummary = `${deviceCapabilities?.vramMB || 0}MB (${deviceCapabilities?.vramEstimateSource || 'unknown'})`;
+    return `Selection: ${selectionLabel} | Active: ${activeLabel} | Workflow: ${getWorkflowById(workflowModeId).label} | Deterministic: ${deterministicLabel} | VRAM: ${vramSummary} | RAG: ${ragDocuments.length} docs/${ragChunks.length} chunks | Profile: ${modelRoutingProfileMode} | Benchmark: ${getBenchmarkSummary()} | Retries: ${reliabilityStats.generationRetries} | Failures: ${reliabilityStats.generationFailures} | Generating: ${isGenerating ? 'yes' : 'no'} | GenerationId: ${activeGenerationId}`;
 }
 
 function renderDebugPanel() {
@@ -1518,6 +1598,9 @@ async function createStreamingCompletion(requestMessages, config, options = {}) 
 }
 
 function buildTrustMeta(payload = {}) {
+    const ragDocNames = Array.isArray(payload.ragDocNames)
+        ? payload.ragDocNames.map((name) => String(name || '').trim()).filter(Boolean).slice(0, 8)
+        : [];
     return {
         modelId: payload.modelId || selectedModelId,
         modelName: payload.modelName || getModelById(selectedModelId).name,
@@ -1536,6 +1619,7 @@ function buildTrustMeta(payload = {}) {
         webSources: Number(payload.webSources || 0),
         webMode: payload.webMode || 'off',
         ragSources: Number(payload.ragSources || 0),
+        ragDocNames,
         generatedAt: Date.now(),
     };
 }
@@ -1545,6 +1629,10 @@ function renderTrustMetaHtml(meta = {}) {
     const deterministicText = meta.deterministic
         ? `on${Number.isFinite(meta.seed) ? ` (seed ${meta.seed})` : ''}`
         : 'off';
+    const ragDocNames = Array.isArray(meta.ragDocNames) ? meta.ragDocNames : [];
+    const ragDocSummary = ragDocNames.length
+        ? `${ragDocNames.slice(0, 3).join(', ')}${ragDocNames.length > 3 ? ', ...' : ''}`
+        : 'n/a';
     return `
         <details class="trust-meta">
             <summary>Trust Layer: why this answer</summary>
@@ -1558,6 +1646,7 @@ function renderTrustMetaHtml(meta = {}) {
                 <span><strong>Web sources:</strong> ${escapeHtml(String(meta.webSources ?? 0))}</span>
                 <span><strong>Web mode:</strong> ${escapeHtml(String(meta.webMode || 'off'))}</span>
                 <span><strong>RAG matches:</strong> ${escapeHtml(String(meta.ragSources ?? 0))}</span>
+                <span><strong>RAG docs:</strong> ${escapeHtml(ragDocSummary)}</span>
                 <span><strong>Image input:</strong> ${meta.hasImage ? 'yes' : 'no'}</span>
             </div>
             <div class="trust-meta-reason"><strong>Route reason:</strong> ${escapeHtml(String(meta.routeReason || 'n/a'))}${routeScore}</div>
@@ -2122,16 +2211,35 @@ function buildSearchContext(results) {
 }
 
 function renderSourceCitations(results, container) {
-    if (!results.length) return;
-    const sources = results.filter(r => r.url);
+    if (!container || !results.length) return;
+    const sources = results
+        .map((result) => {
+            const parsed = safeParseHttpUrl(result?.url);
+            if (!parsed) return null;
+            return {
+                href: parsed.toString(),
+                host: parsed.hostname || parsed.href,
+            };
+        })
+        .filter(Boolean);
     if (!sources.length) return;
 
     const div = document.createElement('div');
     div.className = 'search-sources';
-    div.innerHTML = `
-    <div class="search-sources-title">Sources</div>
-    ${sources.map(s => `<a class="search-source-link" href="${s.url}" target="_blank" rel="noopener">${new URL(s.url).hostname}</a>`).join('')}
-  `;
+    const title = document.createElement('div');
+    title.className = 'search-sources-title';
+    title.textContent = 'Sources';
+    div.appendChild(title);
+
+    for (const source of sources) {
+        const link = document.createElement('a');
+        link.className = 'search-source-link';
+        link.href = source.href;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = source.host;
+        div.appendChild(link);
+    }
     container.appendChild(div);
 }
 
@@ -2146,6 +2254,7 @@ async function init() {
     await initDatabase();
     await loadSettings();
     loadRagDocsIntoState(await loadRagDocsRecord());
+    renderRagGuidance();
     renderPromptPresets();
     renderWorkflowModes();
     renderWorkbenchPanel();
@@ -2168,6 +2277,8 @@ async function init() {
     logRuntimeEvent('app_init', {
         gpu: deviceCapabilities?.gpuName || 'unknown',
         vramMB: deviceCapabilities?.vramMB || 0,
+        vramSource: deviceCapabilities?.vramEstimateSource || 'unknown',
+        gpuClass: deviceCapabilities?.gpuClass || 'unknown',
         profile: modelRoutingProfileMode,
         benchmark: getBenchmarkSummary(),
         workflow: workflowModeId,
@@ -2411,7 +2522,7 @@ function renderModelSelector(capabilities, recommended) {
                 return;
             }
             if (isGenerating) {
-                alert('Please wait for generation to finish before switching models.');
+                setInlineNotice('Please wait for generation to finish before switching models.', 'warn', 2200);
                 return;
             }
             modelSelectionId = requestedSelection;
@@ -2429,7 +2540,7 @@ function renderModelSelector(capabilities, recommended) {
                 switchBtn.style.display = 'none';
             } catch (err) {
                 console.error('Model switch failed:', err);
-                alert(`Model switch failed: ${err.message}`);
+                setInlineNotice(`Model switch failed: ${toUserFriendlyError(err)}`, 'error', 3200);
             } finally {
                 switchBtn.disabled = false;
                 switchBtn.textContent = 'Switch Model';
@@ -2801,12 +2912,15 @@ async function sendMessage(text) {
         }
 
         let ragMatches = [];
+        let ragDocNames = [];
         if (userText && ragChunks.length > 0) {
             ragMatches = retrieveRagChunks(userText);
             if (ragMatches.length > 0) {
+                ragDocNames = Array.from(new Set(ragMatches.map((m) => String(m.docName || '').trim()).filter(Boolean)));
+                routeReason = `${routeReason} | Local docs (${ragMatches.length} matches from ${ragDocNames.length} docs)`;
                 pushWorkbenchEvent('rag_retrieval', {
                     matches: ragMatches.length,
-                    docs: Array.from(new Set(ragMatches.map((m) => m.docName))).join(', '),
+                    docs: ragDocNames.join(', '),
                 });
             }
         }
@@ -3012,6 +3126,7 @@ async function sendMessage(text) {
             workflow: workflowModeId,
             deterministic: deterministicModeEnabled,
             ragMatches: ragMatches.length,
+            ragDocNames,
             webResults: searchResults.length,
             webMode,
             webQuery: effectiveSearchQuery,
@@ -3027,6 +3142,7 @@ async function sendMessage(text) {
             webSources: searchResults.length,
             webMode,
             ragSources: ragMatches.length,
+            ragDocNames,
         });
         conv.messages.push({ role: 'assistant', content: fullResponse, meta: trustMeta });
         if (trustLayerEnabled) {
@@ -3126,41 +3242,6 @@ function addMessageToDOM(role, content, imageUrl, meta = null) {
     messagesContainer.appendChild(msg);
 
     return msg;
-}
-
-function formatMarkdown(text) {
-    // Extract thinking blocks if present
-    let processedText = text;
-    
-    // Check if there is an unclosed think tag (model is currently thinking)
-    const thinkOpenMatch = text.match(/<think>/g);
-    const thinkCloseMatch = text.match(/<\/think>/g);
-    
-    // Handle completed thinking blocks
-    processedText = processedText.replace(/<think>([\s\S]*?)<\/think>/g, (match, content) => {
-        return `<details class="think-block"><summary>Thought Process</summary><div class="think-content">${formatBasicHTML(content)}</div></details>`;
-    });
-
-    // Handle unclosed thinking block (currently generating)
-    if (thinkOpenMatch && (!thinkCloseMatch || thinkOpenMatch.length > thinkCloseMatch.length)) {
-        const parts = processedText.split(/<think>/);
-        const lastPart = parts.pop(); // The thinking part
-        const bodyBefore = parts.join('<think>'); // Everything before the current thinking
-        
-        return formatBasicHTML(bodyBefore) + `<details class="think-block" open><summary>Thinking...</summary><div class="think-content">${formatBasicHTML(lastPart)}<span class="typing-indicator" style="display:inline-flex;margin-left:8px;"><span></span><span></span><span></span></span></div></details>`;
-    }
-
-    return '<p>' + formatBasicHTML(processedText) + '</p>';
-}
-
-function formatBasicHTML(text) {
-    return text
-        .replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/\n/g, '<br>');
 }
 
 function scrollToBottom() {
@@ -3268,7 +3349,10 @@ function formatConversationAsMarkdown(conv) {
             lines.push('');
         }
         if (msg.role === 'assistant' && msg.meta && trustLayerEnabled) {
-            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}_`);
+            const ragDocs = Array.isArray(msg.meta.ragDocNames) && msg.meta.ragDocNames.length
+                ? msg.meta.ragDocNames.join('|')
+                : 'none';
+            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}, rag_docs=${ragDocs}_`);
             lines.push('');
         }
     }
@@ -3738,7 +3822,7 @@ if (exportChatsBtn) {
     exportChatsBtn.addEventListener('click', () => {
         void exportConversationsToFile().catch((err) => {
             console.error('Export failed:', err);
-            alert(`Export failed: ${err.message}`);
+            setInlineNotice(`Export failed: ${toUserFriendlyError(err)}`, 'error', 3200);
         });
     });
 }
@@ -3746,7 +3830,7 @@ if (exportMdBtn) {
     exportMdBtn.addEventListener('click', () => {
         void exportActiveConversationMarkdown().catch((err) => {
             console.error('Markdown export failed:', err);
-            alert(`Markdown export failed: ${err.message}`);
+            setInlineNotice(`Markdown export failed: ${toUserFriendlyError(err)}`, 'error', 3200);
         });
     });
 }
@@ -3754,7 +3838,7 @@ if (copyShareBtn) {
     copyShareBtn.addEventListener('click', () => {
         void copyActiveConversationShareText().catch((err) => {
             console.error('Copy share failed:', err);
-            alert(`Copy share failed: ${err.message}`);
+            setInlineNotice(`Copy share failed: ${toUserFriendlyError(err)}`, 'error', 3200);
         });
     });
 }
@@ -3767,7 +3851,7 @@ if (importChatsBtn && importChatsInput) {
             await importConversationsFromFile(file);
         } catch (err) {
             console.error('Import failed:', err);
-            alert(`Import failed: ${err.message}`);
+            setInlineNotice(`Import failed: ${toUserFriendlyError(err)}`, 'error', 3200);
         } finally {
             importChatsInput.value = '';
         }

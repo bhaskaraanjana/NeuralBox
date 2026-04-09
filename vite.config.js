@@ -11,6 +11,14 @@ export default defineConfig({
     },
     build: {
         target: 'esnext',
+        rollupOptions: {
+            output: {
+                manualChunks(id) {
+                    if (id.includes('@mlc-ai/web-llm')) return 'webllm';
+                    if (id.includes('@huggingface/transformers')) return 'transformers';
+                },
+            },
+        },
     },
     optimizeDeps: {
         exclude: ['@mlc-ai/web-llm'],

@@ -18,7 +18,11 @@ const requiredFiles = [
   'package.json',
   'vite.config.js',
   'src/main.js',
+  'src/lib/rendering.js',
+  'src/lib/rag.js',
   'src/db/database.js',
+  'PROGRESS.md',
+  'core/task.md',
   'rules.md',
 ];
 
@@ -31,4 +35,3 @@ for (const file of requiredFiles) {
 console.log('Environment check passed.');
 console.log(`Node: ${process.versions.node}`);
 console.log('Project files and runtime constraints are valid.');
-

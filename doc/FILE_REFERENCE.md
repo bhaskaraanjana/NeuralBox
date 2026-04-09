@@ -9,7 +9,7 @@ This section documents every tracked repository file.
 - `README.md`
   - End-user overview and setup instructions.
 - `changelog.md`
-  - Release notes from `1.0.0` through `1.5.0`.
+  - Release notes from `1.0.0` through `1.6.0`.
 - `index.html`
   - Full static UI markup (loading screen, chat UI, settings panel, voice overlay).
 - `package.json`
@@ -35,6 +35,17 @@ This section documents every tracked repository file.
     - voice chat loop
     - image attachment behavior for vision models
     - think mode controls
+- `src/lib/rendering.js`
+  - Extracted pure helpers for:
+    - safe HTTP URL parsing
+    - escaped markdown-like formatting
+    - think-block markdown rendering
+- `src/lib/rag.js`
+  - Shared pure RAG helpers:
+    - normalization
+    - chunk splitting
+    - retrieval scoring
+    - file-extension utility
 - `src/db/database.js`
   - IndexedDB-first persistence module with localStorage fallback and legacy migration.
 - `src/whisper.js`
@@ -48,6 +59,10 @@ This section documents every tracked repository file.
   - Environment validation script (Node version + required project files).
 - `scripts/stability-sprint-smoke.mjs`
   - Runtime contract smoke checks.
+- `scripts/rendering-safety-test.mjs`
+  - Pure rendering + URL safety checks.
+- `scripts/rag-web-extensive-test.mjs`
+  - Extensive RAG ingest/retrieval test with downloaded web docs.
 
 ## Documentation Files (Added)
 

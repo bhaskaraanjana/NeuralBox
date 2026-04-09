@@ -7,9 +7,10 @@ function assert(condition, message) {
 }
 
 async function main() {
-  const [html, mainJs] = await Promise.all([
+  const [html, mainJs, renderingJs] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
+    readFile(new URL('../src/lib/rendering.js', import.meta.url), 'utf8'),
   ]);
 
   // Send/stop dual button contract.
@@ -33,6 +34,20 @@ async function main() {
   assert(/id="debug-panel-setting"/.test(html), 'Missing #debug-panel-setting in index.html');
   assert(/function logRuntimeEvent\(/.test(mainJs), 'logRuntimeEvent helper missing');
   assert(/debugPanelEnabled: debugPanelEnabled/.test(mainJs), 'Debug panel setting should persist');
+
+  // Source citation safety and rendering safety.
+  assert(/safeParseHttpUrl/.test(mainJs), 'safeParseHttpUrl import usage missing');
+  assert(!/new URL\(s\.url\)\.hostname/.test(mainJs), 'Unsafe URL hostname rendering path still present');
+  assert(/export function safeParseHttpUrl\(/.test(renderingJs), 'safeParseHttpUrl helper missing in rendering module');
+  assert(/const safe = escapeHtmlText\(String\(text \?\? ''\)\);/.test(renderingJs), 'formatBasicHTML should escape raw HTML first');
+
+  // Prefer non-blocking notices instead of window.alert for standard UI actions.
+  assert(!/\balert\(/.test(mainJs), 'Blocking alert usage should not exist in main runtime flow');
+
+  // RAG ingestion safety guardrails.
+  assert(/const RAG_MAX_FILE_BYTES =/.test(mainJs), 'RAG max file-size guard missing');
+  assert(/function isSupportedRagFile\(/.test(mainJs), 'RAG file-type guard helper missing');
+  assert(/skippedTooLarge/.test(mainJs), 'RAG skipped-too-large reporting missing');
 
   console.log('Stability sprint smoke test passed.');
 }
