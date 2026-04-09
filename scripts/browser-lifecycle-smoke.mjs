@@ -130,6 +130,17 @@ const idleState = await page.evaluate(() => {
 });
 assert(idleState.title === 'Send message', 'Send button should restore send title when idle.');
 
+const routeSwitchFallbackText = await page.evaluate(() => {
+  return window.__NB_TEST_API.injectRouteSwitchFailureBannerForTest();
+});
+const expectedRouteSwitchText = await page.evaluate(() => {
+  return window.__NB_TEST_API.getRouteSwitchFailureNoticeForTest();
+});
+assert(
+  routeSwitchFallbackText.includes(expectedRouteSwitchText),
+  `Expected route-switch fallback banner text \"${expectedRouteSwitchText}\".`,
+);
+
 await browser.close();
 
 if (errors.length > 0) {

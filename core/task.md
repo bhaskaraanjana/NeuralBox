@@ -12,6 +12,7 @@
 - [x] Add RAG ingestion guardrails (file-type + file-size + skip reporting).
 - [x] Normalize UI separators to ASCII-safe strings and add a non-ASCII regression guard.
 - [x] Add browser-level smoke coverage for import/export and send-stop lifecycle.
+- [x] Add browser-smoke assertion for model-switch fallback banner messaging.
 
 ## P1 - Architecture Refactor
 
@@ -36,5 +37,5 @@
 
 ## Progress Summary
 
-- Completed this session: browser lifecycle smoke harness + opt-in test API hook + full regression validation.
-- Validation status: env check + stability + events + generation + composer + ascii-ui + rendering + trust + routing + device + RAG web + build + browser lifecycle smoke all passing.
+- Completed this session: extended browser lifecycle smoke with model-switch fallback banner assertion via test API.
+- Validation status: build + browser lifecycle smoke passing after fallback-banner coverage extension.

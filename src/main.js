@@ -1965,6 +1965,16 @@ function attachTestApiIfEnabled() {
         getRuntimeEvents() {
             return Array.isArray(runtimeEvents) ? [...runtimeEvents] : [];
         },
+        injectRouteSwitchFailureBannerForTest() {
+            const aiMsg = addMessageToDOM('assistant', '');
+            const contentEl = aiMsg?.querySelector?.('.message-content');
+            if (!contentEl) return '';
+            contentEl.innerHTML = `<div class="search-badge"><span class="spinner"></span> ${getRouteSwitchFailureNotice()}</div>`;
+            return String(contentEl.textContent || '').trim();
+        },
+        getRouteSwitchFailureNoticeForTest() {
+            return getRouteSwitchFailureNotice();
+        },
     };
 }
 

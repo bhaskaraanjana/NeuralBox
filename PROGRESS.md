@@ -13,6 +13,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - New script: `scripts/browser-lifecycle-smoke.mjs`
   - New npm command: `npm run test:browser:lifecycle`
   - Covers settings open/close, import chats, export chats download naming, and send-stop lifecycle behavior.
+  - Extended to assert model-switch fallback banner messaging via `injectRouteSwitchFailureBannerForTest()`.
   - Uses fake WebGPU adapter + test-mode chat-screen activation in headless runs.
 - Updated project checks/docs:
   - Added browser smoke script to `scripts/check-env.mjs` required files.
@@ -348,8 +349,8 @@ Last Updated: 2026-04-08 (America/St_Johns)
 ## What To Work On Next
 
 1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
-2. Add targeted browser smoke for model-switch fallback messaging path.
-3. Continue extracting voice and settings orchestration from `src/main.js`.
+2. Continue extracting voice and settings orchestration from `src/main.js`.
+3. Add browser smoke for manual model-switch button flow in settings panel.
 4. Continue UI density cleanup on mobile settings and composer flows.
 
 ## File Map
