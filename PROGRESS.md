@@ -4,6 +4,31 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-08 - Tap event dedupe helper for mobile interaction stability
+- Continued deep-scan execution for mobile interaction correctness and duplicate touch/click handling.
+- Added shared event utility: `src/lib/events.js`
+  - `bindTap()` unifies click + touchend handling and suppresses synthetic click duplication after touch.
+- Integrated `bindTap()` in `src/main.js` for:
+  - Primary send/stop button interaction.
+  - Suggestion chip tap handling.
+- Added dedicated regression test:
+  - New script: `scripts/events-bindings-test.mjs`
+  - New npm command: `npm run test:events`
+  - Updated env check + docs references.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:events` (pass)
+  - `npm run test:composer` (pass)
+  - `npm run test:generation` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run test:rendering` (pass)
+  - `npm run test:trust` (pass)
+  - `npm run test:routing` (pass)
+  - `npm run test:device` (pass)
+  - `npm run test:rag:web` (pass)
+  - `npm run build` (pass)
+
 ### 2026-04-08 - Generation lifecycle hardening (cancellation + switch fallback)
 - Continued deep-scan execution for model-switch fallback and generation cancellation consistency.
 - Added new generation helper module: `src/lib/generation.js`
@@ -255,6 +280,19 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Device heuristics test: pass
   - RAG extensive test: pass
   - Build: pass
+- Verification after tap-event dedupe helper integration:
+  - Env check: pass
+  - Event binding tap test: pass
+  - Composer action test: pass
+  - Generation lifecycle test: pass
+  - Stability smoke: pass
+  - ASCII UI guard test: pass
+  - Rendering safety test: pass
+  - Trust metadata test: pass
+  - Routing sanity test: pass
+  - Device heuristics test: pass
+  - RAG extensive test: pass
+  - Build: pass
 
 ## Known Issues And Gotchas
 
@@ -282,10 +320,11 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Trust-layer helpers: `src/lib/trust.js`
 - Composer helpers: `src/lib/composer.js`
 - Generation lifecycle helpers: `src/lib/generation.js`
+- Event binding helpers: `src/lib/events.js`
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
-- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
+- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/events-bindings-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
 - Docs: `doc/`
 
 ## Tech Stack

@@ -21,6 +21,7 @@
 - [x] Extract trust-layer renderer to `src/lib/trust.js` and add trust metadata sanity tests.
 - [x] Extract composer action helpers to `src/lib/composer.js` and add composer lifecycle tests.
 - [x] Extract generation lifecycle helpers to `src/lib/generation.js` and add cancellation/fallback tests.
+- [x] Extract touch/click dedupe helper to `src/lib/events.js` and add tap binding tests.
 - [ ] Split remaining `src/main.js` domains into focused modules (routing, RAG, voice, UI events).
 - [ ] Add pure-function unit test paths for routing/retrieval/render helpers.
 - [ ] Keep behavior parity with current smoke tests.
@@ -34,5 +35,5 @@
 
 ## Progress Summary
 
-- Completed this session: generation lifecycle helper extraction + cancellation/fallback tests + helper integration in send flow.
-- Validation status: env check + generation + composer + ascii-ui + rendering + stability + trust + routing + device + RAG web + build all passing.
+- Completed this session: tap-event dedupe helper extraction + send/chip integration + tap binding regression tests.
+- Validation status: env check + events + generation + composer + ascii-ui + rendering + stability + trust + routing + device + RAG web + build all passing.

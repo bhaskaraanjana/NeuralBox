@@ -44,6 +44,7 @@ import {
     isGenerationCancelledError,
     isGenerationInterrupted,
 } from './lib/generation.js';
+import { bindTap } from './lib/events.js';
 import { renderTrustMetaHtml } from './lib/trust.js';
 let whisperModulePromise = null;
 let whisperApi = null;
@@ -3468,12 +3469,7 @@ function saveSettings() {
 // ---- Suggestion Chips ----
 function bindSuggestionChips() {
     document.querySelectorAll('.suggestion-chip').forEach((chip) => {
-        chip.addEventListener('click', () => {
-            const prompt = chip.dataset.prompt;
-            if (prompt) sendMessage(prompt);
-        });
-        chip.addEventListener('touchend', (e) => {
-            e.preventDefault();
+        bindTap(chip, () => {
             const prompt = chip.dataset.prompt;
             if (prompt) sendMessage(prompt);
         });
@@ -3485,11 +3481,7 @@ function bindSuggestionChips() {
 // ============================================
 
 // Send message
-sendBtn.addEventListener('click', () => {
-    handleComposerPrimaryAction();
-});
-sendBtn.addEventListener('touchend', (e) => {
-    e.preventDefault();
+bindTap(sendBtn, () => {
     handleComposerPrimaryAction();
 });
 
