@@ -38,6 +38,12 @@ import {
     resolvePrimaryComposerAction,
     shouldDisableSendButton,
 } from './lib/composer.js';
+import {
+    buildRouteSwitchFailureReason,
+    getRouteSwitchFailureNotice,
+    isGenerationCancelledError,
+    isGenerationInterrupted,
+} from './lib/generation.js';
 import { renderTrustMetaHtml } from './lib/trust.js';
 let whisperModulePromise = null;
 let whisperApi = null;
@@ -2800,7 +2806,10 @@ async function sendMessage(text) {
                 } catch (switchErr) {
                     reliabilityStats.switchFailures += 1;
                     reliabilityStats.lastError = String(switchErr?.message || switchErr || '');
-                    routeReason = `${routing.reason} (switch failed, stayed on ${getModelById(selectedModelId).name})`;
+                    routeReason = buildRouteSwitchFailureReason({
+                        routeReason: routing.reason,
+                        activeModelName: getModelById(selectedModelId).name,
+                    });
                     logRuntimeEvent('route_switch_failed', {
                         targetModelId: routing.targetModelId,
                         error: reliabilityStats.lastError,
@@ -2809,7 +2818,7 @@ async function sendMessage(text) {
                         targetModel: getModelById(routing.targetModelId).name,
                         error: reliabilityStats.lastError,
                     });
-                    contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Model switch failed, continuing on current model...</div>';
+                    contentEl.innerHTML = `<div class="search-badge"><span class="spinner"></span> ${getRouteSwitchFailureNotice()}</div>`;
                     scrollToBottom();
                 }
             }
@@ -2891,7 +2900,11 @@ async function sendMessage(text) {
 
         const maxAttempts = isVisionRequest ? 3 : 2;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            if (generationCancelRequested || generationId !== activeGenerationId) {
+            if (isGenerationInterrupted({
+                cancelRequested: generationCancelRequested,
+                generationId,
+                activeGenerationId,
+            })) {
                 throw new Error('Generation cancelled by user.');
             }
             try {
@@ -2899,7 +2912,11 @@ async function sendMessage(text) {
                 finalErr = null;
                 break;
             } catch (err) {
-                if (generationCancelRequested || generationId !== activeGenerationId) {
+                if (isGenerationInterrupted({
+                    cancelRequested: generationCancelRequested,
+                    generationId,
+                    activeGenerationId,
+                })) {
                     throw new Error('Generation cancelled by user.');
                 }
                 finalErr = err;
@@ -2982,7 +2999,11 @@ async function sendMessage(text) {
         }
 
         for await (const chunk of chunks) {
-            if (generationCancelRequested || generationId !== activeGenerationId) {
+            if (isGenerationInterrupted({
+                cancelRequested: generationCancelRequested,
+                generationId,
+                activeGenerationId,
+            })) {
                 break;
             }
             const delta = chunk.choices?.[0]?.delta?.content || '';
@@ -2994,7 +3015,11 @@ async function sendMessage(text) {
             }
         }
 
-        if (generationCancelRequested || generationId !== activeGenerationId) {
+        if (isGenerationInterrupted({
+            cancelRequested: generationCancelRequested,
+            generationId,
+            activeGenerationId,
+        })) {
             if (!fullResponse.trim()) {
                 contentEl.innerHTML = '<span style="color: #9ca3af;">Generation stopped.</span>';
             }
@@ -3068,7 +3093,12 @@ async function sendMessage(text) {
         });
     } catch (err) {
         const errText = String(err?.message || err || '');
-        if (/cancelled by user/i.test(errText) || generationCancelRequested || generationId !== activeGenerationId) {
+        if (isGenerationCancelledError({
+            errText,
+            cancelRequested: generationCancelRequested,
+            generationId,
+            activeGenerationId,
+        })) {
             if (!contentEl.textContent?.trim()) {
                 contentEl.innerHTML = '<span style="color: #9ca3af;">Generation stopped.</span>';
             }

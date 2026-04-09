@@ -21,6 +21,7 @@
     "test:device": "node scripts/device-heuristics-test.mjs",
     "test:trust": "node scripts/trust-metadata-test.mjs",
     "test:composer": "node scripts/composer-actions-test.mjs",
+    "test:generation": "node scripts/generation-lifecycle-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
   }
@@ -49,6 +50,8 @@
   - Trust-layer metadata rendering sanity checks.
 - `npm run test:composer`
   - Composer send/stop/no-op decision and send-button-disable logic checks.
+- `npm run test:generation`
+  - Cancellation and model-switch fallback reason checks for generation lifecycle helpers.
 - `npm run test:ascii-ui`
   - Guards UI source strings against non-ASCII regressions that can surface as mojibake.
 - `npm run test:rag:web`

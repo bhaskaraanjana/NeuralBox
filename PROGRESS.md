@@ -4,6 +4,35 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-08 - Generation lifecycle hardening (cancellation + switch fallback)
+- Continued deep-scan execution for model-switch fallback and generation cancellation consistency.
+- Added new generation helper module: `src/lib/generation.js`
+  - `isGenerationInterrupted()` for cancellation/interruption checks.
+  - `isGenerationCancelledError()` for catch-path cancellation classification.
+  - `buildRouteSwitchFailureReason()` for consistent route reason fallback text.
+  - `getRouteSwitchFailureNotice()` for consistent user-facing fallback status text.
+- Updated `src/main.js` to consume generation helpers in:
+  - Model-switch failure route reason composition.
+  - Retry-loop interruption checks.
+  - Stream-loop interruption checks.
+  - Catch-path cancellation classification.
+- Added dedicated generation lifecycle regression test:
+  - New script: `scripts/generation-lifecycle-test.mjs`
+  - New npm command: `npm run test:generation`
+  - Updated env checks/docs and validation references.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:generation` (pass)
+  - `npm run test:composer` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run test:rendering` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:trust` (pass)
+  - `npm run test:routing` (pass)
+  - `npm run test:device` (pass)
+  - `npm run test:rag:web` (pass)
+  - `npm run build` (pass)
+
 ### 2026-04-08 - Composer lifecycle refactor and coverage
 - Continued deep-scan execution on send/stop lifecycle robustness.
 - Added new shared composer helper module: `src/lib/composer.js`
@@ -214,6 +243,18 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - Device heuristics test: pass
   - RAG extensive test: pass
   - Build: pass
+- Verification after generation lifecycle hardening:
+  - Env check: pass
+  - Generation lifecycle test: pass
+  - Composer action test: pass
+  - ASCII UI guard test: pass
+  - Rendering safety test: pass
+  - Stability smoke: pass
+  - Trust metadata test: pass
+  - Routing sanity test: pass
+  - Device heuristics test: pass
+  - RAG extensive test: pass
+  - Build: pass
 
 ## Known Issues And Gotchas
 
@@ -226,8 +267,8 @@ Last Updated: 2026-04-08 (America/St_Johns)
 ## What To Work On Next
 
 1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
-2. Add targeted tests around model-switch fallback/cancellation (composer send/stop coverage now added).
-3. Add browser-level smoke for conversation import/export and send-stop lifecycle.
+2. Add browser-level smoke for conversation import/export and send-stop lifecycle.
+3. Add targeted browser smoke for model-switch fallback messaging path.
 4. Continue UI density cleanup on mobile settings and composer flows.
 
 ## File Map
@@ -240,10 +281,11 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Device helpers: `src/lib/device.js`
 - Trust-layer helpers: `src/lib/trust.js`
 - Composer helpers: `src/lib/composer.js`
+- Generation lifecycle helpers: `src/lib/generation.js`
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
-- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
+- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`
 - Docs: `doc/`
 
 ## Tech Stack

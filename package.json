@@ -17,6 +17,7 @@
     "test:device": "node scripts/device-heuristics-test.mjs",
     "test:trust": "node scripts/trust-metadata-test.mjs",
     "test:composer": "node scripts/composer-actions-test.mjs",
+    "test:generation": "node scripts/generation-lifecycle-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs"
   },
