@@ -45,6 +45,20 @@ import {
     isGenerationInterrupted,
 } from './lib/generation.js';
 import { bindTap } from './lib/events.js';
+import {
+    buildVoiceChatTranscript,
+    formatVoiceTimer,
+    getMicStatusMarkup,
+    getVoiceOrbUi,
+    isVoiceOrbIdleClassName,
+    pickPreferredSpeechVoice,
+} from './lib/voice.js';
+import {
+    getDeterministicModeNotice,
+    isSettingGroupVisible,
+    normalizeSettingsTab,
+    parseDeterministicSeedInput,
+} from './lib/settings.js';
 import { renderTrustMetaHtml } from './lib/trust.js';
 let whisperModulePromise = null;
 let whisperApi = null;
@@ -1056,7 +1070,7 @@ function syncModelSelectors() {
 }
 
 function setSettingsTab(tab = 'regular', options = {}) {
-    const nextTab = tab === 'advanced' ? 'advanced' : 'regular';
+    const nextTab = normalizeSettingsTab(tab);
     activeSettingsTab = nextTab;
 
     if (settingsTabRegular) settingsTabRegular.classList.toggle('active', nextTab === 'regular');
@@ -1064,7 +1078,7 @@ function setSettingsTab(tab = 'regular', options = {}) {
 
     document.querySelectorAll('.setting-group[data-setting-level]').forEach((group) => {
         const level = group.getAttribute('data-setting-level') || 'regular';
-        group.classList.toggle('hidden-by-tab', level !== nextTab);
+        group.classList.toggle('hidden-by-tab', !isSettingGroupVisible(level, nextTab));
     });
 
     if (options.persist) saveSettings();
@@ -3286,11 +3300,13 @@ async function loadConversations() {
 }
 
 function clearAllConversations() {
+    const removedCount = conversations.length;
     conversations = [];
     activeConversationId = null;
     saveConversations();
     renderSidebar();
     renderWelcome();
+    setInlineNotice(`Cleared ${removedCount} conversation${removedCount === 1 ? '' : 's'}.`, 'info', 2200);
 }
 
 function renderPromptPresets() {
@@ -3402,6 +3418,7 @@ async function exportConversationsToFile() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    setInlineNotice(`Exported ${conversations.length} conversation${conversations.length === 1 ? '' : 's'}.`, 'info', 2200);
 }
 
 async function importConversationsFromFile(file) {
@@ -3434,6 +3451,7 @@ async function importConversationsFromFile(file) {
         renderWelcome();
     }
     renderSidebar();
+    setInlineNotice(`Imported ${conversations.length} conversation${conversations.length === 1 ? '' : 's'}.`, 'info', 2200);
 }
 
 // ---- Settings ----
@@ -3463,7 +3481,7 @@ async function loadSettings() {
         workbenchEnabled = Boolean(settings.workbenchEnabled);
         trustLayerEnabled = settings.trustLayerEnabled !== false;
         deterministicModeEnabled = Boolean(settings.deterministicModeEnabled);
-        activeSettingsTab = settings.activeSettingsTab === 'advanced' ? 'advanced' : 'regular';
+    activeSettingsTab = normalizeSettingsTab(settings.activeSettingsTab);
         workflowModeId = getWorkflowById(settings.workflowModeId || workflowModeId).id;
         const parsedSeed = parseInt(settings.deterministicSeed, 10);
         deterministicSeed = Number.isFinite(parsedSeed) ? parsedSeed : deterministicSeed;
@@ -3780,25 +3798,20 @@ if (deterministicSetting) {
     deterministicSetting.addEventListener('change', () => {
         deterministicModeEnabled = Boolean(deterministicSetting.checked);
         saveSettings();
-        setInlineNotice(
-            deterministicModeEnabled
-                ? 'Deterministic Team Mode enabled.'
-                : 'Deterministic Team Mode disabled.',
-            'info',
-            1800,
-        );
+        setInlineNotice(getDeterministicModeNotice(deterministicModeEnabled), 'info', 1800);
     });
 }
 if (deterministicSeedInput) {
     deterministicSeedInput.addEventListener('change', () => {
-        const parsed = parseInt(deterministicSeedInput.value, 10);
-        if (Number.isFinite(parsed)) {
-            deterministicSeed = parsed;
+        const parsed = parseDeterministicSeedInput(deterministicSeedInput.value, deterministicSeed);
+        if (parsed.ok) {
+            deterministicSeed = parsed.seed;
+            deterministicSeedInput.value = parsed.inputValue;
             saveSettings();
             return;
         }
-        deterministicSeedInput.value = String(deterministicSeed);
-        setInlineNotice('Seed must be an integer.', 'warn', 1800);
+        deterministicSeedInput.value = parsed.inputValue;
+        setInlineNotice(parsed.error, 'warn', 1800);
     });
 }
 if (exportChatsBtn) {
@@ -3880,21 +3893,19 @@ async function startRecording() {
         micBtn.classList.add('recording');
         voiceStatus.style.display = 'flex';
         voiceStatus.className = 'voice-status recording';
-        voiceStatus.innerHTML = '<span class="rec-dot"></span> Recording... <span class="voice-timer">0:00</span>';
+        voiceStatus.innerHTML = getMicStatusMarkup('recording');
 
         recordingTimer = setInterval(() => {
             recordingSeconds++;
-            const mins = Math.floor(recordingSeconds / 60);
-            const secs = recordingSeconds % 60;
             const timerEl = voiceStatus.querySelector('.voice-timer');
-            if (timerEl) timerEl.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+            if (timerEl) timerEl.textContent = formatVoiceTimer(recordingSeconds);
         }, 1000);
 
     } catch (err) {
         console.error('Mic access failed:', err);
         voiceStatus.style.display = 'flex';
         voiceStatus.className = 'voice-status';
-        voiceStatus.textContent = 'Microphone access denied';
+        voiceStatus.textContent = getMicStatusMarkup('mic_denied');
         setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
     }
 }
@@ -3911,16 +3922,16 @@ function stopRecording() {
 async function processRecording(audioBlob) {
     voiceStatus.style.display = 'flex';
     voiceStatus.className = 'voice-status transcribing';
-    voiceStatus.innerHTML = '<span class="voice-spinner"></span> Loading Whisper model...';
+    voiceStatus.innerHTML = getMicStatusMarkup('loading');
     micBtn.classList.add('loading');
 
     try {
         const whisper = await getWhisperApi();
         await whisper.initWhisper((progress) => {
-            voiceStatus.innerHTML = `<span class="voice-spinner"></span> Loading Whisper... ${progress}%`;
+            voiceStatus.innerHTML = getMicStatusMarkup('loading_progress', { progress });
         });
 
-        voiceStatus.innerHTML = '<span class="voice-spinner"></span> Transcribing...';
+        voiceStatus.innerHTML = getMicStatusMarkup('transcribing');
         const text = await whisper.transcribeAudio(audioBlob);
 
         if (text) {
@@ -3929,16 +3940,16 @@ async function processRecording(audioBlob) {
             sendBtn.disabled = false;
             userInput.focus();
             voiceStatus.className = 'voice-status';
-            voiceStatus.innerHTML = 'Transcribed! Edit and send, or record more.';
+            voiceStatus.innerHTML = getMicStatusMarkup('transcribed');
             setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
         } else {
-            voiceStatus.innerHTML = 'No speech detected. Try again.';
+            voiceStatus.innerHTML = getMicStatusMarkup('empty');
             setTimeout(() => { voiceStatus.style.display = 'none'; }, 3000);
         }
     } catch (err) {
         console.error('Transcription failed:', err);
         voiceStatus.className = 'voice-status';
-        voiceStatus.innerHTML = `Transcription error: ${err.message}`;
+        voiceStatus.innerHTML = getMicStatusMarkup('error', { errorMessage: err?.message || 'Unknown error' });
         setTimeout(() => { voiceStatus.style.display = 'none'; }, 5000);
     }
 
@@ -3963,10 +3974,7 @@ function speakText(text) {
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
 
-        // Try to pick a good English voice
-        const voices = speechSynthesis.getVoices();
-        const preferred = voices.find((v) => safeStartsWith(v?.lang, 'en') && typeof v?.name === 'string' && v.name.includes('Google')) ||
-            voices.find((v) => safeStartsWith(v?.lang, 'en'));
+        const preferred = pickPreferredSpeechVoice(speechSynthesis.getVoices());
         if (preferred) utterance.voice = preferred;
 
         utterance.onend = () => resolve();
@@ -3977,15 +3985,9 @@ function speakText(text) {
 
 function setVoiceChatState(state) {
     voiceOrb.className = 'voice-orb ' + state;
-    const icons = { idle: 'Mic', listening: 'Listen', thinking: 'AI', speaking: 'Speak' };
-    const labels = {
-        idle: 'Tap to start talking',
-        listening: 'Listening...',
-        thinking: 'Thinking...',
-        speaking: 'Speaking...',
-    };
-    voiceOrb.querySelector('.voice-orb-icon').textContent = icons[state] || icons.idle;
-    voiceChatLabel.textContent = labels[state] || labels.idle;
+    const ui = getVoiceOrbUi(state);
+    voiceOrb.querySelector('.voice-orb-icon').textContent = ui.icon;
+    voiceChatLabel.textContent = ui.label;
 }
 
 function openVoiceChat() {
@@ -4067,7 +4069,7 @@ async function voiceChatListen() {
             return;
         }
 
-        voiceChatText.textContent = `You: "${userText}"`;
+        voiceChatText.textContent = buildVoiceChatTranscript(userText);
 
         // Ensure a conversation exists
         if (!activeConversationId) createConversation();
@@ -4082,7 +4084,7 @@ async function voiceChatListen() {
         }
 
         // Generate response
-        voiceChatText.textContent = `You: "${userText}"\n\nThinking...`;
+        voiceChatText.textContent = buildVoiceChatTranscript(userText, '', 'thinking');
 
         const sysContent = getEffectiveSystemPrompt() + getWorkflowInstruction();
         const messages = [
@@ -4098,7 +4100,7 @@ async function voiceChatListen() {
             const delta = chunk.choices?.[0]?.delta?.content || '';
             if (delta) {
                 fullResponse += delta;
-                voiceChatText.textContent = `You: "${userText}"\n\nAI: ${fullResponse}`;
+                voiceChatText.textContent = buildVoiceChatTranscript(userText, fullResponse);
             }
         }
 
@@ -4150,12 +4152,12 @@ voiceChatClose.addEventListener('touchend', (e) => {
 voiceOrb.addEventListener('click', () => {
     if (!voiceChatActive) return;
     const state = voiceOrb.className;
-    if (state.includes('idle')) voiceChatListen();
+    if (isVoiceOrbIdleClassName(state)) voiceChatListen();
 });
 voiceOrb.addEventListener('touchend', (e) => {
     if (!voiceChatActive) return;
     const state = voiceOrb.className;
-    if (state.includes('idle')) {
+    if (isVoiceOrbIdleClassName(state)) {
         e.preventDefault();
         voiceChatListen();
     }

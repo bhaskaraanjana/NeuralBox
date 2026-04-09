@@ -19,6 +19,9 @@
     "test:composer": "node scripts/composer-actions-test.mjs",
     "test:generation": "node scripts/generation-lifecycle-test.mjs",
     "test:events": "node scripts/events-bindings-test.mjs",
+    "test:voice": "node scripts/voice-helpers-test.mjs",
+    "test:settings": "node scripts/settings-helpers-test.mjs",
+    "test:rag:helpers": "node scripts/rag-helpers-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs",
     "test:browser:lifecycle": "node scripts/browser-lifecycle-smoke.mjs"

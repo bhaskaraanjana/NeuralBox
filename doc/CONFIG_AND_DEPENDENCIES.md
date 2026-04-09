@@ -23,6 +23,9 @@
     "test:composer": "node scripts/composer-actions-test.mjs",
     "test:generation": "node scripts/generation-lifecycle-test.mjs",
     "test:events": "node scripts/events-bindings-test.mjs",
+    "test:voice": "node scripts/voice-helpers-test.mjs",
+    "test:settings": "node scripts/settings-helpers-test.mjs",
+    "test:rag:helpers": "node scripts/rag-helpers-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs",
     "test:browser:lifecycle": "node scripts/browser-lifecycle-smoke.mjs"
@@ -56,6 +59,12 @@
   - Cancellation and model-switch fallback reason checks for generation lifecycle helpers.
 - `npm run test:events`
   - Touch/click dedupe behavior checks for shared tap event binding helper.
+- `npm run test:voice`
+  - Voice helper checks for timer formatting, orb state UI mapping, transcript formatting, and voice selection.
+- `npm run test:settings`
+  - Settings helper checks for tab normalization, visibility logic, deterministic notices, and seed parsing.
+- `npm run test:rag:helpers`
+  - Pure RAG helper checks for normalization, chunking, token scoring, retrieval, and extension parsing.
 - `npm run test:ascii-ui`
   - Guards UI source strings against non-ASCII regressions that can surface as mojibake.
 - `npm run test:rag:web`

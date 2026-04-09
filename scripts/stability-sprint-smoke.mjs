@@ -22,6 +22,8 @@ async function main() {
   assert(/const action = resolvePrimaryComposerAction\(\{/.test(mainJs), 'Composer action resolver usage missing');
   assert(/if \(action === 'cancel'\)\s*{\s*requestGenerationCancel\(\);/.test(mainJs), 'Send button should cancel generation when active');
   assert(/function attachTestApiIfEnabled\(/.test(mainJs), 'Test API attach helper missing');
+  assert(/from '\.\/lib\/voice\.js'/.test(mainJs), 'Voice helper module import missing');
+  assert(/from '\.\/lib\/settings\.js'/.test(mainJs), 'Settings helper module import missing');
 
   // Routing should only run behind auto selection.
   assert(/if \(isAutoModelSelected\(\)\)\s*{\s*const routing = chooseModelRoute/.test(mainJs), 'Routing must be gated by Auto selection');
@@ -57,6 +59,8 @@ async function main() {
   // Device heuristics extraction contract.
   assert(/estimateVramMB/.test(mainJs), 'Device heuristic module usage missing in main runtime');
   assert(/getDeviceTier/.test(mainJs), 'Device tier helper usage missing in main runtime');
+  assert(/formatVoiceTimer/.test(mainJs), 'Voice timer helper usage missing');
+  assert(/normalizeSettingsTab/.test(mainJs), 'Settings tab normalization helper usage missing');
 
   console.log('Stability sprint smoke test passed.');
 }

@@ -4,6 +4,49 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-08 - Voice/settings modularization and mobile/settings UX hardening
+- Continued deepscan execution to close remaining architecture + UX checklist gaps.
+- Added new helper modules:
+  - `src/lib/voice.js`
+    - Timer formatting (`formatVoiceTimer`), mic status text/markup mapping, voice-orb UI mapping, transcript formatting, and preferred speech voice selection.
+  - `src/lib/settings.js`
+    - Settings tab normalization/visibility helpers and deterministic seed parsing/notice helpers.
+- Updated `src/main.js` to use new modules:
+  - Voice domain now consumes `voice.js` helpers for timer/status/voice-orb/transcript logic.
+  - Settings domain now consumes `settings.js` helpers for tab and deterministic controls.
+- Added pure helper tests:
+  - `scripts/voice-helpers-test.mjs`
+  - `scripts/settings-helpers-test.mjs`
+  - `scripts/rag-helpers-test.mjs`
+- Added npm scripts:
+  - `npm run test:voice`
+  - `npm run test:settings`
+  - `npm run test:rag:helpers`
+- Updated environment/doc plumbing:
+  - Added new helper modules/tests to `scripts/check-env.mjs`.
+  - Updated `doc/CONFIG_AND_DEPENDENCIES.md` for new script commands and descriptions.
+  - Extended stability smoke contract to assert voice/settings helper module usage.
+- UX hardening updates:
+  - Added inline success notices for conversation clear, JSON export, and JSON import flows.
+  - Reduced phone clutter in composer/settings via compact responsive rules at `@media (max-width: 640px)` in `src/style.css`.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:voice` (pass)
+  - `npm run test:settings` (pass)
+  - `npm run test:rag:helpers` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:events` (pass)
+  - `npm run test:generation` (pass)
+  - `npm run test:composer` (pass)
+  - `npm run test:rendering` (pass)
+  - `npm run test:trust` (pass)
+  - `npm run test:routing` (pass)
+  - `npm run test:device` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run test:rag:web` (pass)
+  - `npm run build` (pass)
+  - `npm run test:browser:lifecycle` against local preview server (pass)
+
 ### 2026-04-08 - Browser smoke harness for import/export and send-stop lifecycle
 - Continued deep-scan execution by adding browser-level lifecycle verification.
 - Added opt-in test API hook in `src/main.js`:
@@ -337,6 +380,23 @@ Last Updated: 2026-04-08 (America/St_Johns)
   - RAG extensive test: pass
   - Build: pass
   - Browser lifecycle smoke test: pass
+- Verification after voice/settings modularization and UX hardening:
+  - Env check: pass
+  - Voice helpers test: pass
+  - Settings helpers test: pass
+  - RAG helpers test: pass
+  - Stability smoke: pass
+  - Events test: pass
+  - Generation lifecycle test: pass
+  - Composer action test: pass
+  - Rendering safety test: pass
+  - Trust metadata test: pass
+  - Routing sanity test: pass
+  - Device heuristics test: pass
+  - ASCII UI guard test: pass
+  - RAG extensive test: pass
+  - Build: pass
+  - Browser lifecycle smoke test: pass
 
 ## Known Issues And Gotchas
 
@@ -348,10 +408,10 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## What To Work On Next
 
-1. Continue P1 modular split of `src/main.js` (voice and settings event flows next).
-2. Continue extracting voice and settings orchestration from `src/main.js`.
-3. Add browser smoke for manual model-switch button flow in settings panel.
-4. Continue UI density cleanup on mobile settings and composer flows.
+1. Monitor upstream WebLLM Phi-3.5 vision embed-size bug and remove compatibility retries once upstream fix is available.
+2. Add optional browser smoke for manual model-switch action through settings panel switch button.
+3. Continue performance work (lazy-load/defer heavy optional features) to further reduce perceived startup cost.
+4. Evaluate targeted accessibility improvements (focus order in settings and keyboard affordances in RAG list controls).
 
 ## File Map
 
@@ -365,11 +425,13 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Composer helpers: `src/lib/composer.js`
 - Generation lifecycle helpers: `src/lib/generation.js`
 - Event binding helpers: `src/lib/events.js`
+- Voice helpers: `src/lib/voice.js`
+- Settings helpers: `src/lib/settings.js`
 - Test harness hook: `attachTestApiIfEnabled()` in `src/main.js` (`window.__NB_TEST_API` in opt-in mode)
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
-- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/events-bindings-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`, `scripts/browser-lifecycle-smoke.mjs`
+- Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/events-bindings-test.mjs`, `scripts/voice-helpers-test.mjs`, `scripts/settings-helpers-test.mjs`, `scripts/rag-helpers-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`, `scripts/browser-lifecycle-smoke.mjs`
 - Docs: `doc/`
 
 ## Tech Stack

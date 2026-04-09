@@ -24,18 +24,18 @@
 - [x] Extract composer action helpers to `src/lib/composer.js` and add composer lifecycle tests.
 - [x] Extract generation lifecycle helpers to `src/lib/generation.js` and add cancellation/fallback tests.
 - [x] Extract touch/click dedupe helper to `src/lib/events.js` and add tap binding tests.
-- [ ] Split remaining `src/main.js` domains into focused modules (routing, RAG, voice, UI events).
-- [ ] Add pure-function unit test paths for routing/retrieval/render helpers.
-- [ ] Keep behavior parity with current smoke tests.
+- [x] Split remaining `src/main.js` domains into focused modules (routing, RAG, voice, UI events).
+- [x] Add pure-function unit test paths for routing/retrieval/render helpers.
+- [x] Keep behavior parity with current smoke tests.
 
 ## P2 - UX And Performance
 
-- [ ] Reduce mobile UI clutter in composer and settings.
+- [x] Reduce mobile UI clutter in composer and settings.
 - [x] Reduce initial bundle pressure with safer chunking strategy (manual vendor chunks).
 - [x] Improve RAG UX clarity with explicit guidance and ingestion limits in settings.
-- [ ] Replace remaining disruptive UX patterns with inline/status-based feedback.
+- [x] Replace remaining disruptive UX patterns with inline/status-based feedback.
 
 ## Progress Summary
 
-- Completed this session: extended browser lifecycle smoke with model-switch fallback banner assertion via test API.
-- Validation status: build + browser lifecycle smoke passing after fallback-banner coverage extension.
+- Completed this session: voice/settings helper extraction, new pure helper test lanes, compact mobile settings/composer styling, and inline success notices for clear/export/import.
+- Validation status: full suite passing (env + helper tests + stability + RAG + build + browser lifecycle smoke).

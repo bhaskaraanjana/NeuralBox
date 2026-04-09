@@ -2467,6 +2467,102 @@ body {
 }
 
 @media (max-width: 640px) {
+  .chat-header {
+    padding: 0.52rem 0.62rem;
+  }
+
+  .header-right {
+    gap: 0.15rem;
+  }
+
+  .model-badge,
+  .hot-swap-status {
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .debug-panel,
+  .workbench-panel {
+    margin: 0.35rem 0.6rem 0;
+    max-height: 120px;
+  }
+
+  .messages-container {
+    padding: 0.75rem 0.6rem;
+  }
+
+  .input-container {
+    padding: 0.45rem 0.6rem 0.65rem;
+  }
+
+  .input-wrapper {
+    gap: 0.32rem;
+    padding: 0.42rem 0.42rem 0.42rem 0.58rem;
+    border-radius: 12px;
+  }
+
+  .web-toggle,
+  .mic-btn,
+  .image-btn,
+  .doc-btn,
+  .send-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    padding: 0;
+  }
+
+  .web-toggle-label {
+    display: none;
+  }
+
+  #user-input {
+    font-size: 0.9rem;
+    min-height: 22px;
+    max-height: 96px;
+  }
+
+  .settings-header {
+    padding: 0.75rem 0.8rem;
+  }
+
+  .settings-body {
+    padding: 0.7rem;
+  }
+
+  .setting-group {
+    margin-bottom: 0.7rem;
+    padding: 0.55rem;
+  }
+
+  .setting-group label {
+    font-size: 0.75rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .setting-hint {
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .setting-inline-row {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .setting-inline-row > * {
+    flex: 1 1 calc(50% - 0.2rem);
+    min-width: 118px;
+  }
+
+  .btn-primary,
+  .btn-danger {
+    padding: 0.58rem 0.68rem;
+    font-size: 0.82rem;
+  }
+
   .settings-tabs {
     padding: 0 0.75rem 0.6rem;
   }
