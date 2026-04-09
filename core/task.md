@@ -35,7 +35,16 @@
 - [x] Improve RAG UX clarity with explicit guidance and ingestion limits in settings.
 - [x] Replace remaining disruptive UX patterns with inline/status-based feedback.
 
+## P3 - Product Roadmap And UI Rehaul
+
+- [x] Create a feature roadmap document with themes, milestones, and sprint sequencing.
+- [x] Execute a complete UI rehaul pass while preserving runtime behavior contracts.
+- [x] Revalidate stability/build/browser lifecycle after visual system rewrite.
+- [ ] Implement Wave 2 manual model-switch UX redesign in settings.
+- [ ] Add browser smoke coverage for manual model-switch flow.
+- [ ] Run focused accessibility pass for settings + RAG controls.
+
 ## Progress Summary
 
-- Completed this session: voice/settings helper extraction, new pure helper test lanes, compact mobile settings/composer styling, and inline success notices for clear/export/import.
-- Validation status: full suite passing (env + helper tests + stability + RAG + build + browser lifecycle smoke).
+- Completed this session: added `doc/FEATURE_ROADMAP.md`, shipped a full `src/style.css` UI system rewrite, and preserved existing behavior/test contracts.
+- Validation status for this session: `env:check`, `test:stability`, `test:ascii-ui`, `build`, and `test:browser:lifecycle` all passing.

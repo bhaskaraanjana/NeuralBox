@@ -1,8 +1,23 @@
 # PROGRESS
 
-Last Updated: 2026-04-08 (America/St_Johns)
+Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
+
+### 2026-04-09 - Feature roadmap + complete UI rehaul wave kickoff
+- Created product roadmap artifact:
+  - Added `doc/FEATURE_ROADMAP.md` with themes, milestones, sprint plan, and success metrics.
+- Executed complete UI rehaul pass in `src/style.css`:
+  - Rebuilt style system around a single tokenized palette, typography, radius, and elevation model.
+  - Reworked loading shell, sidebar, header, message surfaces, composer, settings, RAG controls, and debug panes.
+  - Preserved existing runtime IDs/classes to keep `src/main.js` behavior and tests stable.
+  - Improved phone layout density and interaction spacing to reduce clutter in core chat/settings flows.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run build` (pass)
+  - `npm run test:browser:lifecycle` (pass)
 
 ### 2026-04-08 - Voice/settings modularization and mobile/settings UX hardening
 - Continued deepscan execution to close remaining architecture + UX checklist gaps.
@@ -265,6 +280,12 @@ Last Updated: 2026-04-08 (America/St_Johns)
 
 ## What's Been Verified
 
+- Verification after roadmap + UI rehaul pass:
+  - Env check: pass
+  - Stability smoke: pass
+  - ASCII UI guard test: pass
+  - Build: pass
+  - Browser lifecycle smoke test: pass
 - Baseline before edits:
   - Build: pass
   - Stability smoke: pass
@@ -403,15 +424,17 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Vision path still depends on upstream WebLLM Phi-3.5 embed-shape constraints.
 - Web search quality depends on third-party endpoint availability (allorigins + DuckDuckGo).
 - `src/main.js` remains a large orchestration file and should be modularized next.
+- Build emits large-chunk warnings for `webllm` and `transformers` bundles; runtime is functional but bundle pressure remains a performance focus.
 - Local workspace has a pre-existing modified file not touched by this session:
   - `scripts/rag-web-test-data/node-readme.md`
 
 ## What To Work On Next
 
-1. Monitor upstream WebLLM Phi-3.5 vision embed-size bug and remove compatibility retries once upstream fix is available.
-2. Add optional browser smoke for manual model-switch action through settings panel switch button.
-3. Continue performance work (lazy-load/defer heavy optional features) to further reduce perceived startup cost.
-4. Evaluate targeted accessibility improvements (focus order in settings and keyboard affordances in RAG list controls).
+1. Implement Theme A Wave 2: redesign manual model-switch UX in settings (state clarity + explicit action confirmation).
+2. Add browser smoke for manual model-switch flow to prevent regressions after settings UX changes.
+3. Run accessibility pass on chat/settings/RAG controls (focus order, keyboard navigation, contrast checks).
+4. Continue startup performance work: defer heavy optional runtimes and monitor chunk pressure.
+5. Monitor upstream WebLLM Phi-3.5 vision embed-size bug and remove compatibility retries when fixed upstream.
 
 ## File Map
 
@@ -431,6 +454,7 @@ Last Updated: 2026-04-08 (America/St_Johns)
 - Persistence layer: `src/db/database.js`
 - Voice transcription module: `src/whisper.js`
 - Styling: `src/style.css`
+- Roadmap: `doc/FEATURE_ROADMAP.md`
 - Validation scripts: `scripts/stability-sprint-smoke.mjs`, `scripts/rendering-safety-test.mjs`, `scripts/routing-sanity-test.mjs`, `scripts/device-heuristics-test.mjs`, `scripts/trust-metadata-test.mjs`, `scripts/composer-actions-test.mjs`, `scripts/generation-lifecycle-test.mjs`, `scripts/events-bindings-test.mjs`, `scripts/voice-helpers-test.mjs`, `scripts/settings-helpers-test.mjs`, `scripts/rag-helpers-test.mjs`, `scripts/ascii-ui-strings-test.mjs`, `scripts/rag-web-extensive-test.mjs`, `scripts/browser-lifecycle-smoke.mjs`
 - Docs: `doc/`
 
