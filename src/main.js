@@ -24,6 +24,7 @@ const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running
 let engine = null;
 let isGenerating = false;
 let webSearchEnabled = false;
+let autoWebSearchEnabled = true;
 let generationCancelRequested = false;
 let activeGenerationId = 0;
 let conversationSearchQuery = '';
@@ -108,6 +109,7 @@ const conversationSearch = $('#conversation-search');
 // Web search refs
 const webSearchToggle = $('#web-search-toggle');
 const webSearchSetting = $('#web-search-setting');
+const autoWebSearchSetting = $('#auto-web-search-setting');
 const visionVerboseSetting = $('#vision-verbose-setting');
 const inputDisclaimer = $('#input-disclaimer');
 
@@ -132,6 +134,11 @@ const imageInput = $('#image-input');
 const imagePreview = $('#image-preview');
 const imagePreviewImg = $('#image-preview-img');
 const imagePreviewClear = $('#image-preview-clear');
+const docBtn = $('#doc-btn');
+const docInput = $('#doc-input');
+const docPreview = $('#doc-preview');
+const docPreviewText = $('#doc-preview-text');
+const docPreviewClear = $('#doc-preview-clear');
 const inputWrapper = $('.input-wrapper');
 
 // ---- Model Config ----
@@ -575,6 +582,21 @@ function renderRagDocList() {
         .join('');
 }
 
+function renderDocAttachmentPreview() {
+    if (!docPreview || !docPreviewText) return;
+    const count = ragDocuments.length;
+    if (!count) {
+        docPreview.style.display = 'none';
+        docPreviewText.textContent = 'No docs attached';
+        return;
+    }
+    const sample = ragDocuments.slice(-2).map((d) => String(d?.name || '').trim()).filter(Boolean);
+    const suffix = count > 2 ? ', ...' : '';
+    const sampleText = sample.length ? ` (${sample.join(', ')}${suffix})` : '';
+    docPreviewText.textContent = `${count} doc${count === 1 ? '' : 's'} attached${sampleText}`;
+    docPreview.style.display = 'flex';
+}
+
 function renderRagStatus() {
     if (!ragStatus) return;
     const docCount = ragDocuments.length;
@@ -582,10 +604,12 @@ function renderRagStatus() {
     if (!docCount) {
         ragStatus.textContent = 'No local docs loaded.';
         renderRagDocList();
+        renderDocAttachmentPreview();
         return;
     }
     ragStatus.textContent = `${docCount} docs indexed - ${chunkCount} chunks ready. Retrieval runs automatically when relevant.`;
     renderRagDocList();
+    renderDocAttachmentPreview();
 }
 
 function persistRagDocs() {
@@ -1510,6 +1534,7 @@ function buildTrustMeta(payload = {}) {
         maxTokens: payload.maxTokens,
         hasImage: Boolean(payload.hasImage),
         webSources: Number(payload.webSources || 0),
+        webMode: payload.webMode || 'off',
         ragSources: Number(payload.ragSources || 0),
         generatedAt: Date.now(),
     };
@@ -1531,6 +1556,7 @@ function renderTrustMetaHtml(meta = {}) {
                 <span><strong>Temperature:</strong> ${escapeHtml(String(meta.temperature ?? 'n/a'))}</span>
                 <span><strong>Max tokens:</strong> ${escapeHtml(String(meta.maxTokens ?? 'n/a'))}</span>
                 <span><strong>Web sources:</strong> ${escapeHtml(String(meta.webSources ?? 0))}</span>
+                <span><strong>Web mode:</strong> ${escapeHtml(String(meta.webMode || 'off'))}</span>
                 <span><strong>RAG matches:</strong> ${escapeHtml(String(meta.ragSources ?? 0))}</span>
                 <span><strong>Image input:</strong> ${meta.hasImage ? 'yes' : 'no'}</span>
             </div>
@@ -1899,13 +1925,58 @@ function toggleWebSearch(enabled, options = {}) {
     }
 }
 
+function shouldAutoWebSearch(query) {
+    const text = String(query || '').trim().toLowerCase();
+    if (!text) return false;
+    if (/^(search web|web search|search the web)\b/.test(text)) return true;
+    if (/\b(today|yesterday|tomorrow|latest|recent|breaking|right now|currently|as of now|this morning|tonight)\b/.test(text)) {
+        return true;
+    }
+    if (/\b(news|headline|war|attack|bomb|strike|election|score|stock|price|weather|earthquake|fired|hired|ceo)\b/.test(text)) {
+        return true;
+    }
+    return false;
+}
+
+function resolveWebSearchQuery(userText, conversation) {
+    const raw = String(userText || '').trim();
+    if (!raw) return '';
+
+    if (/^search web[:\s]+/i.test(raw)) {
+        return raw.replace(/^search web[:\s]+/i, '').trim();
+    }
+    if (/^web search[:\s]+/i.test(raw)) {
+        return raw.replace(/^web search[:\s]+/i, '').trim();
+    }
+    if (!/^(search web|web search|search the web)$/i.test(raw)) {
+        return raw;
+    }
+
+    const msgs = Array.isArray(conversation?.messages) ? conversation.messages : [];
+    for (let i = msgs.length - 2; i >= 0; i--) {
+        if (msgs[i]?.role !== 'user') continue;
+        const priorText = getMessageText(msgs[i].content)
+            .replace(/^\/(no_)?think\n/, '')
+            .trim();
+        if (!priorText) continue;
+        if (/^(search web|web search|search the web)$/i.test(priorText)) continue;
+        return priorText;
+    }
+    return '';
+}
+
 function updateInputDisclaimer() {
     const capabilityLabel = getModelCapabilitiesLabel(getModelById(selectedModelId));
     const ragLabel = ragDocuments.length > 0
         ? ` Local docs: ${ragDocuments.length} indexed.`
-        : '';
+        : ' Attach documents with the Docs button for grounded answers.';
     if (webSearchEnabled) {
         inputDisclaimer.textContent = `Web-Enhanced mode is on. Search queries are sent to DuckDuckGo. Active model supports: ${capabilityLabel}.${ragLabel}`;
+        inputDisclaimer.classList.add('web-active');
+        return;
+    }
+    if (autoWebSearchEnabled) {
+        inputDisclaimer.textContent = `Auto Web Search is on for time-sensitive queries. Active model supports: ${capabilityLabel}.${ragLabel}`;
         inputDisclaimer.classList.add('web-active');
         return;
     }
@@ -2657,6 +2728,8 @@ async function sendMessage(text) {
     setGeneratingState(true);
     let routeReason = `Manual model selection (${getModelById(selectedModelId).name})`;
     let routeScore = null;
+    let webMode = 'off';
+    let effectiveSearchQuery = '';
     logRuntimeEvent('generation_start', {
         generationId,
         hasImage: Boolean(imageDataUrl),
@@ -2738,13 +2811,34 @@ async function sendMessage(text) {
             }
         }
 
-        // Web search if enabled
+        // Web search (manual or auto)
         let searchResults = [];
-        if (webSearchEnabled && userText) {
-            contentEl.innerHTML = '<div class="search-badge"><span class="spinner"></span> Searching the web...</div>';
+        effectiveSearchQuery = resolveWebSearchQuery(userText, conv);
+        if (/^(search web|web search|search the web)$/i.test(userText) && !effectiveSearchQuery) {
+            setInlineNotice('No search topic found. Ask a question first or use "search web: <topic>".', 'warn', 3200);
+        }
+        const shouldSearchWeb = Boolean(effectiveSearchQuery) && (
+            webSearchEnabled ||
+            (autoWebSearchEnabled && shouldAutoWebSearch(effectiveSearchQuery))
+        );
+        if (shouldSearchWeb) {
+            webMode = webSearchEnabled ? 'manual' : 'auto';
+            contentEl.innerHTML = `<div class="search-badge"><span class="spinner"></span> Searching the web (${webMode})...</div>`;
             scrollToBottom();
-            searchResults = await webSearch(userText);
+            searchResults = await webSearch(effectiveSearchQuery);
+            if (searchResults.length > 0) {
+                routeReason = `${routeReason} | Web lookup ${webMode} (${searchResults.length} results)`;
+            } else {
+                routeReason = `${routeReason} | Web lookup ${webMode} (no results)`;
+            }
             pushWorkbenchEvent('web_search', {
+                mode: webMode,
+                query: effectiveSearchQuery,
+                results: searchResults.length,
+            });
+            logRuntimeEvent('web_search', {
+                mode: webMode,
+                query: effectiveSearchQuery,
                 results: searchResults.length,
             });
         }
@@ -2919,6 +3013,8 @@ async function sendMessage(text) {
             deterministic: deterministicModeEnabled,
             ragMatches: ragMatches.length,
             webResults: searchResults.length,
+            webMode,
+            webQuery: effectiveSearchQuery,
         });
         const trustMeta = buildTrustMeta({
             routeReason,
@@ -2929,6 +3025,7 @@ async function sendMessage(text) {
             maxTokens: requestConfig.maxTokens,
             hasImage: Boolean(imageDataUrl),
             webSources: searchResults.length,
+            webMode,
             ragSources: ragMatches.length,
         });
         conv.messages.push({ role: 'assistant', content: fullResponse, meta: trustMeta });
@@ -3288,6 +3385,7 @@ async function loadSettings() {
         } else {
             toggleWebSearch(false, { persist: false });
         }
+        autoWebSearchEnabled = settings.autoWebSearchEnabled !== false;
         verboseVisionLogs = Boolean(settings.verboseVisionLogs);
         debugPanelEnabled = Boolean(settings.debugPanelEnabled);
         workbenchEnabled = Boolean(settings.workbenchEnabled);
@@ -3299,6 +3397,9 @@ async function loadSettings() {
         deterministicSeed = Number.isFinite(parsedSeed) ? parsedSeed : deterministicSeed;
         if (visionVerboseSetting) {
             visionVerboseSetting.checked = verboseVisionLogs;
+        }
+        if (autoWebSearchSetting) {
+            autoWebSearchSetting.checked = autoWebSearchEnabled;
         }
         if (debugPanelSetting) {
             debugPanelSetting.checked = debugPanelEnabled;
@@ -3331,6 +3432,7 @@ function saveSettings() {
         temperature: parseFloat(temperatureSlider.value),
         maxTokens: parseInt(maxTokensSlider.value),
         webSearch: webSearchEnabled,
+        autoWebSearchEnabled: autoWebSearchEnabled,
         verboseVisionLogs: verboseVisionLogs,
         debugPanelEnabled: debugPanelEnabled,
         workbenchEnabled: workbenchEnabled,
@@ -3473,6 +3575,13 @@ webSearchToggle.addEventListener('touchend', (e) => {
     toggleWebSearch(!webSearchEnabled);
 });
 webSearchSetting.addEventListener('change', () => toggleWebSearch(webSearchSetting.checked));
+if (autoWebSearchSetting) {
+    autoWebSearchSetting.addEventListener('change', () => {
+        autoWebSearchEnabled = Boolean(autoWebSearchSetting.checked);
+        updateInputDisclaimer();
+        saveSettings();
+    });
+}
 if (visionVerboseSetting) {
     visionVerboseSetting.addEventListener('change', () => {
         verboseVisionLogs = Boolean(visionVerboseSetting.checked);
@@ -3507,6 +3616,25 @@ if (workbenchClearBtn) {
 }
 if (ragAddBtn && ragFileInput) {
     ragAddBtn.addEventListener('click', () => ragFileInput.click());
+}
+if (docBtn && docInput) {
+    docBtn.addEventListener('click', () => docInput.click());
+    docBtn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        docInput.click();
+    });
+}
+if (docInput) {
+    docInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files || []);
+        await ingestRagFiles(files);
+        docInput.value = '';
+    });
+}
+if (docPreviewClear) {
+    docPreviewClear.addEventListener('click', () => {
+        clearRagDocs();
+    });
 }
 if (ragDropzone && ragFileInput) {
     ragDropzone.addEventListener('click', () => ragFileInput.click());
