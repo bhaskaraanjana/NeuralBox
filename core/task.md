@@ -45,7 +45,13 @@
 - [ ] Run focused accessibility pass for settings + RAG controls.
 - [ ] Add recovery UX for web-search offline/network failures.
 
+## P4 - RAG Explainability And Controls
+
+- [x] Add citation confidence badges for local RAG snippets.
+- [x] Expose RAG confidence telemetry in trust metadata.
+- [ ] Add configurable retrieval profile presets (precise, balanced, broad).
+
 ## Progress Summary
 
-- Completed this session: added roadmap + full UI rehaul, then delivered Wave 2 model-switch UX redesign (clear current/pending state, apply flow, rollback on failure) plus smoke-test coverage.
-- Validation status for this session: `env:check`, `test:stability`, `test:ascii-ui`, `build`, and `test:browser:lifecycle` all passing.
+- Completed this session: added roadmap + full UI rehaul, delivered Wave 2 model-switch UX, and added RAG citation confidence badges with trust-layer confidence telemetry.
+- Validation status for this session: `env:check`, `test:rag:helpers`, `test:trust`, `test:stability`, `test:ascii-ui`, `build`, and `test:browser:lifecycle` all passing.

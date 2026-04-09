@@ -16,6 +16,12 @@ export function renderTrustMetaHtml(meta = {}) {
     const ragDocSummary = ragDocNames.length
         ? `${ragDocNames.slice(0, 3).join(', ')}${ragDocNames.length > 3 ? ', ...' : ''}`
         : 'n/a';
+    const ragConfidence = String(meta.ragConfidence || 'n/a');
+    const ragAvgScore = Number.isFinite(Number(meta.ragAvgScore)) ? Number(meta.ragAvgScore) : null;
+    const ragBreakdown = meta.ragConfidenceBreakdown && typeof meta.ragConfidenceBreakdown === 'object'
+        ? meta.ragConfidenceBreakdown
+        : { high: 0, medium: 0, low: 0 };
+    const ragBreakdownText = `H:${Number(ragBreakdown.high || 0)} M:${Number(ragBreakdown.medium || 0)} L:${Number(ragBreakdown.low || 0)}`;
     return `
         <details class="trust-meta">
             <summary>Trust Layer: why this answer</summary>
@@ -30,6 +36,9 @@ export function renderTrustMetaHtml(meta = {}) {
                 <span><strong>Web mode:</strong> ${escapeHtml(String(meta.webMode || 'off'))}</span>
                 <span><strong>RAG matches:</strong> ${escapeHtml(String(meta.ragSources ?? 0))}</span>
                 <span><strong>RAG docs:</strong> ${escapeHtml(ragDocSummary)}</span>
+                <span><strong>RAG confidence:</strong> ${escapeHtml(ragConfidence)}</span>
+                <span><strong>RAG avg score:</strong> ${escapeHtml(ragAvgScore != null ? String(ragAvgScore) : 'n/a')}</span>
+                <span><strong>RAG confidence mix:</strong> ${escapeHtml(ragBreakdownText)}</span>
                 <span><strong>Image input:</strong> ${meta.hasImage ? 'yes' : 'no'}</span>
             </div>
             <div class="trust-meta-reason"><strong>Route reason:</strong> ${escapeHtml(String(meta.routeReason || 'n/a'))}${routeScore}</div>

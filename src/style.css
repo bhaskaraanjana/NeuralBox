@@ -911,6 +911,69 @@ body {
   text-decoration: underline;
 }
 
+.rag-citations {
+  margin-top: 0.52rem;
+  border: 1px solid rgba(160, 179, 208, 0.22);
+  border-radius: 10px;
+  background: rgba(10, 17, 25, 0.7);
+  padding: 0.44rem 0.5rem;
+}
+
+.rag-citations-title {
+  font-size: 0.72rem;
+  color: var(--text-2);
+  margin-bottom: 0.34rem;
+}
+
+.rag-citation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.46rem;
+  margin-bottom: 0.26rem;
+}
+
+.rag-citation-item:last-child {
+  margin-bottom: 0;
+}
+
+.rag-citation-doc {
+  color: var(--text-1);
+  font-size: 0.75rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rag-citation-confidence {
+  flex: none;
+  border: 1px solid var(--line-1);
+  border-radius: 999px;
+  padding: 0.08rem 0.4rem;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.rag-citation-confidence.high {
+  color: #86efac;
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(6, 78, 59, 0.26);
+}
+
+.rag-citation-confidence.medium {
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.36);
+  background: rgba(120, 53, 15, 0.26);
+}
+
+.rag-citation-confidence.low {
+  color: #fca5a5;
+  border-color: rgba(248, 113, 113, 0.36);
+  background: rgba(127, 29, 29, 0.26);
+}
+
 .think-block {
   border: 1px solid rgba(160, 179, 208, 0.22);
   border-radius: 10px;

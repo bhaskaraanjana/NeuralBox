@@ -51,7 +51,7 @@ Goals:
 Milestones:
 - [x] RAG ingestion guardrails and guidance text.
 - [x] Pure RAG helper tests (normalization, chunking, scoring, retrieval).
-- [ ] Add citation confidence badges for local RAG snippets.
+- [x] Add citation confidence badges for local RAG snippets.
 - [ ] Add configurable retrieval profile presets (precise, balanced, broad).
 
 ### Theme D: Voice and Multimodal Experience

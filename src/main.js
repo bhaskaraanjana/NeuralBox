@@ -542,6 +542,65 @@ function buildRagContext(matches) {
     return ctx;
 }
 
+function getRagConfidenceSummary(matches = []) {
+    const summary = {
+        high: 0,
+        medium: 0,
+        low: 0,
+        avgScore: 0,
+        topScore: 0,
+        topConfidence: 'n/a',
+    };
+    if (!Array.isArray(matches) || matches.length === 0) {
+        return summary;
+    }
+    let totalScore = 0;
+    for (const match of matches) {
+        const score = Number(match?.score) || 0;
+        totalScore += score;
+        if (score > summary.topScore) {
+            summary.topScore = score;
+            summary.topConfidence = String(match?.confidenceLabel || 'low');
+        }
+        const label = String(match?.confidenceLabel || 'low').toLowerCase();
+        if (label === 'high') summary.high += 1;
+        else if (label === 'medium') summary.medium += 1;
+        else summary.low += 1;
+    }
+    summary.avgScore = Number((totalScore / matches.length).toFixed(1));
+    return summary;
+}
+
+function renderLocalRagCitations(matches, container) {
+    if (!container || !Array.isArray(matches) || !matches.length) return;
+    const div = document.createElement('div');
+    div.className = 'rag-citations';
+    const title = document.createElement('div');
+    title.className = 'rag-citations-title';
+    title.textContent = 'Local docs';
+    div.appendChild(title);
+
+    for (const match of matches) {
+        const item = document.createElement('div');
+        item.className = 'rag-citation-item';
+
+        const name = document.createElement('span');
+        name.className = 'rag-citation-doc';
+        name.textContent = String(match?.docName || 'document');
+
+        const score = Number(match?.score) || 0;
+        const confidence = String(match?.confidenceLabel || 'low').toLowerCase();
+        const badge = document.createElement('span');
+        badge.className = `rag-citation-confidence ${confidence}`;
+        badge.textContent = `${confidence} (${score})`;
+
+        item.appendChild(name);
+        item.appendChild(badge);
+        div.appendChild(item);
+    }
+    container.appendChild(div);
+}
+
 function formatCompactNumber(value) {
     const n = Number(value) || 0;
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -1555,6 +1614,15 @@ function buildTrustMeta(payload = {}) {
         webMode: payload.webMode || 'off',
         ragSources: Number(payload.ragSources || 0),
         ragDocNames,
+        ragConfidence: String(payload.ragConfidence || 'n/a'),
+        ragAvgScore: Number.isFinite(Number(payload.ragAvgScore)) ? Number(payload.ragAvgScore) : null,
+        ragConfidenceBreakdown: payload.ragConfidenceBreakdown && typeof payload.ragConfidenceBreakdown === 'object'
+            ? {
+                high: Number(payload.ragConfidenceBreakdown.high || 0),
+                medium: Number(payload.ragConfidenceBreakdown.medium || 0),
+                low: Number(payload.ragConfidenceBreakdown.low || 0),
+            }
+            : { high: 0, medium: 0, low: 0 },
         generatedAt: Date.now(),
     };
 }
@@ -2989,14 +3057,18 @@ async function sendMessage(text) {
 
         let ragMatches = [];
         let ragDocNames = [];
+        let ragConfidence = getRagConfidenceSummary([]);
         if (userText && ragChunks.length > 0) {
             ragMatches = retrieveRagChunks(userText);
             if (ragMatches.length > 0) {
                 ragDocNames = Array.from(new Set(ragMatches.map((m) => String(m.docName || '').trim()).filter(Boolean)));
+                ragConfidence = getRagConfidenceSummary(ragMatches);
                 routeReason = `${routeReason} | Local docs (${ragMatches.length} matches from ${ragDocNames.length} docs)`;
                 pushWorkbenchEvent('rag_retrieval', {
                     matches: ragMatches.length,
                     docs: ragDocNames.join(', '),
+                    confidence: ragConfidence.topConfidence,
+                    avgScore: ragConfidence.avgScore,
                 });
             }
         }
@@ -3203,6 +3275,10 @@ async function sendMessage(text) {
         const messageBody = aiMsg.querySelector('.message-body') || aiMsg;
         messageBody.appendChild(statsEl);
 
+        if (ragMatches.length > 0) {
+            renderLocalRagCitations(ragMatches, messageBody);
+        }
+
         // Show source citations if we used web search
         if (searchResults.length > 0) {
             renderSourceCitations(searchResults, messageBody);
@@ -3219,6 +3295,8 @@ async function sendMessage(text) {
             deterministic: deterministicModeEnabled,
             ragMatches: ragMatches.length,
             ragDocNames,
+            ragTopConfidence: ragConfidence.topConfidence,
+            ragAvgScore: ragConfidence.avgScore,
             webResults: searchResults.length,
             webMode,
             webQuery: effectiveSearchQuery,
@@ -3235,6 +3313,13 @@ async function sendMessage(text) {
             webMode,
             ragSources: ragMatches.length,
             ragDocNames,
+            ragConfidence: ragConfidence.topConfidence,
+            ragAvgScore: ragConfidence.avgScore,
+            ragConfidenceBreakdown: {
+                high: ragConfidence.high,
+                medium: ragConfidence.medium,
+                low: ragConfidence.low,
+            },
         });
         conv.messages.push({ role: 'assistant', content: fullResponse, meta: trustMeta });
         if (trustLayerEnabled) {
@@ -3252,6 +3337,8 @@ async function sendMessage(text) {
             tokenCount,
             elapsedSec: Number(elapsed.toFixed(2)),
             ragMatches: ragMatches.length,
+            ragConfidence: ragConfidence.topConfidence,
+            ragAvgScore: ragConfidence.avgScore,
             webResults: searchResults.length,
         });
     } catch (err) {
@@ -3451,7 +3538,7 @@ function formatConversationAsMarkdown(conv) {
             const ragDocs = Array.isArray(msg.meta.ragDocNames) && msg.meta.ragDocNames.length
                 ? msg.meta.ragDocNames.join('|')
                 : 'none';
-            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}, rag_docs=${ragDocs}_`);
+            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}, rag_docs=${ragDocs}, rag_confidence=${msg.meta.ragConfidence || 'n/a'}_`);
             lines.push('');
         }
     }

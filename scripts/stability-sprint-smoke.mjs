@@ -55,6 +55,8 @@ async function main() {
   assert(/skippedTooLarge/.test(mainJs), 'RAG skipped-too-large reporting missing');
   assert(/id="rag-guidance"/.test(html), 'RAG guidance element missing in settings UI');
   assert(/function renderRagGuidance\(/.test(mainJs), 'RAG guidance renderer missing');
+  assert(/function renderLocalRagCitations\(/.test(mainJs), 'RAG citation renderer missing');
+  assert(/ragTopConfidence/.test(mainJs), 'RAG confidence telemetry missing');
 
   // Device heuristics extraction contract.
   assert(/estimateVramMB/.test(mainJs), 'Device heuristic module usage missing in main runtime');

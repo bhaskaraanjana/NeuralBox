@@ -42,15 +42,29 @@ export function getRagMatchScore(queryTokens, chunkText) {
     return score;
 }
 
+export function getRagConfidenceLabel(score, queryTokenCount = 0) {
+    const baseScore = Number(score) || 0;
+    if (baseScore <= 0) return 'low';
+    const tokenCount = Math.max(1, Number(queryTokenCount) || 1);
+    const normalized = baseScore / tokenCount;
+    if (normalized >= 3) return 'high';
+    if (normalized >= 1.5) return 'medium';
+    return 'low';
+}
+
 export function retrieveRagChunksFromIndex(ragChunks, query, maxMatches = 4) {
     if (!Array.isArray(ragChunks) || !ragChunks.length) return [];
     const tokens = tokenizeRagQuery(query);
     if (!tokens.length) return [];
     return ragChunks
-        .map((chunk) => ({
-            ...chunk,
-            score: getRagMatchScore(tokens, chunk.text),
-        }))
+        .map((chunk) => {
+            const score = getRagMatchScore(tokens, chunk.text);
+            return {
+                ...chunk,
+                score,
+                confidenceLabel: getRagConfidenceLabel(score, tokens.length),
+            };
+        })
         .filter((c) => c.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, maxMatches);

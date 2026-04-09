@@ -1,5 +1,6 @@
 ﻿import {
   getFileExtension,
+  getRagConfidenceLabel,
   getRagMatchScore,
   normalizeRagDocText,
   retrieveRagChunksFromIndex,
@@ -25,6 +26,7 @@ function run() {
 
   const score = getRagMatchScore(['neuralbox', 'runtime'], 'NeuralBox runtime is local runtime.');
   assert(score > 0, 'RAG score should be positive for matching tokens.');
+  assert(getRagConfidenceLabel(score, 2) !== 'low', 'Confidence label should scale with score.');
 
   const index = [
     { docId: '1', docName: 'a.txt', idx: 0, text: 'NeuralBox runtime architecture details.' },
@@ -33,6 +35,7 @@ function run() {
   const matches = retrieveRagChunksFromIndex(index, 'runtime architecture', 2);
   assert(matches.length === 1, 'RAG retrieval should return only matching chunks.');
   assert(matches[0].docId === '1', 'RAG retrieval should prioritize relevant document.');
+  assert(['high', 'medium', 'low'].includes(matches[0].confidenceLabel), 'RAG retrieval should expose confidence label.');
 
   assert(getFileExtension('notes.MD') === 'md', 'File extension helper should normalize case.');
 

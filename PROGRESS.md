@@ -4,6 +4,29 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-04-09 - RAG confidence citation feature add
+- Added confidence-aware RAG retrieval output:
+  - `src/lib/rag.js` now includes `getRagConfidenceLabel(score, queryTokenCount)` and retrieval output now includes `confidenceLabel`.
+- Added user-facing local citation confidence UI:
+  - `src/main.js` now renders a `Local docs` citation block under assistant replies when local retrieval is used.
+  - Each cited document now shows confidence badge (`high`, `medium`, `low`) and retrieval score.
+  - Added RAG confidence summary helper used for telemetry and trust metadata.
+- Extended trust metadata for explainability:
+  - `src/lib/trust.js` now shows `RAG confidence`, `RAG avg score`, and `RAG confidence mix`.
+  - Markdown export trust line now includes `rag_confidence`.
+- Added styling and tests:
+  - New RAG citation styles in `src/style.css`.
+  - Updated `scripts/rag-helpers-test.mjs` with confidence assertions.
+  - Updated `scripts/stability-sprint-smoke.mjs` to assert RAG citation renderer/confidence telemetry.
+- Validation run for this batch:
+  - `npm run env:check` (pass)
+  - `npm run test:rag:helpers` (pass)
+  - `npm run test:trust` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run test:ascii-ui` (pass)
+  - `npm run build` (pass)
+  - `npm run test:browser:lifecycle` (pass)
+
 ### 2026-04-09 - Wave 2 manual model-switch UX + smoke coverage
 - Continued roadmap execution after Wave 1 rehaul with focused model-selection UX cleanup.
 - Updated `src/main.js` model selection flows:
@@ -300,6 +323,14 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## What's Been Verified
 
+- Verification after RAG confidence citation feature:
+  - Env check: pass
+  - RAG helpers test: pass
+  - Trust metadata test: pass
+  - Stability smoke: pass
+  - ASCII UI guard test: pass
+  - Build: pass
+  - Browser lifecycle smoke test: pass
 - Verification after Wave 2 model-switch UX pass:
   - Env check: pass
   - Stability smoke: pass
@@ -457,9 +488,10 @@ Last Updated: 2026-04-09 (America/St_Johns)
 ## What To Work On Next
 
 1. Run accessibility pass on chat/settings/RAG controls (focus order, keyboard navigation, contrast checks).
-2. Add recovery UX for web-search failures (offline/network endpoint errors) with actionable retry guidance.
-3. Continue startup performance work: defer heavy optional runtimes and monitor chunk pressure.
-4. Monitor upstream WebLLM Phi-3.5 vision embed-size bug and remove compatibility retries when fixed upstream.
+2. Add configurable retrieval profile presets (precise, balanced, broad) for local RAG.
+3. Add recovery UX for web-search failures (offline/network endpoint errors) with actionable retry guidance.
+4. Continue startup performance work: defer heavy optional runtimes and monitor chunk pressure.
+5. Monitor upstream WebLLM Phi-3.5 vision embed-size bug and remove compatibility retries when fixed upstream.
 
 ## File Map
 
