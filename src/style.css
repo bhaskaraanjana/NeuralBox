@@ -1948,3 +1948,21 @@ textarea:focus-visible {
     font-size: 0.8rem;
   }
 }
+
+/* Average Joe Mode Overrides */
+body.mode-average-joe #settings-tab-advanced,
+body.mode-average-joe .setting-group[data-setting-level="advanced"],
+body.mode-average-joe #prompt-preset-group,
+body.mode-average-joe #workflow-mode-group,
+body.mode-average-joe #web-search-group,
+body.mode-average-joe #doc-btn,
+body.mode-average-joe #rag-dropzone,
+body.mode-average-joe #web-search-toggle,
+body.mode-average-joe #think-toggle,
+body.mode-average-joe #model-badge,
+body.mode-average-joe #hot-swap-status,
+body.mode-average-joe #start-model-selector-group,
+body.mode-average-joe .workbench-panel,
+body.mode-average-joe .debug-panel {
+  display: none !important;
+}

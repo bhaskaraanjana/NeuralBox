@@ -4,6 +4,12 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Version 1.6.9 Updates
+- Bumped app version to 1.6.9 and exposed it in the settings panel.
+- Introduced an "Average Joe" vs "Expert" experience mode selector on app startup.
+- Added logic in `main.js` to intercept startup and prompt new users for their preferred UI complexity.
+- Implemented CSS overrides in `style.css` (`.mode-average-joe`) to elegantly hide advanced options like prompt presets, RAG attachment buttons, workflow selectors, and system debug panels for casual users.
+
 ### 2026-05-04 - Version 1.6.8 Updates
 - Bumped app version to 1.6.8 and exposed it in the settings panel.
 - Lowered the default temperature from 0.7 to 0.3 to significantly reduce hallucinations in the small browser-based models.

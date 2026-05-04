@@ -105,6 +105,9 @@ const loadingScreen = $('#loading-screen');
 const chatScreen = $('#chat-screen');
 const webgpuError = $('#webgpu-error');
 const downloadSection = $('#download-section');
+const experienceModeSelector = $('#experience-mode-selector');
+const modeJoeBtn = $('#mode-joe-btn');
+const modeExpertBtn = $('#mode-expert-btn');
 const statusText = $('#status-text');
 const progressFill = $('#progress-fill');
 const progressPercent = $('#progress-percent');
@@ -2143,6 +2146,37 @@ function renderSourceCitations(results, container) {
 
 // ---- Init ----
 async function init() {
+    const savedMode = localStorage.getItem('neuralbox-experience-mode');
+    
+    if (savedMode === 'joe') {
+        document.body.classList.add('mode-average-joe');
+    }
+    
+    if (!savedMode && experienceModeSelector && modeJoeBtn && modeExpertBtn) {
+        downloadSection.style.display = 'none';
+        experienceModeSelector.style.display = 'block';
+        
+        return new Promise((resolve) => {
+            modeJoeBtn.addEventListener('click', () => {
+                localStorage.setItem('neuralbox-experience-mode', 'joe');
+                document.body.classList.add('mode-average-joe');
+                experienceModeSelector.style.display = 'none';
+                downloadSection.style.display = 'block';
+                resolve(continueInit());
+            });
+            modeExpertBtn.addEventListener('click', () => {
+                localStorage.setItem('neuralbox-experience-mode', 'expert');
+                experienceModeSelector.style.display = 'none';
+                downloadSection.style.display = 'block';
+                resolve(continueInit());
+            });
+        });
+    } else {
+        return continueInit();
+    }
+}
+
+async function continueInit() {
     if (!navigator.gpu) {
         webgpuError.style.display = 'block';
         downloadSection.style.display = 'none';

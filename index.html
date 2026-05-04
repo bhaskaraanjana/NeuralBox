@@ -33,6 +33,15 @@
           </p>
         </div>
 
+        <div id="experience-mode-selector" style="display:none; text-align:center; margin-bottom: 2rem;">
+          <h2 style="font-size: 1.2rem; color: var(--text-1); margin-bottom: 1rem;">Choose your experience:</h2>
+          <div style="display: flex; gap: 1rem; justify-content: center;">
+            <button id="mode-joe-btn" class="btn-primary" style="flex: 1;">Average Joe Mode</button>
+            <button id="mode-expert-btn" class="btn-secondary" style="flex: 1;">Expert Mode</button>
+          </div>
+          <p class="setting-hint" style="margin-top: 1rem;">Average Joe Mode hides advanced settings for a cleaner chat interface.</p>
+        </div>
+
         <div id="download-section">
           <div id="start-model-selector-group" class="model-selector-group" style="margin-bottom: 1rem;"></div>
           <div id="status-text" class="status-text" role="status" aria-live="polite">Checking device capabilities...</div>
@@ -221,14 +230,14 @@
           <div id="model-selector-group" class="setting-group" data-setting-level="regular">
             <!-- Populated dynamically by renderModelSelector() -->
           </div>
-          <div class="setting-group" data-setting-level="regular">
+          <div id="prompt-preset-group" class="setting-group" data-setting-level="regular">
             <label for="prompt-preset-select">Prompt Presets</label>
             <div class="setting-inline-row">
               <select id="prompt-preset-select"></select>
               <button id="apply-preset-btn" class="btn-primary" type="button">Apply</button>
             </div>
           </div>
-          <div class="setting-group" data-setting-level="regular">
+          <div id="workflow-mode-group" class="setting-group" data-setting-level="regular">
             <label for="workflow-select">Workflow Mode</label>
             <div class="setting-inline-row">
               <select id="workflow-select"></select>
@@ -236,7 +245,7 @@
             </div>
             <p class="setting-hint">Adds task-specific instructions (for example: Structured JSON, Code Review, or Study mode).</p>
           </div>
-          <div class="setting-group" data-setting-level="regular">
+          <div id="web-search-group" class="setting-group" data-setting-level="regular">
             <label class="toggle-label">
               <span>Web-Enhanced Mode</span>
               <input type="checkbox" id="web-search-setting" />
@@ -341,7 +350,7 @@
           <div class="setting-group" data-setting-level="advanced">
             <button id="clear-history-btn" class="btn-danger">Clear All Conversations</button>
           </div>
-          <div class="setting-info"><p>All data stays in your browser. Nothing is sent to any server. | Version: 1.6.8</p></div>
+          <div class="setting-info"><p>All data stays in your browser. Nothing is sent to any server. | Version: 1.6.9</p></div>
         </div>
       </div>
     </div>
