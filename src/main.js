@@ -176,6 +176,9 @@ const inputDisclaimer = $('#input-disclaimer');
 // Voice refs
 const micBtn = $('#mic-btn');
 const voiceStatus = $('#voice-status');
+const audioFileBtn = $('#audio-file-btn');
+const audioFileInput = $('#audio-file-input');
+const transcribeStatus = $('#transcribe-status');
 
 // Voice chat overlay refs
 const voiceChatBtn = $('#voice-chat-btn');
@@ -4026,6 +4029,63 @@ async function processRecording(audioBlob) {
     }
 
     micBtn.classList.remove('loading');
+}
+
+// ============================================
+// Audio File Transcription (with live streaming)
+// ============================================
+
+if (audioFileBtn && audioFileInput) {
+    audioFileBtn.addEventListener('click', () => audioFileInput.click());
+    audioFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        audioFileInput.value = '';
+        await processAudioFileTranscription(file);
+    });
+}
+
+async function processAudioFileTranscription(file) {
+    transcribeStatus.style.display = 'flex';
+    transcribeStatus.className = 'voice-status transcribing';
+    transcribeStatus.innerHTML = getMicStatusMarkup('loading');
+    audioFileBtn.classList.add('loading');
+
+    try {
+        const whisper = await getWhisperApi();
+        await whisper.initWhisper((progress) => {
+            transcribeStatus.innerHTML = getMicStatusMarkup('loading_progress', { progress });
+        });
+
+        transcribeStatus.innerHTML = getMicStatusMarkup('transcribing');
+        const baseText = userInput.value ? userInput.value + (userInput.value.endsWith(' ') ? '' : ' ') : '';
+
+        // Stream partial tokens live into the input box
+        const text = await whisper.transcribeAudio(file, (partial) => {
+            userInput.value = baseText + partial;
+            autoResizeInput();
+        });
+
+        if (text) {
+            userInput.value = baseText + text;
+            autoResizeInput();
+            sendBtn.disabled = false;
+            userInput.focus();
+            transcribeStatus.className = 'voice-status';
+            transcribeStatus.innerHTML = getMicStatusMarkup('transcribed');
+            setTimeout(() => { transcribeStatus.style.display = 'none'; }, 3000);
+        } else {
+            transcribeStatus.innerHTML = getMicStatusMarkup('empty');
+            setTimeout(() => { transcribeStatus.style.display = 'none'; }, 3000);
+        }
+    } catch (err) {
+        console.error('Audio file transcription failed:', err);
+        transcribeStatus.className = 'voice-status';
+        transcribeStatus.innerHTML = getMicStatusMarkup('error', { errorMessage: err?.message || 'Unknown error' });
+        setTimeout(() => { transcribeStatus.style.display = 'none'; }, 5000);
+    }
+
+    audioFileBtn.classList.remove('loading');
 }
 
 // ============================================
