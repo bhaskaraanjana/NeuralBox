@@ -93,6 +93,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recordingTimer = null;
 let recordingSeconds = 0;
+let liveRecognition = null; // Web Speech API for live interim transcription
 let voiceChatActive = false;
 
 // Conversations: { id, title, messages[], createdAt, updatedAt }
@@ -3775,7 +3776,14 @@ if (docBtn && docInput) {
 if (docInput) {
     docInput.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files || []);
-        await ingestRagFiles(files);
+        const audioFiles = files.filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|flac|webm|aac)$/i.test(f.name));
+        const docFiles = files.filter(f => !audioFiles.includes(f));
+        if (audioFiles.length > 0) {
+            await processAudioFileTranscription(audioFiles[0]); // transcribe first audio file
+        }
+        if (docFiles.length > 0) {
+            await ingestRagFiles(docFiles);
+        }
         docInput.value = '';
     });
 }
@@ -3953,6 +3961,11 @@ async function startRecording() {
 
         mediaRecorder.onstop = async () => {
             stream.getTracks().forEach(t => t.stop());
+            // Stop Web Speech API before running Whisper final pass
+            if (liveRecognition) {
+                try { liveRecognition.stop(); } catch (_) {}
+                liveRecognition = null;
+            }
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             await processRecording(audioBlob);
         };
@@ -3972,6 +3985,34 @@ async function startRecording() {
             if (timerEl) timerEl.textContent = formatVoiceTimer(recordingSeconds);
         }, 1000);
 
+        // ── Live interim transcription via Web Speech API ──
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            liveRecognition = new SpeechRecognition();
+            liveRecognition.continuous = true;
+            liveRecognition.interimResults = true;
+            liveRecognition.lang = 'en-US';
+            const baseText = userInput.value ? userInput.value + (userInput.value.endsWith(' ') ? '' : ' ') : '';
+            let confirmedText = baseText;
+            liveRecognition.onresult = (event) => {
+                let interim = '';
+                let final = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const t = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) final += t + ' ';
+                    else interim += t;
+                }
+                if (final) {
+                    confirmedText += final;
+                }
+                userInput.value = confirmedText + interim;
+                autoResizeInput();
+                sendBtn.disabled = false;
+            };
+            liveRecognition.onerror = () => { liveRecognition = null; };
+            try { liveRecognition.start(); } catch (_) { liveRecognition = null; }
+        }
+
     } catch (err) {
         console.error('Mic access failed:', err);
         voiceStatus.style.display = 'flex';
@@ -3989,6 +4030,7 @@ function stopRecording() {
     clearInterval(recordingTimer);
     micBtn.classList.remove('recording');
 }
+
 
 async function processRecording(audioBlob) {
     voiceStatus.style.display = 'flex';
