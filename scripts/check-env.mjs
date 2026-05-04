@@ -34,6 +34,7 @@ const requiredFiles = [
   'scripts/voice-helpers-test.mjs',
   'scripts/settings-helpers-test.mjs',
   'scripts/rag-helpers-test.mjs',
+  'scripts/accessibility-static-test.mjs',
   'scripts/browser-lifecycle-smoke.mjs',
   'scripts/ascii-ui-strings-test.mjs',
   'src/db/database.js',

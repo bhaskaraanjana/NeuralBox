@@ -1168,10 +1168,12 @@ function applyModelUiState() {
     if (isThinkingModel()) {
         thinkToggle.style.display = 'flex';
         thinkToggle.classList.toggle('active', thinkingEnabled);
+        thinkToggle.setAttribute('aria-pressed', thinkingEnabled ? 'true' : 'false');
     } else {
         thinkToggle.style.display = 'none';
         thinkingEnabled = false;
         thinkToggle.classList.remove('active');
+        thinkToggle.setAttribute('aria-pressed', 'false');
     }
 
     if (isThinkingModel() && thinkingEnabled) {
@@ -1650,6 +1652,7 @@ function setGeneratingState(active) {
     });
     sendBtn.classList.toggle('generating', active);
     sendBtn.title = active ? 'Stop generation' : 'Send message';
+    sendBtn.setAttribute('aria-label', active ? 'Stop generation' : 'Send message');
     sendBtn.innerHTML = active ? STOP_ICON_SVG : SEND_ICON_SVG;
     renderDebugPanel();
 }
@@ -1999,6 +2002,7 @@ function toggleWebSearch(enabled, options = {}) {
     const shouldPersist = options.persist !== false;
     webSearchEnabled = enabled;
     webSearchToggle.classList.toggle('active', enabled);
+    webSearchToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     webSearchSetting.checked = enabled;
     updateInputDisclaimer();
 
@@ -2872,10 +2876,12 @@ function escapeHtml(text) {
 
 function openSidebar() {
     sidebar.classList.add('open');
+    sidebarToggle?.setAttribute('aria-expanded', 'true');
 }
 
 function closeSidebar() {
     sidebar.classList.remove('open');
+    sidebarToggle?.setAttribute('aria-expanded', 'false');
 }
 
 // ============================================
@@ -3797,13 +3803,16 @@ settingsBtn.addEventListener('click', () => {
     renderWorkflowModes();
     setSettingsTab(activeSettingsTab, { persist: false });
     settingsPanel.classList.add('open');
+    settingsBtn.setAttribute('aria-expanded', 'true');
 });
 settingsOverlay.addEventListener('click', () => {
     settingsPanel.classList.remove('open');
+    settingsBtn.setAttribute('aria-expanded', 'false');
     saveSettings();
 });
 closeSettings.addEventListener('click', () => {
     settingsPanel.classList.remove('open');
+    settingsBtn.setAttribute('aria-expanded', 'false');
     saveSettings();
 });
 if (settingsTabRegular) {
@@ -3831,6 +3840,7 @@ maxTokensSlider.addEventListener('input', () => {
 clearHistoryBtn.addEventListener('click', () => {
     clearAllConversations();
     settingsPanel.classList.remove('open');
+    settingsBtn.setAttribute('aria-expanded', 'false');
 });
 // Suggestion chips
 bindSuggestionChips();
@@ -4176,6 +4186,7 @@ function openVoiceChat() {
     voiceChatActive = true;
     voiceChatOverlay.classList.add('active');
     voiceChatBtn.classList.add('active');
+    voiceChatBtn.setAttribute('aria-expanded', 'true');
     setVoiceChatState('idle');
     voiceChatText.textContent = 'Tap the orb to start a voice conversation.';
 }
@@ -4184,6 +4195,7 @@ function closeVoiceChat() {
     voiceChatActive = false;
     voiceChatOverlay.classList.remove('active');
     voiceChatBtn.classList.remove('active');
+    voiceChatBtn.setAttribute('aria-expanded', 'false');
     speechSynthesis.cancel();
     if (isRecording) stopRecording();
     setVoiceChatState('idle');
@@ -4335,6 +4347,15 @@ voiceOrb.addEventListener('click', () => {
     if (!voiceChatActive) return;
     const state = voiceOrb.className;
     if (isVoiceOrbIdleClassName(state)) voiceChatListen();
+});
+voiceOrb.addEventListener('keydown', (e) => {
+    if (!voiceChatActive) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const state = voiceOrb.className;
+    if (isVoiceOrbIdleClassName(state)) {
+        e.preventDefault();
+        voiceChatListen();
+    }
 });
 voiceOrb.addEventListener('touchend', (e) => {
     if (!voiceChatActive) return;

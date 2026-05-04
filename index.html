@@ -35,14 +35,14 @@
 
         <div id="download-section">
           <div id="start-model-selector-group" class="model-selector-group" style="margin-bottom: 1rem;"></div>
-          <div id="status-text" class="status-text">Checking device capabilities...</div>
+          <div id="status-text" class="status-text" role="status" aria-live="polite">Checking device capabilities...</div>
           <div class="progress-container">
             <div class="progress-bar">
               <div id="progress-fill" class="progress-fill"></div>
             </div>
             <span id="progress-percent" class="progress-percent">0%</span>
           </div>
-          <button id="start-btn" class="btn-primary" style="display:none; width: 100%;">
+          <button id="start-btn" class="btn-primary" style="display:none; width: 100%;" aria-describedby="cache-status-note">
             <span class="btn-icon">&gt;</span> Load AI Model
           </button>
           <p id="cache-status-note" class="download-note">Powered by WebGPU</p>
@@ -56,14 +56,14 @@
       <aside id="sidebar" class="sidebar">
         <div class="sidebar-header">
           <h3 class="sidebar-title">Conversations</h3>
-          <button id="sidebar-new-chat" class="sidebar-new-btn" title="New conversation">
+          <button id="sidebar-new-chat" class="sidebar-new-btn" title="New conversation" aria-label="Start new conversation">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 5v14M5 12h14" />
             </svg>
           </button>
         </div>
         <div class="sidebar-tools">
-          <input id="conversation-search" type="text" placeholder="Search conversations..." />
+          <input id="conversation-search" type="text" placeholder="Search conversations..." aria-label="Search conversations" />
         </div>
         <div id="conversation-list" class="conversation-list"></div>
         <div class="sidebar-footer">
@@ -76,22 +76,22 @@
       <div class="chat-main">
         <header class="chat-header">
           <div class="header-left">
-            <button id="sidebar-toggle" class="icon-btn" title="Toggle sidebar">
+            <button id="sidebar-toggle" class="icon-btn" title="Toggle sidebar" aria-label="Toggle conversations sidebar" aria-controls="sidebar">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 12h18M3 6h18M3 18h18" />
               </svg>
             </button>
             <h2 class="header-title">Neural<span>Box</span></h2>
             <div id="model-badge" class="model-badge">Qwen3.5-0.8B</div>
-            <div id="hot-swap-status" class="hot-swap-status" style="display:none;"></div>
+            <div id="hot-swap-status" class="hot-swap-status" style="display:none;" role="status" aria-live="polite"></div>
           </div>
           <div class="header-right">
-            <button id="new-chat-btn" class="icon-btn" title="New conversation">
+            <button id="new-chat-btn" class="icon-btn" title="New conversation" aria-label="Start new conversation">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 5v14M5 12h14" />
               </svg>
             </button>
-            <button id="voice-chat-btn" class="icon-btn" title="Voice chat mode">
+            <button id="voice-chat-btn" class="icon-btn" title="Voice chat mode" aria-label="Open voice chat mode" aria-controls="voice-chat-overlay" aria-expanded="false">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
                 <path d="M19 10v2a7 7 0 01-14 0v-2" />
@@ -99,7 +99,7 @@
                 <line x1="8" y1="23" x2="16" y2="23" />
               </svg>
             </button>
-            <button id="settings-btn" class="icon-btn" title="Settings">
+            <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Open settings" aria-controls="settings-panel" aria-expanded="false">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3" />
                 <path
@@ -145,7 +145,7 @@
 
         <div class="input-container">
           <div class="input-wrapper">
-            <button id="web-search-toggle" class="web-toggle" title="Toggle web search">
+            <button id="web-search-toggle" class="web-toggle" title="Toggle web search" aria-label="Toggle web search" aria-pressed="false">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10" />
                 <path
@@ -153,42 +153,42 @@
               </svg>
               <span class="web-toggle-label">Search</span>
             </button>
-            <button id="think-toggle" class="web-toggle" title="Toggle Thinking Mode" style="display:none;">
+            <button id="think-toggle" class="web-toggle" title="Toggle Thinking Mode" style="display:none;" aria-label="Toggle thinking mode" aria-pressed="false">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
                 <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
               </svg>
               <span class="web-toggle-label">Think</span>
             </button>
-            <button id="mic-btn" class="mic-btn" title="Voice input (Whisper)">
+            <button id="mic-btn" class="mic-btn" title="Voice input (Whisper)" aria-label="Record voice input">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
             </button>
-            <button id="image-btn" class="image-btn" title="Attach image (Vision model only)" style="display:none;">
+            <button id="image-btn" class="image-btn" title="Attach image (Vision model only)" style="display:none;" aria-label="Attach image">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
             </button>
-            <input type="file" id="image-input" accept="image/*" style="display:none;" />
-            <button id="doc-btn" class="doc-btn" title="Attach documents for RAG">
+            <input type="file" id="image-input" accept="image/*" style="display:none;" aria-label="Choose image attachment" />
+            <button id="doc-btn" class="doc-btn" title="Attach documents for RAG" aria-label="Attach local documents for RAG">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <path d="M14 3h7v7" />
                 <path d="M10 14L21 3" />
               </svg>
             </button>
-            <input type="file" id="doc-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" />
-            <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
-            <button id="send-btn" class="send-btn" title="Send message" disabled>
+            <input type="file" id="doc-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" aria-label="Choose local documents for RAG" />
+            <textarea id="user-input" placeholder="Ask anything..." rows="1" aria-label="Message NeuralBox"></textarea>
+            <button id="send-btn" class="send-btn" title="Send message" aria-label="Send message" disabled>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
             </button>
           </div>
           <div id="image-preview" class="image-preview" style="display:none;">
             <img id="image-preview-img" src="" alt="Attached image" />
-            <button id="image-preview-clear" class="image-preview-clear" title="Remove image">X</button>
+            <button id="image-preview-clear" class="image-preview-clear" title="Remove image" aria-label="Remove attached image">X</button>
           </div>
           <div id="doc-preview" class="doc-preview" style="display:none;">
             <span id="doc-preview-text">No docs attached</span>
-            <button id="doc-preview-clear" class="image-preview-clear" title="Clear attached docs">Clear</button>
+            <button id="doc-preview-clear" class="image-preview-clear" title="Clear attached docs" aria-label="Clear attached documents">Clear</button>
           </div>
-          <div id="voice-status" class="voice-status" style="display:none;"></div>
+          <div id="voice-status" class="voice-status" style="display:none;" role="status" aria-live="polite"></div>
           <p id="input-disclaimer" class="input-disclaimer">AI runs locally in your browser. Responses may vary in
             quality.</p>
         </div>
@@ -196,12 +196,12 @@
     </div>
 
     <!-- Settings Panel -->
-    <div id="settings-panel" class="settings-panel">
+    <div id="settings-panel" class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
       <div class="settings-overlay" id="settings-overlay"></div>
       <div class="settings-content">
         <div class="settings-header">
-          <h3>Settings</h3>
-          <button id="close-settings" class="icon-btn">
+          <h3 id="settings-title">Settings</h3>
+          <button id="close-settings" class="icon-btn" aria-label="Close settings">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
@@ -248,7 +248,7 @@
           </div>
           <div class="setting-group rag-setting-group" data-setting-level="regular">
             <label>Local RAG (Document Q&amp;A)</label>
-            <div id="rag-dropzone" class="rag-dropzone" tabindex="0">
+            <div id="rag-dropzone" class="rag-dropzone" tabindex="0" role="button" aria-label="Drop local documents here or press Add Docs">
               <div class="rag-dropzone-title">Drop docs here or use Add Docs</div>
               <div class="rag-dropzone-subtitle">Accepted: txt, md, csv, json, code, logs</div>
             </div>
@@ -256,10 +256,10 @@
               <button id="rag-add-btn" class="btn-primary" type="button">Add Docs</button>
               <button id="rag-clear-btn" class="btn-primary" type="button">Clear All</button>
             </div>
-            <input type="file" id="rag-file-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" />
-            <p id="rag-status" class="setting-hint">No local docs loaded.</p>
+            <input type="file" id="rag-file-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" aria-label="Choose local documents for RAG library" />
+            <p id="rag-status" class="setting-hint" role="status" aria-live="polite">No local docs loaded.</p>
             <p id="rag-guidance" class="setting-hint"></p>
-            <input id="rag-search-input" type="text" placeholder="Search loaded docs..." />
+            <input id="rag-search-input" type="text" placeholder="Search loaded docs..." aria-label="Search loaded RAG documents" />
             <div id="rag-doc-list" class="rag-doc-list"></div>
           </div>
           <div class="setting-group" data-setting-level="regular">
@@ -268,7 +268,7 @@
               <button id="export-chats-btn" class="btn-primary" type="button">Export</button>
               <button id="import-chats-btn" class="btn-primary" type="button">Import</button>
             </div>
-            <input type="file" id="import-chats-input" accept="application/json" style="display:none;" />
+            <input type="file" id="import-chats-input" accept="application/json" style="display:none;" aria-label="Choose NeuralBox conversation export JSON" />
             <div class="setting-inline-row" style="margin-top:0.5rem;">
               <button id="export-md-btn" class="btn-primary" type="button">Export Markdown</button>
               <button id="copy-share-btn" class="btn-primary" type="button">Copy Share Text</button>
@@ -302,7 +302,7 @@
               <span class="toggle-switch"></span>
             </label>
             <div class="setting-inline-row" style="margin-top:0.5rem;">
-              <input id="deterministic-seed" type="text" placeholder="Seed (e.g. 42)" />
+              <input id="deterministic-seed" type="text" placeholder="Seed (e.g. 42)" aria-label="Deterministic seed" />
             </div>
             <p class="setting-hint">When enabled, uses reproducible generation behavior (lower randomness) and applies the optional seed when supported.</p>
           </div>
@@ -340,13 +340,13 @@
   </div>
 
   <!-- Voice Chat Overlay -->
-  <div id="voice-chat-overlay" class="voice-chat-overlay">
-    <button id="voice-chat-close" class="voice-chat-close" title="Exit voice chat">X</button>
-    <div id="voice-orb" class="voice-orb">
+  <div id="voice-chat-overlay" class="voice-chat-overlay" role="dialog" aria-modal="true" aria-labelledby="voice-chat-label">
+    <button id="voice-chat-close" class="voice-chat-close" title="Exit voice chat" aria-label="Exit voice chat">X</button>
+    <div id="voice-orb" class="voice-orb" role="button" tabindex="0" aria-label="Start voice recording">
       <span class="voice-orb-icon">Mic</span>
     </div>
     <div id="voice-chat-label" class="voice-chat-label">Tap to start talking</div>
-    <div id="voice-chat-text" class="voice-chat-text"></div>
+    <div id="voice-chat-text" class="voice-chat-text" role="status" aria-live="polite"></div>
   </div>
 
   <script type="module" src="/src/main.js"></script>
