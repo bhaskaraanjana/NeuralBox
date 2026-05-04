@@ -91,6 +91,8 @@ This section documents every tracked repository file.
   - Web-search trigger/error/recovery helper checks.
 - `scripts/accessibility-static-test.mjs`
   - Static accessibility contract checks for dialog semantics, live regions, accessible names, aria state, and focus styling.
+- `scripts/create-builder-club-docx.py`
+  - Reproducible generator for the Builder Club presentation DOCX.
 
 ## Documentation Files (Added)
 
@@ -108,3 +110,4 @@ This section documents every tracked repository file.
 - `doc/CODEBASE_SCAN_2026-05-04.md`
 - `doc/IMPROVEMENT_REPORT_2026-05-04.md`
 - `doc/TEST_REPORT_2026-05-04.md`
+- `doc/NeuralBox_Builder_Club_Presentation.docx`

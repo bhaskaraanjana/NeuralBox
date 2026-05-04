@@ -2,3 +2,4 @@ node_modules/
 dist/
 .cache/
 *.log
+doc/.presentation_assets/
