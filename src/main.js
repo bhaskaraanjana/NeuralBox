@@ -3992,10 +3992,14 @@ async function processRecording(audioBlob) {
         });
 
         voiceStatus.innerHTML = getMicStatusMarkup('transcribing');
-        const text = await whisper.transcribeAudio(audioBlob);
+        const baseText = userInput.value ? userInput.value + (userInput.value.endsWith(' ') ? '' : ' ') : '';
+        const text = await whisper.transcribeAudio(audioBlob, (partial) => {
+            userInput.value = baseText + partial;
+            autoResizeInput();
+        });
 
         if (text) {
-            userInput.value = userInput.value ? userInput.value + ' ' + text : text;
+            userInput.value = baseText + text;
             autoResizeInput();
             sendBtn.disabled = false;
             userInput.focus();
@@ -4123,7 +4127,11 @@ async function voiceChatListen() {
         });
 
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const userText = await whisper.transcribeAudio(audioBlob);
+        const userText = await whisper.transcribeAudio(audioBlob, (partial) => {
+            if (voiceChatActive && partial) {
+                voiceChatText.textContent = buildVoiceChatTranscript(partial);
+            }
+        });
 
         if (!userText || !voiceChatActive) {
             voiceChatText.textContent = 'No speech detected. Tap to try again.';
@@ -4441,7 +4449,24 @@ thinkToggle.addEventListener('click', () => {
     applyModelUiState();
 });
 
+// Prevent accidental page reloads
+window.addEventListener('beforeunload', (e) => {
+    if (engine) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
 // ---- Start ----
 setGeneratingState(false);
 attachTestApiIfEnabled();
+
+// Preload Whisper API in the background
+getWhisperApi().then(api => {
+    // Suppress progress as we just want to cache it in the background
+    api.initWhisper().catch(err => {
+        console.warn('Background whisper preload failed (non-fatal):', err);
+    });
+});
+
 init();
