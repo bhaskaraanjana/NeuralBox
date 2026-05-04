@@ -4,6 +4,11 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Version 1.6.4 Updates
+- Bumped app version to 1.6.4 and exposed it in the settings panel.
+- Rewrote the system prompt in `index.html` to explicitly inform the local model of its web search capabilities.
+- Fixed an accidental deletion of the `<!DOCTYPE html>` declaration.
+
 ### 2026-05-04 - Version 1.6.3 Updates
 - Bumped app version to 1.6.3 and exposed it in the settings panel.
 - Implemented a Light Mode theme toggle using an advanced CSS `invert` and `hue-rotate` trick.
