@@ -1627,7 +1627,7 @@ function getRenderableMessage(role, content) {
 
 function getEffectiveSystemPrompt() {
     const rawPrompt = systemPrompt.value?.trim() || DEFAULT_SYSTEM_PROMPT;
-    if (rawPrompt === LEGACY_SYSTEM_PROMPT) {
+    if (rawPrompt === LEGACY_SYSTEM_PROMPT || (rawPrompt.startsWith("You are NeuralBox") && !rawPrompt.includes("Local RAG"))) {
         return DEFAULT_SYSTEM_PROMPT;
     }
     return rawPrompt;
@@ -3507,7 +3507,7 @@ async function loadSettings() {
     try {
         const settings = await loadSettingsRecord();
         systemPrompt.value = settings.systemPrompt || DEFAULT_SYSTEM_PROMPT;
-        if (systemPrompt.value === LEGACY_SYSTEM_PROMPT) {
+        if (systemPrompt.value === LEGACY_SYSTEM_PROMPT || (systemPrompt.value.startsWith("You are NeuralBox") && !systemPrompt.value.includes("Local RAG"))) {
             systemPrompt.value = DEFAULT_SYSTEM_PROMPT;
         }
         if (settings.temperature != null) {

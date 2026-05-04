@@ -4,6 +4,10 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Version 1.6.7 Updates
+- Bumped app version to 1.6.7 and exposed it in the settings panel.
+- Added an automatic migration script in `main.js` to ensure users upgrading from version 1.6.4 or older have their saved `localStorage` default prompts automatically overridden with the new 1.6.5 default prompt.
+
 ### 2026-05-04 - Version 1.6.6 Updates
 - Bumped app version to 1.6.6 and exposed it in the settings panel.
 - Made the sidebar fully retractable on desktop view via the header toggle button.
