@@ -2724,11 +2724,13 @@ function escapeHtml(text) {
 
 function openSidebar() {
     sidebar.classList.add('open');
+    sidebar.classList.remove('closed');
     sidebarToggle?.setAttribute('aria-expanded', 'true');
 }
 
 function closeSidebar() {
     sidebar.classList.remove('open');
+    sidebar.classList.add('closed');
     sidebarToggle?.setAttribute('aria-expanded', 'false');
 }
 
@@ -3636,7 +3638,12 @@ newChatBtn.addEventListener('click', createConversation);
 
 // Sidebar toggle
 sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+        sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    } else {
+        sidebar.classList.contains('closed') ? openSidebar() : closeSidebar();
+    }
 });
 
 sidebarOverlay.addEventListener('click', closeSidebar);
@@ -4466,7 +4473,7 @@ themeToggleBtn.addEventListener('click', () => {
 });
 
 // Load initial theme
-if (localStorage.getItem('neuralbox-light-theme') === 'true') {
+if (localStorage.getItem('neuralbox-light-theme') !== 'false') {
     document.body.classList.add('light-theme');
 }
 

@@ -4,6 +4,11 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Version 1.6.6 Updates
+- Bumped app version to 1.6.6 and exposed it in the settings panel.
+- Made the sidebar fully retractable on desktop view via the header toggle button.
+- Set Light Mode as the default theme for new users.
+
 ### 2026-05-04 - Version 1.6.5 Updates
 - Bumped app version to 1.6.5 and exposed it in the settings panel.
 - Rewrote all prompt presets in `main.js` (Writer, Coder, Research, Tutor, Summarizer, Product Manager) to explicitly mention and encourage the use of local RAG document ingestion, WebGPU, and real-time web search capabilities.
