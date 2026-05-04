@@ -114,6 +114,7 @@ const userInput = $('#user-input');
 const sendBtn = $('#send-btn');
 const newChatBtn = $('#new-chat-btn');
 const settingsBtn = $('#settings-btn');
+const themeToggleBtn = $('#theme-toggle-btn');
 const settingsPanel = $('#settings-panel');
 const settingsOverlay = $('#settings-overlay');
 const closeSettings = $('#close-settings');
@@ -4456,6 +4457,18 @@ window.addEventListener('beforeunload', (e) => {
         e.returnValue = '';
     }
 });
+
+// Theme toggle handling
+themeToggleBtn.addEventListener('click', () => {
+    document.body.classList.toggle('light-theme');
+    const isLight = document.body.classList.contains('light-theme');
+    localStorage.setItem('neuralbox-light-theme', isLight ? 'true' : 'false');
+});
+
+// Load initial theme
+if (localStorage.getItem('neuralbox-light-theme') === 'true') {
+    document.body.classList.add('light-theme');
+}
 
 // ---- Start ----
 setGeneratingState(false);

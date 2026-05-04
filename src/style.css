@@ -1,3 +1,14 @@
+/* Light Theme (Invert & Hue-Rotate Hack) */
+body.light-theme {
+  filter: invert(1) hue-rotate(180deg);
+  background: #f8f4ee;
+}
+body.light-theme img,
+body.light-theme video,
+body.light-theme canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 :root {
   --bg-0: #070b11;
   --bg-1: #0e1520;

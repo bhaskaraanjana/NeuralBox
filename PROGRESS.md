@@ -4,6 +4,12 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Version 1.6.3 Updates
+- Bumped app version to 1.6.3 and exposed it in the settings panel.
+- Implemented a Light Mode theme toggle using an advanced CSS `invert` and `hue-rotate` trick.
+- Added a persistence layer (`localStorage`) to remember the user's theme preference across sessions.
+- Added a theme toggle button to the main app header.
+
 ### 2026-05-04 - Version 1.6.2 Updates
 - Bumped app version to 1.6.2 and exposed it in the settings panel.
 - Rewrote `README.md` to feature a beautiful, modern layout accurately reflecting the app's latest features (WebGPU, Voice, Trust Layer, Local RAG).
