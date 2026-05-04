@@ -6,6 +6,8 @@ This folder contains implementation-level documentation for the current NeuralBo
 
 - `PROJECT_OVERVIEW.md` - Product goals, runtime model, and startup sequence.
 - `CODEBASE_SCAN_2026-05-04.md` - Fresh repository scan, verified baseline, risk register, and planning candidates.
+- `IMPROVEMENT_REPORT_2026-05-04.md` - Detailed record of the improvement sweep and remaining refactor targets.
+- `TEST_REPORT_2026-05-04.md` - Feature-oriented validation map and latest test results.
 - `FILE_REFERENCE.md` - What every repository file does.
 - `ARCHITECTURE_AND_RUNTIME.md` - System architecture and end-to-end execution flows.
 - `FEATURE_REFERENCE.md` - Detailed feature behavior (chat, web search, voice, vision, thinking mode).

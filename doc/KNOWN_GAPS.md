@@ -25,6 +25,7 @@ This file records implementation observations from the current source snapshot.
 
 - Web-enhanced mode routes requests through allorigins + DuckDuckGo endpoints.
 - If either endpoint rate-limits, changes format, or is blocked, search enrichment can degrade.
+- NeuralBox now classifies common web-search failures and continues locally with inline recovery guidance, but the upstream endpoint dependency remains.
 
 ## 5) VRAM estimation is still heuristic
 
@@ -36,3 +37,13 @@ This file records implementation observations from the current source snapshot.
 
 - Debug events are intentionally in-memory only and capped (current max: 100 events).
 - Events are cleared on page reload; only panel enabled/disabled preference is persisted.
+
+## 7) Main orchestrator size
+
+- `src/main.js` is smaller after extracting the model catalog, but it remains the central app orchestrator.
+- Future architecture work should split settings, conversations, web search runtime, RAG UI, and voice chat into feature controllers.
+
+## 8) Accessibility validation depth
+
+- Static accessibility contracts now exist for labels, live regions, dialog semantics, aria state, keyboard focus, and keyboard activation.
+- A manual screen-reader and keyboard-only pass is still recommended before a public launch.

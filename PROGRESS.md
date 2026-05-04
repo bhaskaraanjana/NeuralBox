@@ -4,6 +4,29 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Codebase superiority sweep
+- Added documentation baseline and improvement/test reports:
+  - `doc/CODEBASE_SCAN_2026-05-04.md`
+  - `doc/IMPROVEMENT_REPORT_2026-05-04.md`
+  - `doc/TEST_REPORT_2026-05-04.md`
+- Cleared dependency audit findings with audited lockfile refresh.
+- Added accessibility contract hardening:
+  - Dialog semantics for settings and voice overlay.
+  - Live regions for startup, hot swap, voice, and RAG status.
+  - Accessible names and aria state for icon/dynamic controls.
+  - Keyboard activation for voice orb and visible focus styling.
+  - New `npm run test:accessibility`.
+- Added web-search recovery helpers:
+  - `src/lib/web-search.js`
+  - Failure classification and inline recovery notices.
+  - New `npm run test:web-search`.
+- Added configurable RAG retrieval profiles:
+  - Precise, Balanced, Broad.
+  - Settings UI, persistence, trust metadata, Markdown export, workbench telemetry, and tests.
+- Extracted model catalog to `src/lib/models.js` with catalog integrity test:
+  - New `npm run test:models`.
+- Validation for individual slices passed during implementation; final full-suite validation is recorded in `doc/TEST_REPORT_2026-05-04.md`.
+
 ### 2026-04-09 - RAG confidence citation feature add
 - Added confidence-aware RAG retrieval output:
   - `src/lib/rag.js` now includes `getRagConfidenceLabel(score, queryTokenCount)` and retrieval output now includes `confidenceLabel`.
@@ -522,3 +545,4 @@ Last Updated: 2026-04-09 (America/St_Johns)
 - Local ASR: `@huggingface/transformers` (Whisper tiny.en)
 - Testing: Node script smoke tests + Playwright dependency available
 - Persistence: IndexedDB with localStorage fallback
+
