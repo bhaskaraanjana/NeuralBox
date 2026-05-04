@@ -1,83 +1,66 @@
-# NeuralBox
+<div align="center">
+  <div style="font-size: 3em; font-weight: bold; margin-bottom: 0.25em;">NeuralBox</div>
+  <p><em>Run a powerful AI chatbot entirely in your browser. No server, no sign-up, no data leaves your device.</em></p>
+</div>
 
-Local-first AI chat in the browser using WebGPU and WebLLM.
+<br />
 
-NeuralBox runs models on-device, stores conversations locally, supports optional web lookup, optional document-grounded responses (RAG), optional voice input, and vision input for supported models.
+NeuralBox is a local-first web application that runs large language models natively in your browser using **WebGPU** and **WebLLM**. It brings the power of state-of-the-art models straight to your hardware while ensuring 100% privacy—no server, no cloud, no subscriptions.
 
-## Current capabilities
+---
 
-- Local chat with streaming responses and perf stats.
-- Model selection:
-  - Manual model selection.
-  - `Auto` mode with per-request routing and hot swap.
-- Vision input for supported models (image attach, paste, drag/drop).
-- Local document attach for RAG (text/code/log-style files).
-- Optional web-enhanced answers (DuckDuckGo via proxy).
-- Voice input (Whisper tiny.en via Transformers.js).
-- Voice chat overlay mode (listen -> generate -> speak loop).
-- Conversation export/import, Markdown export, and share-text copy.
-- Runtime debug panel and workbench panel for diagnostics.
+## ✨ Features
 
-## Tech stack
+- 🔒 **100% Private:** Inference and conversation storage are fully local. Your data never leaves your device.
+- ⚡ **WebGPU Accelerated:** Real-time generation powered by hardware acceleration.
+- 🖼️ **Multimodal Capabilities:** Drag, drop, or paste images for vision analysis (with supported models).
+- 🎙️ **Voice Mode & Whisper ASR:** Enjoy hands-free dictation and a fullscreen Voice Chat mode, powered by localized Transformers.js. Whisper is preloaded and streams text to your screen in real time.
+- 📚 **Local RAG (Document Q&A):** Attach `.md`, `.txt`, `.csv`, `.json`, code, or log files to ground the AI's knowledge base securely on-device with smart citations.
+- 🌐 **Web-Enhanced Mode:** Optional DuckDuckGo-powered web lookups for up-to-date answers.
+- 🛡️ **Trust & Telemetry:** Full visibility into routing decisions, context lengths, and RAG confidence scores via the Trust Layer and Runtime Workbench.
 
-- Vite
-- `@mlc-ai/web-llm`
-- `@huggingface/transformers` (Whisper ASR)
-- Vanilla JavaScript + CSS
+## 🛠️ Technology Stack
 
-## Requirements
+- **[Vite](https://vitejs.dev/)** - Lightning fast dev server & build tool
+- **[@mlc-ai/web-llm](https://webllm.mlc.ai/)** - In-browser LLM inference via WebGPU
+- **[@huggingface/transformers](https://huggingface.co/docs/transformers.js/index)** - Local ASR (Whisper tiny.en)
+- **Vanilla JS + CSS** - Zero framework overhead
 
-- Node.js `>=20 <26`
-- A browser with WebGPU support (latest Chrome/Edge recommended)
+## 📋 Requirements
 
-## Setup
+- **Node.js**: `>=20 <26`
+- **Browser**: A modern browser with WebGPU support enabled (Latest Chrome, Edge, or Firefox).
 
+## 🚀 Getting Started
+
+### 1. Install Dependencies
 ```bash
 npm install
 npm run env:check
 ```
 
-## Run
-
-Default dev server (configured in `vite.config.js`):
-
+### 2. Start the Development Server
 ```bash
 npm run dev
 ```
+> **Note for Local Network Access**: The Vite dev server is configured with `@vitejs/plugin-basic-ssl` to serve HTTPS automatically. This ensures secure contexts (`https://`) are met so that WebGPU features can function perfectly when testing on phones or other computers in your local network.
 
-Override port when needed:
+## 🧪 Testing & Validation
 
+NeuralBox enforces strict reliability and accessibility standards. You can run the test suites locally:
 ```bash
-npm run dev -- --port 5174 --host
-```
-
-## Validate
-
-```bash
-npm run build
 npm run test:stability
 npm run test:rendering
 npm run test:routing
-npm run test:device
-npm run test:rag:web
+npm run test:rag:helpers
+npm run test:accessibility
 ```
 
-## Model catalog
+## 🧠 Model Catalog
 
-Model definitions live in [src/main.js](C:/DEV/NeuralBox/src/main.js) (`MODEL_CATALOG`) and are split in UI as:
+Our curated model definitions are maintained within `src/lib/models.js` and intelligently routed via our custom heuristics. We offer both "Curated" models optimized for general use and "Advanced" models for specialized tasks. *Note: Models are cached securely in IndexedDB after their first download.*
 
-- Curated models (default/recommended path)
-- Advanced models (opt-in)
-
-Use the in-app selector for the canonical, current list.
-
-## Privacy and network behavior
-
-- Inference and conversation storage are local to the browser.
-- Web-enhanced mode and auto web search send the query to DuckDuckGo endpoints (through allorigins proxy).
-- First model load downloads model assets and caches them locally.
-
-## Notes
-
-- Vision support currently includes compatibility workarounds for known WebLLM Phi-3.5 embedding-shape constraints; see `doc/VISION_EMBED_SHAPE_INCIDENT_2026-03-19.md`.
-- RAG document ingestion currently enforces a per-file size cap of 5MB for predictable browser performance.
+---
+<div align="center">
+  Built with privacy in mind.
+</div>

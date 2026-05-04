@@ -4,6 +4,10 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Version 1.6.2 Updates
+- Bumped app version to 1.6.2 and exposed it in the settings panel.
+- Rewrote `README.md` to feature a beautiful, modern layout accurately reflecting the app's latest features (WebGPU, Voice, Trust Layer, Local RAG).
+
 ### 2026-05-04 - Version 1.6.1 Updates
 - Bumped app version to 1.6.1 and exposed it in the settings panel.
 - Configured Vite development server with `@vitejs/plugin-basic-ssl` for local WebGPU testing via HTTPS.
