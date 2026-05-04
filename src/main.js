@@ -59,6 +59,12 @@ import {
     normalizeSettingsTab,
     parseDeterministicSeedInput,
 } from './lib/settings.js';
+import {
+    classifyWebSearchError,
+    getWebSearchNoResultsNotice,
+    getWebSearchRecoveryNotice,
+    shouldAutoWebSearch,
+} from './lib/web-search.js';
 import { renderTrustMetaHtml } from './lib/trust.js';
 let whisperModulePromise = null;
 let whisperApi = null;
@@ -71,6 +77,7 @@ let engine = null;
 let isGenerating = false;
 let webSearchEnabled = false;
 let autoWebSearchEnabled = true;
+let lastWebSearchFailure = null;
 let generationCancelRequested = false;
 let activeGenerationId = 0;
 let conversationSearchQuery = '';
@@ -2064,19 +2071,6 @@ function attachTestApiIfEnabled() {
     };
 }
 
-function shouldAutoWebSearch(query) {
-    const text = String(query || '').trim().toLowerCase();
-    if (!text) return false;
-    if (/^(search web|web search|search the web)\b/.test(text)) return true;
-    if (/\b(today|yesterday|tomorrow|latest|recent|breaking|right now|currently|as of now|this morning|tonight)\b/.test(text)) {
-        return true;
-    }
-    if (/\b(news|headline|war|attack|bomb|strike|election|score|stock|price|weather|earthquake|fired|hired|ceo)\b/.test(text)) {
-        return true;
-    }
-    return false;
-}
-
 function resolveWebSearchQuery(userText, conversation) {
     const raw = String(userText || '').trim();
     if (!raw) return '';
@@ -2130,13 +2124,14 @@ function updateInputDisclaimer() {
 }
 
 async function webSearch(query) {
+    lastWebSearchFailure = null;
     try {
         // Strategy: try DuckDuckGo HTML lite (simpler, better for parsing)
         const searchUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
 
         const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-        if (!response.ok) throw new Error('Search failed');
+        if (!response.ok) throw new Error(`Search endpoint returned HTTP ${response.status}`);
 
         const html = await response.text();
         const results = parseDDGLite(html);
@@ -2149,7 +2144,12 @@ async function webSearch(query) {
         return results.slice(0, 6);
     } catch (err) {
         console.warn('Primary search failed, trying fallback:', err);
-        return await webSearchFallback(query);
+        const primaryFailure = classifyWebSearchError(err);
+        const fallbackResults = await webSearchFallback(query);
+        if (!fallbackResults.length && !lastWebSearchFailure) {
+            lastWebSearchFailure = primaryFailure;
+        }
+        return fallbackResults;
     }
 }
 
@@ -2214,7 +2214,10 @@ async function webSearchFallback(query) {
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
 
         const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!response.ok) return [];
+        if (!response.ok) {
+            lastWebSearchFailure = classifyWebSearchError(`Search fallback returned HTTP ${response.status}`);
+            return [];
+        }
 
         const data = await response.json();
         const results = [];
@@ -2246,6 +2249,7 @@ async function webSearchFallback(query) {
         return results.slice(0, 6);
     } catch (err) {
         console.warn('Fallback search also failed:', err);
+        lastWebSearchFailure = classifyWebSearchError(err);
         return [];
     }
 }
@@ -3098,16 +3102,22 @@ async function sendMessage(text) {
                 routeReason = `${routeReason} | Web lookup ${webMode} (${searchResults.length} results)`;
             } else {
                 routeReason = `${routeReason} | Web lookup ${webMode} (no results)`;
+                const notice = lastWebSearchFailure
+                    ? getWebSearchRecoveryNotice(lastWebSearchFailure, { mode: webMode })
+                    : getWebSearchNoResultsNotice(webMode);
+                setInlineNotice(notice, lastWebSearchFailure ? 'warn' : 'info', 4200);
             }
             pushWorkbenchEvent('web_search', {
                 mode: webMode,
                 query: effectiveSearchQuery,
                 results: searchResults.length,
+                failure: lastWebSearchFailure?.kind || '',
             });
             logRuntimeEvent('web_search', {
                 mode: webMode,
                 query: effectiveSearchQuery,
                 results: searchResults.length,
+                failure: lastWebSearchFailure?.kind || '',
             });
         }
 
