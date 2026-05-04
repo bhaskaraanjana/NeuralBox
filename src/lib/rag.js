@@ -52,10 +52,52 @@ export function getRagConfidenceLabel(score, queryTokenCount = 0) {
     return 'low';
 }
 
-export function retrieveRagChunksFromIndex(ragChunks, query, maxMatches = 4) {
+export const RAG_RETRIEVAL_PROFILES = {
+    precise: {
+        id: 'precise',
+        label: 'Precise',
+        maxMatches: 2,
+        minScore: 4,
+        description: 'Fewer, stronger matches for focused answers.',
+    },
+    balanced: {
+        id: 'balanced',
+        label: 'Balanced',
+        maxMatches: 4,
+        minScore: 1,
+        description: 'Default mix of context size and relevance.',
+    },
+    broad: {
+        id: 'broad',
+        label: 'Broad',
+        maxMatches: 6,
+        minScore: 1,
+        description: 'More context for exploratory or fuzzy questions.',
+    },
+};
+
+export function normalizeRagRetrievalProfile(profileId = 'balanced') {
+    const id = String(profileId || '').trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(RAG_RETRIEVAL_PROFILES, id) ? id : 'balanced';
+}
+
+export function getRagRetrievalProfileConfig(profileId = 'balanced') {
+    return RAG_RETRIEVAL_PROFILES[normalizeRagRetrievalProfile(profileId)];
+}
+
+export function retrieveRagChunksFromIndex(ragChunks, query, options = 4) {
     if (!Array.isArray(ragChunks) || !ragChunks.length) return [];
     const tokens = tokenizeRagQuery(query);
     if (!tokens.length) return [];
+
+    const config = typeof options === 'object' && options !== null
+        ? getRagRetrievalProfileConfig(options.profileId)
+        : null;
+    const maxMatches = config
+        ? Number(options.maxMatches || config.maxMatches)
+        : Number(options || 4);
+    const minScore = config ? Number(config.minScore || 1) : 1;
+
     return ragChunks
         .map((chunk) => {
             const score = getRagMatchScore(tokens, chunk.text);
@@ -65,7 +107,7 @@ export function retrieveRagChunksFromIndex(ragChunks, query, maxMatches = 4) {
                 confidenceLabel: getRagConfidenceLabel(score, tokens.length),
             };
         })
-        .filter((c) => c.score > 0)
+        .filter((c) => c.score >= minScore)
         .sort((a, b) => b.score - a.score)
         .slice(0, maxMatches);
 }

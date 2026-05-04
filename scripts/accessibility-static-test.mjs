@@ -21,6 +21,7 @@ const requiredHtmlContracts = [
   { pattern: /id="send-btn"[^>]*aria-label="Send message"/, message: 'Composer send button needs an accessible name.' },
   { pattern: /id="voice-orb"[^>]*role="button"[^>]*tabindex="0"/, message: 'Voice orb must be keyboard focusable.' },
   { pattern: /id="rag-dropzone"[^>]*role="button"/, message: 'RAG dropzone must expose button semantics.' },
+  { pattern: /id="rag-retrieval-profile"[^>]*aria-label="RAG retrieval profile"/, message: 'RAG retrieval profile select needs an accessible name.' },
   { pattern: /id="conversation-search"[^>]*aria-label="Search conversations"/, message: 'Conversation search input needs an accessible name.' },
   { pattern: /id="user-input"[^>]*aria-label="Message NeuralBox"/, message: 'Composer textarea needs an accessible name.' },
   { pattern: /id="settings-btn"[^>]*aria-expanded="false"/, message: 'Settings button must expose collapsed state.' },

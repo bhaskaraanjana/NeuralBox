@@ -1371,6 +1371,14 @@ textarea:focus-visible {
   margin-bottom: 0.38rem;
 }
 
+.setting-sub-label {
+  display: block;
+  margin-top: 0.55rem;
+  margin-bottom: 0.32rem;
+  color: var(--text-2);
+  font-size: 0.76rem;
+}
+
 .setting-hint {
   margin-top: 0.32rem;
   color: var(--text-3);

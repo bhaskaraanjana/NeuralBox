@@ -20,7 +20,10 @@ import {
 } from './lib/rendering.js';
 import {
     getFileExtension,
+    getRagRetrievalProfileConfig,
     normalizeRagDocText,
+    normalizeRagRetrievalProfile,
+    RAG_RETRIEVAL_PROFILES,
     retrieveRagChunksFromIndex,
     splitTextIntoRagChunks,
 } from './lib/rag.js';
@@ -148,6 +151,7 @@ const ragStatus = $('#rag-status');
 const ragGuidance = $('#rag-guidance');
 const ragDocList = $('#rag-doc-list');
 const ragSearchInput = $('#rag-search-input');
+const ragRetrievalProfileSelect = $('#rag-retrieval-profile');
 const ragDropzone = $('#rag-dropzone');
 const exportMdBtn = $('#export-md-btn');
 const copyShareBtn = $('#copy-share-btn');
@@ -401,6 +405,7 @@ const WORKBENCH_LIMIT = 40;
 let ragDocuments = [];
 let ragChunks = [];
 let ragDocSearchQuery = '';
+let ragRetrievalProfile = 'balanced';
 const RAG_MAX_DOCS = 24;
 const RAG_MAX_CHARS_PER_DOC = 240000;
 const RAG_CHUNK_SIZE = 900;
@@ -535,8 +540,12 @@ function rebuildRagChunkIndex() {
     ragChunks = next;
 }
 
-function retrieveRagChunks(query, maxMatches = RAG_MAX_MATCHES) {
-    return retrieveRagChunksFromIndex(ragChunks, query, maxMatches);
+function retrieveRagChunks(query, maxMatches = null) {
+    const profile = getRagRetrievalProfileConfig(ragRetrievalProfile);
+    return retrieveRagChunksFromIndex(ragChunks, query, {
+        profileId: profile.id,
+        maxMatches: maxMatches || profile.maxMatches,
+    });
 }
 
 function buildRagContext(matches) {
@@ -679,7 +688,17 @@ function renderRagStatus() {
 
 function renderRagGuidance() {
     if (!ragGuidance) return;
-    ragGuidance.textContent = `Best quality with Qwen 3 1.7B+ or larger. Limits: ${RAG_MAX_DOCS} docs, ${formatCompactNumber(RAG_MAX_CHARS_PER_DOC)} chars/doc, ${(RAG_MAX_FILE_BYTES / (1024 * 1024)).toFixed(0)}MB/file.`;
+    const profile = getRagRetrievalProfileConfig(ragRetrievalProfile);
+    ragGuidance.textContent = `Profile: ${profile.label} - ${profile.description} Limits: ${RAG_MAX_DOCS} docs, ${formatCompactNumber(RAG_MAX_CHARS_PER_DOC)} chars/doc, ${(RAG_MAX_FILE_BYTES / (1024 * 1024)).toFixed(0)}MB/file.`;
+}
+
+function renderRagRetrievalProfiles() {
+    if (!ragRetrievalProfileSelect) return;
+    ragRetrievalProfileSelect.innerHTML = Object.values(RAG_RETRIEVAL_PROFILES)
+        .map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.label)} - ${escapeHtml(profile.description)}</option>`)
+        .join('');
+    ragRetrievalProfileSelect.value = normalizeRagRetrievalProfile(ragRetrievalProfile);
+    renderRagGuidance();
 }
 
 function persistRagDocs() {
@@ -1622,6 +1641,7 @@ function buildTrustMeta(payload = {}) {
         webSources: Number(payload.webSources || 0),
         webMode: payload.webMode || 'off',
         ragSources: Number(payload.ragSources || 0),
+        ragProfile: normalizeRagRetrievalProfile(payload.ragProfile || ragRetrievalProfile),
         ragDocNames,
         ragConfidence: String(payload.ragConfidence || 'n/a'),
         ragAvgScore: Number.isFinite(Number(payload.ragAvgScore)) ? Number(payload.ragAvgScore) : null,
@@ -2308,7 +2328,7 @@ async function init() {
     await initDatabase();
     await loadSettings();
     loadRagDocsIntoState(await loadRagDocsRecord());
-    renderRagGuidance();
+    renderRagRetrievalProfiles();
     renderPromptPresets();
     renderWorkflowModes();
     renderWorkbenchPanel();
@@ -3068,13 +3088,15 @@ async function sendMessage(text) {
         let ragMatches = [];
         let ragDocNames = [];
         let ragConfidence = getRagConfidenceSummary([]);
+        const ragProfile = getRagRetrievalProfileConfig(ragRetrievalProfile);
         if (userText && ragChunks.length > 0) {
             ragMatches = retrieveRagChunks(userText);
             if (ragMatches.length > 0) {
                 ragDocNames = Array.from(new Set(ragMatches.map((m) => String(m.docName || '').trim()).filter(Boolean)));
                 ragConfidence = getRagConfidenceSummary(ragMatches);
-                routeReason = `${routeReason} | Local docs (${ragMatches.length} matches from ${ragDocNames.length} docs)`;
+                routeReason = `${routeReason} | Local docs ${ragProfile.label} (${ragMatches.length} matches from ${ragDocNames.length} docs)`;
                 pushWorkbenchEvent('rag_retrieval', {
+                    profile: ragProfile.id,
                     matches: ragMatches.length,
                     docs: ragDocNames.join(', '),
                     confidence: ragConfidence.topConfidence,
@@ -3310,6 +3332,7 @@ async function sendMessage(text) {
             workflow: workflowModeId,
             deterministic: deterministicModeEnabled,
             ragMatches: ragMatches.length,
+            ragProfile: ragProfile.id,
             ragDocNames,
             ragTopConfidence: ragConfidence.topConfidence,
             ragAvgScore: ragConfidence.avgScore,
@@ -3328,6 +3351,7 @@ async function sendMessage(text) {
             webSources: searchResults.length,
             webMode,
             ragSources: ragMatches.length,
+            ragProfile: ragProfile.id,
             ragDocNames,
             ragConfidence: ragConfidence.topConfidence,
             ragAvgScore: ragConfidence.avgScore,
@@ -3554,7 +3578,7 @@ function formatConversationAsMarkdown(conv) {
             const ragDocs = Array.isArray(msg.meta.ragDocNames) && msg.meta.ragDocNames.length
                 ? msg.meta.ragDocNames.join('|')
                 : 'none';
-            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}, rag_docs=${ragDocs}, rag_confidence=${msg.meta.ragConfidence || 'n/a'}_`);
+            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}, rag_docs=${ragDocs}, rag_profile=${msg.meta.ragProfile || 'balanced'}, rag_confidence=${msg.meta.ragConfidence || 'n/a'}_`);
             lines.push('');
         }
     }
@@ -3679,7 +3703,8 @@ async function loadSettings() {
         workbenchEnabled = Boolean(settings.workbenchEnabled);
         trustLayerEnabled = settings.trustLayerEnabled !== false;
         deterministicModeEnabled = Boolean(settings.deterministicModeEnabled);
-    activeSettingsTab = normalizeSettingsTab(settings.activeSettingsTab);
+        activeSettingsTab = normalizeSettingsTab(settings.activeSettingsTab);
+        ragRetrievalProfile = normalizeRagRetrievalProfile(settings.ragRetrievalProfile || ragRetrievalProfile);
         workflowModeId = getWorkflowById(settings.workflowModeId || workflowModeId).id;
         const parsedSeed = parseInt(settings.deterministicSeed, 10);
         deterministicSeed = Number.isFinite(parsedSeed) ? parsedSeed : deterministicSeed;
@@ -3704,6 +3729,7 @@ async function loadSettings() {
         if (deterministicSeedInput) {
             deterministicSeedInput.value = String(deterministicSeed);
         }
+        renderRagRetrievalProfiles();
         renderWorkflowModes();
         if (workflowSelect) {
             workflowSelect.value = workflowModeId;
@@ -3727,6 +3753,7 @@ function saveSettings() {
         trustLayerEnabled: trustLayerEnabled,
         deterministicModeEnabled: deterministicModeEnabled,
         deterministicSeed: deterministicSeed,
+        ragRetrievalProfile: ragRetrievalProfile,
         workflowModeId: workflowModeId,
         activeSettingsTab: activeSettingsTab,
     };
@@ -3956,6 +3983,14 @@ if (ragFileInput) {
 if (ragClearBtn) {
     ragClearBtn.addEventListener('click', () => {
         clearRagDocs();
+    });
+}
+if (ragRetrievalProfileSelect) {
+    ragRetrievalProfileSelect.addEventListener('change', () => {
+        ragRetrievalProfile = normalizeRagRetrievalProfile(ragRetrievalProfileSelect.value);
+        renderRagGuidance();
+        saveSettings();
+        setInlineNotice(`RAG retrieval profile set to ${getRagRetrievalProfileConfig(ragRetrievalProfile).label}.`, 'info', 2200);
     });
 }
 if (ragSearchInput) {
