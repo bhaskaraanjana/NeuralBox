@@ -1,8 +1,58 @@
 import { defineConfig } from 'vite';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-    plugins: [basicSsl()],
+    plugins: [
+        basicSsl(),
+        VitePWA({
+            registerType: 'autoUpdate',
+            includeAssets: ['logo-512.png', 'logo-192.png'],
+            manifest: {
+                name: 'NeuralBox',
+                short_name: 'NeuralBox',
+                description: 'Private AI that runs entirely in your browser. No server, no sign-up.',
+                theme_color: '#070b11',
+                background_color: '#070b11',
+                display: 'standalone',
+                orientation: 'portrait-primary',
+                start_url: '/',
+                icons: [
+                    {
+                        src: '/logo-192.png',
+                        sizes: '192x192',
+                        type: 'image/png',
+                        purpose: 'any maskable',
+                    },
+                    {
+                        src: '/logo-512.png',
+                        sizes: '512x512',
+                        type: 'image/png',
+                        purpose: 'any maskable',
+                    },
+                ],
+            },
+            workbox: {
+                // Cache the app shell and static assets
+                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+                // Don't cache large ML model files — they are fetched from CDNs
+                globIgnores: ['**/node_modules/**', '**/*.wasm'],
+                navigateFallback: 'index.html',
+                runtimeCaching: [
+                    {
+                        // Cache Google Fonts
+                        urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'google-fonts-cache',
+                            expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
+                ],
+            },
+        }),
+    ],
     server: {
         port: 6969,
         host: true,

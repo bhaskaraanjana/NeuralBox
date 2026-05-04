@@ -5,45 +5,54 @@ Last Updated: 2026-04-09 (America/St_Johns)
 ## Session Log
 
 ### 2026-05-04 - Version 1.6.9 Updates
+
 - Bumped app version to 1.6.9 and exposed it in the settings panel.
 - Introduced an "Average Joe" vs "Expert" experience mode selector on app startup.
 - Added logic in `main.js` to intercept startup and prompt new users for their preferred UI complexity.
 - Implemented CSS overrides in `style.css` (`.mode-average-joe`) to elegantly hide advanced options like prompt presets, RAG attachment buttons, workflow selectors, and system debug panels for casual users.
 
 ### 2026-05-04 - Version 1.6.8 Updates
+
 - Bumped app version to 1.6.8 and exposed it in the settings panel.
 - Lowered the default temperature from 0.7 to 0.3 to significantly reduce hallucinations in the small browser-based models.
 
 ### 2026-05-04 - Version 1.6.7 Updates
+
 - Bumped app version to 1.6.7 and exposed it in the settings panel.
 - Added an automatic migration script in `main.js` to ensure users upgrading from version 1.6.4 or older have their saved `localStorage` default prompts automatically overridden with the new 1.6.5 default prompt.
 
 ### 2026-05-04 - Version 1.6.6 Updates
+
 - Bumped app version to 1.6.6 and exposed it in the settings panel.
 - Made the sidebar fully retractable on desktop view via the header toggle button.
 - Set Light Mode as the default theme for new users.
 
 ### 2026-05-04 - Version 1.6.5 Updates
+
 - Bumped app version to 1.6.5 and exposed it in the settings panel.
 - Rewrote all prompt presets in `main.js` (Writer, Coder, Research, Tutor, Summarizer, Product Manager) to explicitly mention and encourage the use of local RAG document ingestion, WebGPU, and real-time web search capabilities.
 - Updated `WORKFLOW_MODES` and `DEFAULT_SYSTEM_PROMPT` in `main.js` to standardize the AI's awareness of its latest multimodal, local-first abilities.
 
 ### 2026-05-04 - Version 1.6.4 Updates
+
 - Bumped app version to 1.6.4 and exposed it in the settings panel.
 - Rewrote the system prompt in `index.html` to explicitly inform the local model of its web search capabilities.
 - Fixed an accidental deletion of the `<!DOCTYPE html>` declaration.
 
 ### 2026-05-04 - Version 1.6.3 Updates
+
 - Bumped app version to 1.6.3 and exposed it in the settings panel.
 - Implemented a Light Mode theme toggle using an advanced CSS `invert` and `hue-rotate` trick.
 - Added a persistence layer (`localStorage`) to remember the user's theme preference across sessions.
 - Added a theme toggle button to the main app header.
 
 ### 2026-05-04 - Version 1.6.2 Updates
+
 - Bumped app version to 1.6.2 and exposed it in the settings panel.
 - Rewrote `README.md` to feature a beautiful, modern layout accurately reflecting the app's latest features (WebGPU, Voice, Trust Layer, Local RAG).
 
 ### 2026-05-04 - Version 1.6.1 Updates
+
 - Bumped app version to 1.6.1 and exposed it in the settings panel.
 - Configured Vite development server with `@vitejs/plugin-basic-ssl` for local WebGPU testing via HTTPS.
 - Added `beforeunload` listener to protect against accidental browser refreshes while the AI model is loaded.
@@ -52,6 +61,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
 - Implemented real-time text streaming for Whisper voice transcriptions.
 
 ### 2026-05-04 - Codebase superiority sweep
+
 - Added documentation baseline and improvement/test reports:
   - `doc/CODEBASE_SCAN_2026-05-04.md`
   - `doc/IMPROVEMENT_REPORT_2026-05-04.md`
@@ -75,6 +85,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
 - Validation for individual slices passed during implementation; final full-suite validation is recorded in `doc/TEST_REPORT_2026-05-04.md`.
 
 ### 2026-04-09 - RAG confidence citation feature add
+
 - Added confidence-aware RAG retrieval output:
   - `src/lib/rag.js` now includes `getRagConfidenceLabel(score, queryTokenCount)` and retrieval output now includes `confidenceLabel`.
 - Added user-facing local citation confidence UI:
@@ -98,6 +109,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` (pass)
 
 ### 2026-04-09 - Wave 2 manual model-switch UX + smoke coverage
+
 - Continued roadmap execution after Wave 1 rehaul with focused model-selection UX cleanup.
 - Updated `src/main.js` model selection flows:
   - Reworked settings model selector to show clear Active / Current mode / Pending mode summaries.
@@ -118,6 +130,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` (pass)
 
 ### 2026-04-09 - Feature roadmap + complete UI rehaul wave kickoff
+
 - Created product roadmap artifact:
   - Added `doc/FEATURE_ROADMAP.md` with themes, milestones, sprint plan, and success metrics.
 - Executed complete UI rehaul pass in `src/style.css`:
@@ -133,6 +146,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` (pass)
 
 ### 2026-04-08 - Voice/settings modularization and mobile/settings UX hardening
+
 - Continued deepscan execution to close remaining architecture + UX checklist gaps.
 - Added new helper modules:
   - `src/lib/voice.js`
@@ -176,6 +190,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` against local preview server (pass)
 
 ### 2026-04-08 - Browser smoke harness for import/export and send-stop lifecycle
+
 - Continued deep-scan execution by adding browser-level lifecycle verification.
 - Added opt-in test API hook in `src/main.js`:
   - New `attachTestApiIfEnabled()` exposes `window.__NB_TEST_API` when `localStorage.neuralbox_test_api=1` or `?nb_test=1`.
@@ -206,6 +221,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` against local preview server on `http://127.0.0.1:4173` (pass)
 
 ### 2026-04-08 - Tap event dedupe helper for mobile interaction stability
+
 - Continued deep-scan execution for mobile interaction correctness and duplicate touch/click handling.
 - Added shared event utility: `src/lib/events.js`
   - `bindTap()` unifies click + touchend handling and suppresses synthetic click duplication after touch.
@@ -231,6 +247,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Generation lifecycle hardening (cancellation + switch fallback)
+
 - Continued deep-scan execution for model-switch fallback and generation cancellation consistency.
 - Added new generation helper module: `src/lib/generation.js`
   - `isGenerationInterrupted()` for cancellation/interruption checks.
@@ -260,6 +277,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Composer lifecycle refactor and coverage
+
 - Continued deep-scan execution on send/stop lifecycle robustness.
 - Added new shared composer helper module: `src/lib/composer.js`
   - `resolvePrimaryComposerAction()` centralizes send vs stop vs no-op behavior.
@@ -287,6 +305,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - UI encoding hardening and ASCII guard
+
 - Continued deep-scan execution on UI corruption risk ("random characters" / mojibake symptoms).
 - Replaced non-ASCII separators in runtime UI strings:
   - `src/main.js`: replaced bullet/em-dash separators with ASCII-safe `|` and `-` in workbench and start-screen status text.
@@ -304,6 +323,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Trust metadata module extraction and validation
+
 - Continued deep-scan execution with focused P1 refactor completion:
   - Extracted trust-layer renderer from `src/main.js` into `src/lib/trust.js`.
   - Updated `src/main.js` to import `renderTrustMetaHtml` from shared trust module.
@@ -322,6 +342,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Stability deepscan execution (P0 start)
+
 - Ran repo-wide deep scan and validated current baseline:
   - `npm run build`
   - `npm run test:stability`
@@ -592,4 +613,3 @@ Last Updated: 2026-04-09 (America/St_Johns)
 - Local ASR: `@huggingface/transformers` (Whisper tiny.en)
 - Testing: Node script smoke tests + Playwright dependency available
 - Persistence: IndexedDB with localStorage fallback
-
