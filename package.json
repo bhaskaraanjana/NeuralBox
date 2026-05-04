@@ -1,6 +1,6 @@
 {
   "name": "neuralbox",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "description": "Run AI in your browser. No server. No sign-up. Private by design.",
   "type": "module",
   "engines": {
