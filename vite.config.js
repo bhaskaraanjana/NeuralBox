@@ -33,11 +33,13 @@ export default defineConfig({
                 ],
             },
             workbox: {
-                // Cache the app shell and static assets
-                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
-                // Don't cache large ML model files — they are fetched from CDNs
-                globIgnores: ['**/node_modules/**', '**/*.wasm'],
+                // Only pre-cache the lightweight app shell — NOT the large ML bundles
+                globPatterns: ['**/*.{css,html,ico,png,svg,woff,woff2}', 'assets/index-*.js', 'assets/whisper-*.js'],
+                // Explicitly exclude large ML model bundles and wasm files
+                globIgnores: ['**/node_modules/**', '**/*.wasm', '**/webllm-*.js', '**/transformers-*.js'],
                 navigateFallback: 'index.html',
+                // Raise the size limit for anything that slips through (default 2 MiB → 10 MiB)
+                maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
                 runtimeCaching: [
                     {
                         // Cache Google Fonts

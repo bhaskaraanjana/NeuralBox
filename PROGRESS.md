@@ -4,6 +4,13 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-04 - Version 1.7.3 Updates
+- Bumped app version to 1.7.3.
+- Fixed Vercel deployment failure caused by Workbox attempting to pre-cache the 6 MB `webllm` bundle (exceeding the 2 MiB default limit).
+- Updated `vite.config.js` Workbox config: tightened `globPatterns` to only capture the app shell, added explicit `globIgnores` for `webllm-*.js` and `transformers-*.js`, and raised `maximumFileSizeToCacheInBytes` to 10 MiB as a safety net.
+- Service worker now pre-caches only 950 KB (app shell only), not the 6 MB ML bundle.
+- Build verified clean locally before push.
+
 ### 2026-05-04 - Version 1.7.2 Updates
 - Bumped app version to 1.7.2.
 - Merged the separate audio-file-transcription button into the existing doc-attach button. The button now accepts all file types: text/code docs (→ RAG) and audio files (→ live-streamed Whisper transcription).
