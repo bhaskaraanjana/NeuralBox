@@ -31,6 +31,7 @@ NeuralBox is a local-first web application that runs large language models nativ
 - **Node.js**: `>=20 <26`
 - **Browser**: A modern browser with WebGPU support enabled (Latest Chrome, Edge, or Firefox) for local AI inference.
 - **Android**: Local chat requires Chrome/Edge on Android with a usable WebGPU adapter, not just the `navigator.gpu` API. If Android cannot provide an adapter, NeuralBox opens Offline Library Mode instead of leaving the chat composer in a silent broken state.
+- **iOS/iPadOS**: The app shell, local library, settings, import/export, and PWA install path are supported. Local model inference only works if the iOS browser session exposes WebGPU and a compatible adapter; otherwise NeuralBox opens Compatibility/Offline Library Mode.
 - **Offline/PWA shell**: Once installed or cached, NeuralBox still opens without internet or WebGPU so you can access settings, local conversations, imports/exports, and the app shell. Model inference still requires WebGPU and a previously available/cached model runtime.
 - **Cached offline inference**: After a model and the WebLLM runtime chunks have been loaded once online, the service worker runtime-caches the ML chunks and WebLLM can reuse its cached model assets offline. Uncached models still need internet for first download.
 
@@ -55,6 +56,7 @@ NeuralBox enforces strict reliability and accessibility standards. You can run t
 npm run test:stability
 npm run test:offline:pwa
 npm run test:android:chat
+npm run test:ios:compat
 npm run test:browser:offline-shell
 npm run test:rendering
 npm run test:routing

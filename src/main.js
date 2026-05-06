@@ -88,11 +88,49 @@ const updateServiceWorker = registerSW({
 const LEGACY_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser via WebGPU. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You can ONLY have text conversations. You CANNOT browse the web, read images, run code, access files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
 const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser via WebGPU. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You have access to real-time web search. If a user asks about current events or if you can browse the web, you should acknowledge that you can and will search the web for up-to-date information automatically. You can read attached local documents via Local RAG. If the active model supports vision, you can analyze user-provided images. You cannot run code or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
 
+function getPlatformInfo() {
+    const ua = String(navigator.userAgent || '');
+    const platform = String(navigator.platform || '');
+    const isIpadDesktopMode = platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
+    const isIOS = /iPad|iPhone|iPod/i.test(ua) || isIpadDesktopMode;
+    const isAndroid = /Android/i.test(ua);
+    const isSafari = /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+    const isStandalonePwa = Boolean(
+        window.matchMedia?.('(display-mode: standalone)')?.matches ||
+        window.navigator?.standalone,
+    );
+
+    return {
+        isIOS,
+        isAndroid,
+        isSafari,
+        isStandalonePwa,
+        deviceMemoryGB: Number(navigator.deviceMemory || 0),
+    };
+}
+
+function safeLocalStorageGet(key, fallback = null) {
+    try {
+        return window.localStorage?.getItem(key) ?? fallback;
+    } catch (_err) {
+        return fallback;
+    }
+}
+
+function safeLocalStorageSet(key, value) {
+    try {
+        window.localStorage?.setItem(key, value);
+    } catch (err) {
+        console.warn('[Storage] localStorage write failed:', err);
+    }
+}
+
 // ---- State ----
 let engine = null;
 let isGenerating = false;
 let webGpuAvailable = false;
 let offlineShellMode = false;
+const platformInfo = getPlatformInfo();
 let webSearchEnabled = false;
 let autoWebSearchEnabled = true;
 let lastWebSearchFailure = null;
@@ -871,7 +909,10 @@ async function detectDeviceCapabilities() {
         webGpuAdapterAvailable: false,
         webGpuUnavailableReason: navigator.gpu
             ? ''
-            : 'This browser session does not expose the WebGPU API.',
+            : platformInfo.isIOS
+                ? 'This iOS browser session does not expose the WebGPU API required for local model inference.'
+                : 'This browser session does not expose the WebGPU API.',
+        platform: platformInfo.isIOS ? 'ios' : (platformInfo.isAndroid ? 'android' : 'desktop'),
     };
 
     try {
@@ -879,7 +920,9 @@ async function detectDeviceCapabilities() {
 
         const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
         if (!adapter) {
-            result.webGpuUnavailableReason = 'This browser exposes WebGPU but could not provide a compatible GPU adapter.';
+            result.webGpuUnavailableReason = platformInfo.isIOS
+                ? 'This iOS browser exposes WebGPU but could not provide a compatible GPU adapter.'
+                : 'This browser exposes WebGPU but could not provide a compatible GPU adapter.';
             return result;
         }
         result.webGpuAdapterAvailable = true;
@@ -2457,6 +2500,31 @@ async function createEngineWithRetry(model, initProgressCallback) {
         }
     }
     throw lastLoadErr || new Error(`Failed to load ${model.name}.`);
+}
+
+function shouldBackgroundPreloadWhisper() {
+    if (platformInfo.isIOS) return false;
+    if (offlineShellMode) return false;
+    if (platformInfo.deviceMemoryGB && platformInfo.deviceMemoryGB < 4) return false;
+    return true;
+}
+
+function scheduleWhisperPreload() {
+    if (!shouldBackgroundPreloadWhisper()) return;
+    const run = () => {
+        getWhisperApi().then(api => {
+            api.initWhisper().catch(err => {
+                console.warn('Background whisper preload failed (non-fatal):', err);
+            });
+        }).catch(err => {
+            console.warn('Background whisper import failed (non-fatal):', err);
+        });
+    };
+    if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(run, { timeout: 5000 });
+    } else {
+        setTimeout(run, 2500);
+    }
 }
 
 // ---- Model Loading ----
@@ -4740,11 +4808,11 @@ window.addEventListener('beforeunload', (e) => {
 themeToggleBtn.addEventListener('click', () => {
     document.body.classList.toggle('light-theme');
     const isLight = document.body.classList.contains('light-theme');
-    localStorage.setItem('neuralbox-light-theme', isLight ? 'true' : 'false');
+    safeLocalStorageSet('neuralbox-light-theme', isLight ? 'true' : 'false');
 });
 
 // Load initial theme
-if (localStorage.getItem('neuralbox-light-theme') !== 'false') {
+if (safeLocalStorageGet('neuralbox-light-theme') !== 'false') {
     document.body.classList.add('light-theme');
 }
 
@@ -4752,12 +4820,12 @@ if (localStorage.getItem('neuralbox-light-theme') !== 'false') {
 setGeneratingState(false);
 attachTestApiIfEnabled();
 
-// Preload Whisper API in the background
-getWhisperApi().then(api => {
-    // Suppress progress as we just want to cache it in the background
-    api.initWhisper().catch(err => {
-        console.warn('Background whisper preload failed (non-fatal):', err);
+init()
+    .then(() => {
+        scheduleWhisperPreload();
+    })
+    .catch((err) => {
+        console.error('Startup failed, opening compatibility shell:', err);
+        setOfflineShellMode(true, `Startup compatibility fallback: ${toUserFriendlyError(err)}`);
+        void showChatScreen();
     });
-});
-
-init();

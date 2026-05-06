@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.6] - 2026-05-06
+
+### Fixed
+- iOS/Safari startup now survives IndexedDB and localStorage failures by falling back to safe storage modes.
+- Theme storage and final app initialization are guarded so the shell still opens in restricted storage contexts.
+- Background Whisper preload is deferred and skipped on iOS to reduce first-load pressure.
+
+### Improved
+- Added iOS-specific WebGPU fallback copy and Apple PWA install metadata.
+
 ## [1.7.5] - 2026-05-06
 
 ### Fixed

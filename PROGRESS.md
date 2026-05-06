@@ -4,6 +4,19 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-06 - Version 1.7.6 iOS Compatibility Fixes
+- Bumped app version to 1.7.6.
+- Hardened storage startup for iOS/Safari:
+  - IndexedDB failures fall back to localStorage
+  - blocked localStorage falls back to in-memory session storage
+  - settings/conversations/model selection/RAG loads return safe defaults instead of aborting startup
+- Wrapped theme localStorage reads/writes so Safari private-mode storage errors do not stop the app.
+- Added final startup compatibility fallback that opens the app shell if initialization throws.
+- Deferred background Whisper preload until after startup and skipped it on iOS to avoid first-load memory/network pressure.
+- Added Apple PWA metadata for Add to Home Screen installs.
+- Added regression coverage:
+  - `npm run test:ios:compat`
+
 ### 2026-05-06 - Version 1.7.5 Android Chat Fixes
 - Bumped app version to 1.7.5.
 - Fixed Android/WebGPU detection so chat startup requires a real `requestAdapter()` result, not only `navigator.gpu`.
