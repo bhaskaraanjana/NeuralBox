@@ -29,7 +29,8 @@ NeuralBox is a local-first web application that runs large language models nativ
 ## 📋 Requirements
 
 - **Node.js**: `>=20 <26`
-- **Browser**: A modern browser with WebGPU support enabled (Latest Chrome, Edge, or Firefox).
+- **Browser**: A modern browser with WebGPU support enabled (Latest Chrome, Edge, or Firefox) for local AI inference.
+- **Offline/PWA shell**: Once installed or cached, NeuralBox still opens without internet or WebGPU so you can access settings, local conversations, imports/exports, and the app shell. Model inference still requires WebGPU and a previously available/cached model runtime.
 
 ## 🚀 Getting Started
 
@@ -50,6 +51,8 @@ npm run dev
 NeuralBox enforces strict reliability and accessibility standards. You can run the test suites locally:
 ```bash
 npm run test:stability
+npm run test:offline:pwa
+npm run test:browser:offline-shell
 npm run test:rendering
 npm run test:routing
 npm run test:rag:helpers

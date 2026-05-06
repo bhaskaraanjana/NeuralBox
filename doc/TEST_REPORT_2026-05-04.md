@@ -18,6 +18,8 @@ All automated checks listed below passed during the sweep.
 | `npm run test:settings` | Settings tab and deterministic seed helpers | Pass |
 | `npm run test:rag:helpers` | RAG normalization, chunking, profiles, retrieval | Pass |
 | `npm run test:web-search` | Web-search trigger/error/recovery helpers | Pass |
+| `npm run test:offline:pwa` | Static offline/PWA shell contracts | Pass |
+| `npm run test:browser:offline-shell` | No-WebGPU browser startup smoke | Pass |
 | `npm run test:accessibility` | Static accessibility contracts | Pass |
 | `npm run test:rendering` | HTML escaping, markdown rendering, URL safety | Pass |
 | `npm run test:routing` | Auto-routing task/model scoring helpers | Pass |
@@ -126,6 +128,21 @@ What is verified:
 - stable creative prompts do not auto-search
 - timeout/network/rate-limit/endpoint/parse errors classify correctly
 - recovery/no-results notices are stable and user-facing
+
+### Offline/PWA Shell
+
+Covered by:
+
+- `npm run test:offline:pwa`
+- `npm run test:browser:offline-shell`
+- `npm run build`
+
+What is verified:
+
+- WebLLM is lazy-loaded and no longer part of the mandatory app-shell import path.
+- No-WebGPU startup enters Offline Library Mode instead of hard-returning.
+- Built PWA output includes service worker and app-shell navigation fallback.
+- Browser smoke masks `navigator.gpu` and verifies the chat shell opens, send is disabled, the model badge explains Offline Library Mode, and settings remain usable.
 
 ### Accessibility
 

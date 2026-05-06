@@ -17,7 +17,8 @@ This file records implementation observations from the current source snapshot.
 
 ## 3) Browser support constraints
 
-- App hard depends on WebGPU for model runtime.
+- Local model inference still depends on WebGPU.
+- The app shell no longer hard-stops when WebGPU is missing; it enters Offline Library Mode for local data/settings/import/export access.
 - Voice features depend on microphone permissions and browser media support.
 - Text-to-speech quality and voice availability depend on platform/browser voice packs.
 

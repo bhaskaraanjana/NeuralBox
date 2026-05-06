@@ -4,6 +4,22 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-06 - Version 1.7.4 Updates
+- Bumped app version to 1.7.4.
+- Fixed the startup path so missing WebGPU no longer blocks the app from loading.
+- Added Offline Library Mode for no-WebGPU/offline shell sessions: the chat shell opens, local conversations/settings/import/export stay accessible, and inference-only controls are disabled.
+- Lazy-loaded WebLLM so the app shell can boot from the PWA cache without needing the large `webllm` runtime chunk.
+- Added explicit PWA service-worker registration with `virtual:pwa-register`.
+- Added regression coverage:
+  - `npm run test:offline:pwa`
+  - `npm run test:browser:offline-shell`
+- Validation run:
+  - `npm run test:offline:pwa` (pass)
+  - `npm run env:check` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run build` (pass)
+  - `npm run test:browser:offline-shell` against preview (pass)
+
 ### 2026-05-04 - Version 1.7.3 Updates
 - Bumped app version to 1.7.3.
 - Fixed Vercel deployment failure caused by Workbox attempting to pre-cache the 6 MB `webllm` bundle (exceeding the 2 MiB default limit).

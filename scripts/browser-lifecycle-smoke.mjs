@@ -69,6 +69,7 @@ await page.waitForFunction(() => {
   const panel = document.querySelector('#settings-panel');
   return Boolean(panel && panel.classList.contains('open'));
 });
+await page.waitForSelector('#model-select', { state: 'attached', timeout: 15000 });
 
 const pendingManualSwitch = await page.evaluate(() => {
   const select = document.querySelector('#model-select');

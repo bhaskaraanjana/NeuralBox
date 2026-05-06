@@ -96,10 +96,17 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
   - `/no_think` when disabled
 - Assistant output parser can render `<think>...</think>` blocks as collapsible details.
 
-## 9) Offline/Cache Behavior
+## 9) Offline/PWA And Cache Behavior
 
-- Model cache check done with `webllm.hasModelInCache`.
-- Start button copy changes based on cache state:
+- The app shell is registered explicitly through `virtual:pwa-register`.
+- WebLLM is lazy-loaded only when model actions need it; the app shell no longer statically imports the large WebLLM chunk.
+- If WebGPU is unavailable, startup enters Offline Library Mode instead of returning early:
+  - chat shell opens automatically
+  - local conversations/settings/RAG metadata remain accessible
+  - import/export and settings continue to work
+  - inference, image analysis, and voice-chat generation controls are disabled
+- Model cache check is only attempted when WebGPU is available and uses `webllm.hasModelInCache`.
+- Start button copy changes based on cache state when inference is available:
   - cached model -> start immediately
   - uncached model -> download then start
 

@@ -2,8 +2,8 @@
 // NeuralBox - Main Application
 // Multi-conversation support
 // ============================================
-import * as webllm from '@mlc-ai/web-llm';
 import { MODEL_CATALOG } from './lib/models.js';
+import { registerSW } from 'virtual:pwa-register';
 import {
     initDatabase,
     loadSettingsRecord,
@@ -72,6 +72,18 @@ import {
 import { renderTrustMetaHtml } from './lib/trust.js';
 let whisperModulePromise = null;
 let whisperApi = null;
+let webllmModulePromise = null;
+let webllmApi = null;
+
+const updateServiceWorker = registerSW({
+    immediate: true,
+    onOfflineReady() {
+        console.info('[PWA] NeuralBox app shell is cached for offline use.');
+    },
+    onNeedRefresh() {
+        console.info('[PWA] A new NeuralBox version is available.');
+    },
+});
 
 const LEGACY_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser via WebGPU. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You can ONLY have text conversations. You CANNOT browse the web, read images, run code, access files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
 const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser via WebGPU. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You have access to real-time web search. If a user asks about current events or if you can browse the web, you should acknowledge that you can and will search the web for up-to-date information automatically. You can read attached local documents via Local RAG. If the active model supports vision, you can analyze user-provided images. You cannot run code or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
@@ -79,6 +91,8 @@ const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running
 // ---- State ----
 let engine = null;
 let isGenerating = false;
+let webGpuAvailable = false;
+let offlineShellMode = false;
 let webSearchEnabled = false;
 let autoWebSearchEnabled = true;
 let lastWebSearchFailure = null;
@@ -1002,13 +1016,26 @@ function applyModelUiState() {
     const capabilityLabel = getModelCapabilitiesLabel(model);
     const modelBadge = $('#model-badge');
     if (modelBadge) {
-        modelBadge.textContent = isAutoModelSelected()
+        modelBadge.textContent = offlineShellMode
+            ? 'Offline Library Mode'
+            : isAutoModelSelected()
             ? `Auto | ${model.name}`
             : model.name;
         modelBadge.title = `Capabilities: ${capabilityLabel}`;
     }
 
-    if (isVisionModel()) {
+    if (offlineShellMode) {
+        imageBtn.style.display = 'none';
+        thinkToggle.style.display = 'none';
+        thinkingEnabled = false;
+        thinkToggle.classList.remove('active');
+        thinkToggle.setAttribute('aria-pressed', 'false');
+        if (micBtn) micBtn.disabled = true;
+        if (voiceChatBtn) voiceChatBtn.disabled = true;
+        clearPendingImage();
+        userInput.placeholder = 'Offline Library Mode: inference needs WebGPU.';
+        sendBtn.disabled = true;
+    } else if (isVisionModel()) {
         imageBtn.style.display = 'flex';
     } else {
         const hadImage = Boolean(pendingImage);
@@ -1019,7 +1046,7 @@ function applyModelUiState() {
         }
     }
 
-    if (isThinkingModel()) {
+    if (!offlineShellMode && isThinkingModel()) {
         thinkToggle.style.display = 'flex';
         thinkToggle.classList.toggle('active', thinkingEnabled);
         thinkToggle.setAttribute('aria-pressed', thinkingEnabled ? 'true' : 'false');
@@ -1030,12 +1057,17 @@ function applyModelUiState() {
         thinkToggle.setAttribute('aria-pressed', 'false');
     }
 
-    if (isThinkingModel() && thinkingEnabled) {
+    if (!offlineShellMode && isThinkingModel() && thinkingEnabled) {
         userInput.placeholder = 'Ask anything... (Thinking mode enabled)';
-    } else if (isVisionModel()) {
+    } else if (!offlineShellMode && isVisionModel()) {
         userInput.placeholder = 'Ask anything... (you can attach images!)';
-    } else {
+    } else if (!offlineShellMode) {
         userInput.placeholder = 'Ask anything...';
+    }
+
+    if (!offlineShellMode) {
+        if (micBtn) micBtn.disabled = false;
+        if (voiceChatBtn) voiceChatBtn.disabled = false;
     }
 
     updateInputDisclaimer();
@@ -1498,9 +1530,37 @@ async function getWhisperApi() {
     return whisperApi;
 }
 
+async function getWebLlmApi() {
+    if (webllmApi) return webllmApi;
+    if (!webllmModulePromise) {
+        webllmModulePromise = import('@mlc-ai/web-llm');
+    }
+    webllmApi = await webllmModulePromise;
+    return webllmApi;
+}
+
+function setOfflineShellMode(enabled, reason = '') {
+    offlineShellMode = Boolean(enabled);
+    if (offlineShellMode) {
+        engine = null;
+        if (webgpuError) {
+            webgpuError.style.display = 'block';
+            webgpuError.innerHTML = `
+                <div class="error-icon">!</div>
+                <h3>Offline Library Mode</h3>
+                <p>${escapeHtml(reason || 'WebGPU is not available, so local model inference is disabled on this device/browser.')}</p>
+                <p class="error-hint">You can still open NeuralBox, browse local conversations, manage settings, export/import chats, and keep the PWA shell available offline.</p>
+            `;
+        }
+        if (downloadSection) {
+            downloadSection.style.display = 'block';
+        }
+    }
+}
+
 function setGeneratingState(active) {
     isGenerating = active;
-    sendBtn.disabled = shouldDisableSendButton({
+    sendBtn.disabled = offlineShellMode || shouldDisableSendButton({
         isGenerating: active,
         inputText: userInput.value,
         hasPendingImage: Boolean(pendingImage),
@@ -1517,7 +1577,7 @@ function handleComposerPrimaryAction() {
         isGenerating,
         inputText: userInput.value,
         hasPendingImage: Boolean(pendingImage),
-        hasEngine: Boolean(engine),
+        hasEngine: Boolean(engine) && !offlineShellMode,
     });
     if (action === 'cancel') {
         requestGenerationCancel();
@@ -1951,6 +2011,12 @@ function updateInputDisclaimer() {
     const ragLabel = ragDocuments.length > 0
         ? ` Local docs: ${ragDocuments.length} indexed.`
         : ' Attach documents with the Docs button for grounded answers.';
+    if (offlineShellMode) {
+        inputDisclaimer.textContent = `Offline Library Mode: local inference is disabled because WebGPU is unavailable. You can still browse, import/export, and manage local data.${ragLabel}`;
+        inputDisclaimer.classList.add('notice-warn');
+        inputDisclaimer.classList.remove('web-active', 'notice-error', 'notice-info');
+        return;
+    }
     if (webSearchEnabled) {
         inputDisclaimer.textContent = `Web-Enhanced mode is on. Search queries are sent to DuckDuckGo. Active model supports: ${capabilityLabel}.${ragLabel}`;
         inputDisclaimer.classList.add('web-active');
@@ -2147,12 +2213,6 @@ function renderSourceCitations(results, container) {
 
 // ---- Init ----
 async function init() {
-    if (!navigator.gpu) {
-        webgpuError.style.display = 'block';
-        downloadSection.style.display = 'none';
-        return;
-    }
-
     await initDatabase();
     await loadSettings();
     loadRagDocsIntoState(await loadRagDocsRecord());
@@ -2162,7 +2222,8 @@ async function init() {
     renderWorkbenchPanel();
 
     // Detect device capabilities and auto-select model
-    statusText.textContent = 'Detecting device capabilities...';
+    webGpuAvailable = Boolean(navigator.gpu);
+    statusText.textContent = webGpuAvailable ? 'Detecting device capabilities...' : 'Opening offline library mode...';
     deviceCapabilities = await detectDeviceCapabilities();
     const recommended = autoSelectModel(deviceCapabilities);
 
@@ -2175,8 +2236,14 @@ async function init() {
     }
     selectedModelId = isAutoModelSelected() ? recommended.id : modelSelectionId;
 
+    if (!webGpuAvailable) {
+        setOfflineShellMode(true, 'This browser session does not expose WebGPU. NeuralBox will still open so your installed/offline app shell, settings, conversations, exports, and local library remain accessible.');
+    }
+
     applyModelUiState();
     logRuntimeEvent('app_init', {
+        webGpuAvailable,
+        offlineShellMode,
         gpu: deviceCapabilities?.gpuName || 'unknown',
         vramMB: deviceCapabilities?.vramMB || 0,
         vramSource: deviceCapabilities?.vramEstimateSource || 'unknown',
@@ -2190,11 +2257,29 @@ async function init() {
     // Render the initial model selector on the loading screen
     renderStartModelSelector(deviceCapabilities, recommended);
 
+    if (!webGpuAvailable) {
+        renderModelSelector(deviceCapabilities, recommended);
+        statusText.textContent = 'Offline Library Mode ready.';
+        progressFill.style.width = '100%';
+        progressPercent.textContent = 'Offline';
+        startBtn.style.display = 'inline-flex';
+        startBtn.textContent = 'Open Offline Library';
+        startBtn.addEventListener('click', () => void showChatScreen());
+        startBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            void showChatScreen();
+        });
+        setTimeout(() => {
+            void showChatScreen();
+        }, 700);
+        return;
+    }
+
+    // Populate model selector in settings before any async cache/runtime checks.
+    renderModelSelector(deviceCapabilities, recommended);
+
     // Check cache and update UI
     await updateStartScreenUi(deviceCapabilities, recommended);
-
-    // Populate model selector in settings
-    renderModelSelector(deviceCapabilities, recommended);
 
     startBtn.addEventListener('click', loadModel);
     startBtn.addEventListener('touchend', (e) => {
@@ -2264,9 +2349,21 @@ async function updateStartScreenUi(capabilities, recommended) {
     
     statusText.innerHTML = `Checking cache state...`;
     startBtn.style.display = 'none';
+
+    if (!webGpuAvailable) {
+        const noteEl = document.getElementById('cache-status-note');
+        if (noteEl) {
+            noteEl.innerHTML = 'WebGPU is unavailable. Inference is disabled, but the installed app shell and local data still open offline.';
+        }
+        statusText.innerHTML = `Offline Library Mode for <strong>${displayName}</strong>`;
+        startBtn.textContent = 'Open Offline Library';
+        startBtn.style.display = 'inline-flex';
+        return;
+    }
     
     let isCached = false;
     try {
+        const webllm = await getWebLlmApi();
         isCached = await webllm.hasModelInCache(selectedModel.id);
     } catch(err) {
         console.warn('Cache check failed:', err);
@@ -2290,6 +2387,11 @@ async function updateStartScreenUi(capabilities, recommended) {
 
 // ---- Model Loading ----
 async function loadModel() {
+    if (!webGpuAvailable || offlineShellMode) {
+        setOfflineShellMode(true, 'WebGPU is unavailable, so local model inference cannot start in this browser session.');
+        await showChatScreen();
+        return;
+    }
     startBtn.style.display = 'none';
     const targetModel = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
     selectedModelId = targetModel.id;
@@ -2316,6 +2418,7 @@ async function loadModel() {
         let lastLoadErr = null;
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
+                const webllm = await getWebLlmApi();
                 engine = await webllm.CreateMLCEngine(targetModel.id, {
                     initProgressCallback,
                 });
@@ -3985,7 +4088,7 @@ async function startRecording() {
             if (timerEl) timerEl.textContent = formatVoiceTimer(recordingSeconds);
         }, 1000);
 
-        // ── Live interim transcription via Web Speech API ──
+        // Live interim transcription via Web Speech API.
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRecognition) {
             liveRecognition = new SpeechRecognition();

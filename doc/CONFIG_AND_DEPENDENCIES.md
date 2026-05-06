@@ -5,7 +5,7 @@
 ```json
 {
   "name": "neuralbox",
-  "version": "1.6.0",
+  "version": "1.7.4",
   "type": "module",
   "engines": {
     "node": ">=20 <26"
@@ -28,6 +28,8 @@
     "test:settings": "node scripts/settings-helpers-test.mjs",
     "test:rag:helpers": "node scripts/rag-helpers-test.mjs",
     "test:web-search": "node scripts/web-search-helpers-test.mjs",
+    "test:offline:pwa": "node scripts/offline-pwa-shell-test.mjs",
+    "test:browser:offline-shell": "node scripts/offline-shell-browser-smoke.mjs",
     "test:accessibility": "node scripts/accessibility-static-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs",
@@ -72,6 +74,10 @@
   - Pure RAG helper checks for normalization, chunking, token scoring, retrieval profiles, retrieval, and extension parsing.
 - `npm run test:web-search`
   - Web-search trigger detection, recoverable error classification, and user-facing recovery notice checks.
+- `npm run test:offline:pwa`
+  - Static PWA/offline shell checks that WebLLM is lazy-loaded and no-WebGPU startup does not hard-return.
+- `npm run test:browser:offline-shell`
+  - Playwright smoke that masks WebGPU and verifies the app opens into Offline Library Mode.
 - `npm run test:accessibility`
   - Static accessibility checks for dialog semantics, live regions, accessible names, aria state, and focus-visible styling.
 - `npm run test:ascii-ui`

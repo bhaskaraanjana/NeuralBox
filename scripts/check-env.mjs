@@ -37,6 +37,8 @@ const requiredFiles = [
   'scripts/settings-helpers-test.mjs',
   'scripts/rag-helpers-test.mjs',
   'scripts/web-search-helpers-test.mjs',
+  'scripts/offline-pwa-shell-test.mjs',
+  'scripts/offline-shell-browser-smoke.mjs',
   'scripts/accessibility-static-test.mjs',
   'scripts/model-catalog-test.mjs',
   'scripts/browser-lifecycle-smoke.mjs',
