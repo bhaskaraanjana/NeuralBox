@@ -10,6 +10,10 @@ Last Updated: 2026-04-09 (America/St_Johns)
 - Added Offline Library Mode for no-WebGPU/offline shell sessions: the chat shell opens, local conversations/settings/import/export stay accessible, and inference-only controls are disabled.
 - Lazy-loaded WebLLM so the app shell can boot from the PWA cache without needing the large `webllm` runtime chunk.
 - Added explicit PWA service-worker registration with `virtual:pwa-register`.
+- Added follow-up runtime caching for cached offline inference:
+  - same-origin `webllm` and `transformers` chunks now use CacheFirst after first successful online use
+  - same-origin runtime WASM files now use CacheFirst after first successful online use
+  - app-shell install remains lightweight because these heavy files are not precached
 - Added regression coverage:
   - `npm run test:offline:pwa`
   - `npm run test:browser:offline-shell`

@@ -31,6 +31,7 @@ NeuralBox is a local-first web application that runs large language models nativ
 - **Node.js**: `>=20 <26`
 - **Browser**: A modern browser with WebGPU support enabled (Latest Chrome, Edge, or Firefox) for local AI inference.
 - **Offline/PWA shell**: Once installed or cached, NeuralBox still opens without internet or WebGPU so you can access settings, local conversations, imports/exports, and the app shell. Model inference still requires WebGPU and a previously available/cached model runtime.
+- **Cached offline inference**: After a model and the WebLLM runtime chunks have been loaded once online, the service worker runtime-caches the ML chunks and WebLLM can reuse its cached model assets offline. Uncached models still need internet for first download.
 
 ## 🚀 Getting Started
 

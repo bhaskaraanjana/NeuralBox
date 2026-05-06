@@ -33,16 +33,41 @@ export default defineConfig({
                 ],
             },
             workbox: {
-                // Only pre-cache the lightweight app shell — NOT the large ML bundles
+                // Only pre-cache the lightweight app shell, not the large ML bundles.
                 globPatterns: ['**/*.{css,html,ico,png,svg,woff,woff2}', 'assets/index-*.js', 'assets/whisper-*.js'],
-                // Explicitly exclude large ML model bundles and wasm files
+                // Large ML runtime chunks are cached after first use instead of during install.
                 globIgnores: ['**/node_modules/**', '**/*.wasm', '**/webllm-*.js', '**/transformers-*.js'],
                 navigateFallback: 'index.html',
-                // Raise the size limit for anything that slips through (default 2 MiB → 10 MiB)
                 maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
                 runtimeCaching: [
                     {
-                        // Cache Google Fonts
+                        // Cache heavy same-origin ML runtime chunks after first successful online use.
+                        urlPattern: ({ url, sameOrigin }) => (
+                            sameOrigin &&
+                            /\/assets\/(webllm|transformers)-.*\.js$/.test(url.pathname)
+                        ),
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'neuralbox-ml-runtime',
+                            expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 30 },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
+                    {
+                        // Cache optional same-origin runtime WASM files after first successful use.
+                        urlPattern: ({ url, sameOrigin }) => (
+                            sameOrigin &&
+                            /\/assets\/.*\.wasm$/.test(url.pathname)
+                        ),
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'neuralbox-runtime-wasm',
+                            expiration: { maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 30 },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
+                    {
+                        // Cache Google Fonts.
                         urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
                         handler: 'CacheFirst',
                         options: {

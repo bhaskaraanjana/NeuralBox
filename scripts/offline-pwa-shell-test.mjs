@@ -18,6 +18,9 @@ assert(/if \(!webGpuAvailable\)\s*{\s*setOfflineShellMode/.test(mainJs), 'Startu
 assert(!/if \(!navigator\.gpu\)\s*{\s*webgpuError\.style\.display = 'block';\s*downloadSection\.style\.display = 'none';\s*return;/.test(mainJs), 'Startup must not hard-return before app initialization when WebGPU is missing.');
 assert(/Open Offline Library/.test(mainJs), 'No-WebGPU startup should expose an offline-library entry point.');
 assert(/globIgnores: \[[^\]]+'\*\*\/webllm-\*\.js'/.test(viteConfig), 'PWA precache should continue excluding the large WebLLM chunk.');
+assert(/cacheName: 'neuralbox-ml-runtime'/.test(viteConfig), 'ML runtime chunks should be runtime cached after first use.');
+assert(viteConfig.includes('(webllm|transformers)-.*\\.js$'), 'Runtime cache should cover WebLLM and Transformers chunks.');
+assert(/cacheName: 'neuralbox-runtime-wasm'/.test(viteConfig), 'Runtime WASM files should be runtime cached after first use.');
 assert(/navigateFallback: 'index.html'/.test(viteConfig), 'PWA should provide app-shell navigation fallback.');
 
 console.log('Offline PWA shell test passed.');

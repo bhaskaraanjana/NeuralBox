@@ -8,6 +8,7 @@
   - model inference controls stay disabled until WebGPU is available
 - Lazy-loaded `@mlc-ai/web-llm` instead of statically importing it from the app shell.
 - Added explicit PWA service-worker registration via `virtual:pwa-register`.
+- Added runtime CacheFirst routes for same-origin ML runtime chunks (`webllm`, `transformers`, and WASM) so cached model inference can work offline after first successful online use.
 - Added offline/PWA regression coverage:
   - `npm run test:offline:pwa`
   - `npm run test:browser:offline-shell`
