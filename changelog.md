@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.5] - 2026-05-06
+
+### Fixed
+- Android/WebGPU startup now verifies a usable GPU adapter before enabling local inference.
+- Chat composer state no longer gets force-enabled on mobile when no model engine is loaded.
+- Model startup retries with the smallest text model after compatible GPU/memory load failures.
+
 ## [1.6.0] - 2026-04-08
 
 ### Fixed

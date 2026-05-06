@@ -867,13 +867,23 @@ async function detectDeviceCapabilities() {
         gpuName: 'Unknown',
         gpuClass: 'unknown',
         vramEstimateSource: 'none',
+        webGpuApiAvailable: Boolean(navigator.gpu),
+        webGpuAdapterAvailable: false,
+        webGpuUnavailableReason: navigator.gpu
+            ? ''
+            : 'This browser session does not expose the WebGPU API.',
     };
 
     try {
         if (!navigator.gpu) return result;
 
         const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-        if (!adapter) return result;
+        if (!adapter) {
+            result.webGpuUnavailableReason = 'This browser exposes WebGPU but could not provide a compatible GPU adapter.';
+            return result;
+        }
+        result.webGpuAdapterAvailable = true;
+        result.webGpuUnavailableReason = '';
 
         let info = adapter.info || {};
         if ((!info || !info.description) && typeof adapter.requestAdapterInfo === 'function') {
@@ -903,6 +913,7 @@ async function detectDeviceCapabilities() {
 
     } catch (err) {
         console.warn('GPU detection failed:', err);
+        result.webGpuUnavailableReason = `GPU detection failed: ${err?.message || err || 'unknown error'}`;
     }
 
     return result;
@@ -1034,7 +1045,7 @@ function applyModelUiState() {
         if (voiceChatBtn) voiceChatBtn.disabled = true;
         clearPendingImage();
         userInput.placeholder = 'Offline Library Mode: inference needs WebGPU.';
-        sendBtn.disabled = true;
+        updateComposerSendState();
     } else if (isVisionModel()) {
         imageBtn.style.display = 'flex';
     } else {
@@ -1560,11 +1571,7 @@ function setOfflineShellMode(enabled, reason = '') {
 
 function setGeneratingState(active) {
     isGenerating = active;
-    sendBtn.disabled = offlineShellMode || shouldDisableSendButton({
-        isGenerating: active,
-        inputText: userInput.value,
-        hasPendingImage: Boolean(pendingImage),
-    });
+    updateComposerSendState();
     sendBtn.classList.toggle('generating', active);
     sendBtn.title = active ? 'Stop generation' : 'Send message';
     sendBtn.setAttribute('aria-label', active ? 'Stop generation' : 'Send message');
@@ -1572,12 +1579,25 @@ function setGeneratingState(active) {
     renderDebugPanel();
 }
 
+function isComposerRuntimeReady() {
+    return Boolean(engine) && !offlineShellMode;
+}
+
+function updateComposerSendState() {
+    const runtimeUnavailable = !isGenerating && !isComposerRuntimeReady();
+    sendBtn.disabled = runtimeUnavailable || shouldDisableSendButton({
+        isGenerating,
+        inputText: userInput.value,
+        hasPendingImage: Boolean(pendingImage),
+    });
+}
+
 function handleComposerPrimaryAction() {
     const action = resolvePrimaryComposerAction({
         isGenerating,
         inputText: userInput.value,
         hasPendingImage: Boolean(pendingImage),
-        hasEngine: Boolean(engine) && !offlineShellMode,
+        hasEngine: isComposerRuntimeReady(),
     });
     if (action === 'cancel') {
         requestGenerationCancel();
@@ -1585,6 +1605,16 @@ function handleComposerPrimaryAction() {
     }
     if (action === 'send') {
         sendMessage(userInput.value);
+        return;
+    }
+    if (userInput.value.trim() || pendingImage) {
+        setInlineNotice(
+            offlineShellMode
+                ? 'Chat generation needs WebGPU on this device/browser. Local library tools still work.'
+                : 'Model is not loaded yet. Start a model before sending a chat message.',
+            'warn',
+            3200,
+        );
     }
 }
 
@@ -2221,10 +2251,11 @@ async function init() {
     renderWorkflowModes();
     renderWorkbenchPanel();
 
-    // Detect device capabilities and auto-select model
-    webGpuAvailable = Boolean(navigator.gpu);
-    statusText.textContent = webGpuAvailable ? 'Detecting device capabilities...' : 'Opening offline library mode...';
+    // Detect device capabilities and auto-select model.
+    const browserHasWebGpuApi = Boolean(navigator.gpu);
+    statusText.textContent = browserHasWebGpuApi ? 'Detecting device capabilities...' : 'Opening offline library mode...';
     deviceCapabilities = await detectDeviceCapabilities();
+    webGpuAvailable = Boolean(deviceCapabilities.webGpuAdapterAvailable);
     const recommended = autoSelectModel(deviceCapabilities);
 
     // Check if user has a saved model preference (manual model or auto)
@@ -2237,7 +2268,10 @@ async function init() {
     selectedModelId = isAutoModelSelected() ? recommended.id : modelSelectionId;
 
     if (!webGpuAvailable) {
-        setOfflineShellMode(true, 'This browser session does not expose WebGPU. NeuralBox will still open so your installed/offline app shell, settings, conversations, exports, and local library remain accessible.');
+        setOfflineShellMode(
+            true,
+            `${deviceCapabilities.webGpuUnavailableReason || 'WebGPU is unavailable in this browser session.'} NeuralBox will still open so your installed/offline app shell, settings, conversations, exports, and local library remain accessible.`,
+        );
     }
 
     applyModelUiState();
@@ -2385,6 +2419,46 @@ async function updateStartScreenUi(capabilities, recommended) {
     startBtn.style.display = 'inline-flex';
 }
 
+function getCompactFallbackModel() {
+    return MODEL_CATALOG
+        .filter((m) => !m.vision)
+        .slice()
+        .sort((a, b) => a.vramMB - b.vramMB)[0] || MODEL_CATALOG[0];
+}
+
+function shouldTryCompactModelFallback(err, attemptedModel, fallbackModel) {
+    if (!fallbackModel || fallbackModel.id === attemptedModel.id) return false;
+    const text = String(err?.message || err || '').toLowerCase();
+    return /memory|outofmemory|allocation|adapter|device|gpu|unsupported|compile|shader/.test(text);
+}
+
+async function createEngineWithRetry(model, initProgressCallback) {
+    let lastLoadErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const webllm = await getWebLlmApi();
+            const nextEngine = await webllm.CreateMLCEngine(model.id, {
+                initProgressCallback,
+            });
+            lastLoadErr = null;
+            return nextEngine;
+        } catch (loadErr) {
+            lastLoadErr = loadErr;
+            if (attempt === 0 && isRetryableGenerationError(loadErr)) {
+                reliabilityStats.recoveries += 1;
+                logRuntimeEvent('model_load_retry', {
+                    modelId: model.id,
+                    reason: String(loadErr?.message || loadErr || ''),
+                });
+                statusText.textContent = `Load hiccup detected. Retrying ${model.name}...`;
+                continue;
+            }
+            throw loadErr;
+        }
+    }
+    throw lastLoadErr || new Error(`Failed to load ${model.name}.`);
+}
+
 // ---- Model Loading ----
 async function loadModel() {
     if (!webGpuAvailable || offlineShellMode) {
@@ -2395,7 +2469,8 @@ async function loadModel() {
     startBtn.style.display = 'none';
     const targetModel = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
     selectedModelId = targetModel.id;
-    const model = targetModel;
+    let model = targetModel;
+    let loadedViaFallback = false;
     statusText.textContent = `Loading ${model.name}...`;
 
     try {
@@ -2415,31 +2490,29 @@ async function loadModel() {
             }
         };
 
-        let lastLoadErr = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const webllm = await getWebLlmApi();
-                engine = await webllm.CreateMLCEngine(targetModel.id, {
-                    initProgressCallback,
-                });
-                lastLoadErr = null;
-                break;
-            } catch (loadErr) {
-                lastLoadErr = loadErr;
-                if (attempt === 0 && isRetryableGenerationError(loadErr)) {
-                    reliabilityStats.recoveries += 1;
-                    logRuntimeEvent('model_load_retry', {
-                        modelId: targetModel.id,
-                        reason: String(loadErr?.message || loadErr || ''),
-                    });
-                    statusText.textContent = `Load hiccup detected. Retrying ${model.name}...`;
-                    continue;
-                }
-                throw loadErr;
+        try {
+            engine = await createEngineWithRetry(model, initProgressCallback);
+        } catch (primaryErr) {
+            const fallbackModel = getCompactFallbackModel();
+            if (!shouldTryCompactModelFallback(primaryErr, model, fallbackModel)) {
+                throw primaryErr;
             }
-        }
-        if (!engine && lastLoadErr) {
-            throw lastLoadErr;
+            logRuntimeEvent('model_load_compact_fallback', {
+                fromModelId: model.id,
+                toModelId: fallbackModel.id,
+                reason: String(primaryErr?.message || primaryErr || ''),
+            });
+            statusText.textContent = `${model.name} did not fit this device. Trying ${fallbackModel.name}...`;
+            progressFill.style.width = '0%';
+            progressPercent.textContent = 'Fallback';
+            model = fallbackModel;
+            selectedModelId = fallbackModel.id;
+            loadedViaFallback = true;
+            try {
+                engine = await createEngineWithRetry(fallbackModel, initProgressCallback);
+            } catch (fallbackErr) {
+                throw new Error(`${toUserFriendlyError(primaryErr)} Compact fallback also failed: ${toUserFriendlyError(fallbackErr)}`);
+            }
         }
 
         progressFill.style.width = '100%';
@@ -2449,16 +2522,21 @@ async function loadModel() {
         logRuntimeEvent('model_loaded', {
             modelId: selectedModelId,
             modelName: model.name,
+            loadedViaFallback,
         });
         scheduleRuntimeBenchmarkCalibration();
 
         setTimeout(() => {
-            void showChatScreen();
+            void showChatScreen().then(() => {
+                if (loadedViaFallback) {
+                    setInlineNotice(`${targetModel.name} did not fit this device, so NeuralBox started ${model.name} instead.`, 'warn', 5200);
+                }
+            });
         }, 500);
     } catch (err) {
         console.error('Model loading failed:', err);
         reliabilityStats.lastError = String(err?.message || err || '');
-        statusText.textContent = 'Failed to load model: ' + err.message;
+        statusText.textContent = 'Failed to load model: ' + toUserFriendlyError(err);
         startBtn.style.display = 'inline-flex';
         startBtn.textContent = 'Retry';
     }
@@ -3722,7 +3800,7 @@ userInput.addEventListener('keydown', (e) => {
             isGenerating,
             inputText: userInput.value,
             hasPendingImage: Boolean(pendingImage),
-            hasEngine: Boolean(engine),
+            hasEngine: isComposerRuntimeReady(),
         });
         if (action === 'send') {
             sendMessage(userInput.value);
@@ -3733,11 +3811,7 @@ userInput.addEventListener('keydown', (e) => {
 // Auto-resize
 userInput.addEventListener('input', () => {
     autoResizeInput();
-    sendBtn.disabled = shouldDisableSendButton({
-        isGenerating,
-        inputText: userInput.value,
-        hasPendingImage: Boolean(pendingImage),
-    });
+    updateComposerSendState();
 });
 
 // New chat (header button)
@@ -4110,7 +4184,7 @@ async function startRecording() {
                 }
                 userInput.value = confirmedText + interim;
                 autoResizeInput();
-                sendBtn.disabled = false;
+                updateComposerSendState();
             };
             liveRecognition.onerror = () => { liveRecognition = null; };
             try { liveRecognition.start(); } catch (_) { liveRecognition = null; }
@@ -4157,7 +4231,7 @@ async function processRecording(audioBlob) {
         if (text) {
             userInput.value = baseText + text;
             autoResizeInput();
-            sendBtn.disabled = false;
+            updateComposerSendState();
             userInput.focus();
             voiceStatus.className = 'voice-status';
             voiceStatus.innerHTML = getMicStatusMarkup('transcribed');
@@ -4214,7 +4288,7 @@ async function processAudioFileTranscription(file) {
         if (text) {
             userInput.value = baseText + text;
             autoResizeInput();
-            sendBtn.disabled = false;
+            updateComposerSendState();
             userInput.focus();
             transcribeStatus.className = 'voice-status';
             transcribeStatus.innerHTML = getMicStatusMarkup('transcribed');
@@ -4538,11 +4612,7 @@ function attachImageFile(file) {
             pendingImage = { dataUrl: normalized.dataUrl, file, meta: normalized };
             imagePreviewImg.src = normalized.dataUrl;
             imagePreview.style.display = 'flex';
-            sendBtn.disabled = shouldDisableSendButton({
-                isGenerating,
-                inputText: userInput.value,
-                hasPendingImage: true,
-            });
+            updateComposerSendState();
             const est = estimatePhiVisionEmbedSize(normalized.targetHeight, normalized.targetWidth);
             visionDebug('Image prepared', {
                 source: `${normalized.sourceWidth}x${normalized.sourceHeight}`,
@@ -4567,11 +4637,7 @@ function clearPendingImage() {
     pendingImage = null;
     imagePreview.style.display = 'none';
     imagePreviewImg.src = '';
-    sendBtn.disabled = shouldDisableSendButton({
-        isGenerating,
-        inputText: userInput.value,
-        hasPendingImage: false,
-    });
+    updateComposerSendState();
 }
 
 function getImageFromClipboard(clipboardData) {

@@ -106,6 +106,7 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
   - local conversations/settings/RAG metadata remain accessible
   - import/export and settings continue to work
   - inference, image analysis, and voice-chat generation controls are disabled
+- WebGPU availability is based on `navigator.gpu.requestAdapter`, not only `navigator.gpu`, so Android browsers that expose the API but cannot provide a compatible adapter fail into Offline Library Mode with a clear reason.
 - Model cache check is only attempted when WebGPU is available and uses `webllm.hasModelInCache`.
 - Cached offline inference can work when all prerequisites are true:
   - the app shell/service worker has been installed or cached
@@ -135,6 +136,8 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
 
 - Click + `touchend` handlers for many interactive controls.
 - Sidebar slide-in behavior for smaller viewports.
+- Chat composer send-state is centralized so mobile voice/input paths cannot force-enable Send unless a model engine is active.
+- If a selected model fails with a memory/GPU compatibility error, startup retries once with the smallest text model before giving up.
 
 ## 13) Local RAG Document Attach
 

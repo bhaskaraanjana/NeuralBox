@@ -1,6 +1,6 @@
 {
   "name": "neuralbox",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "description": "Run AI in your browser. No server. No sign-up. Private by design.",
   "type": "module",
   "engines": {
@@ -25,6 +25,7 @@
     "test:rag:helpers": "node scripts/rag-helpers-test.mjs",
     "test:web-search": "node scripts/web-search-helpers-test.mjs",
     "test:offline:pwa": "node scripts/offline-pwa-shell-test.mjs",
+    "test:android:chat": "node scripts/android-chat-compatibility-test.mjs",
     "test:browser:offline-shell": "node scripts/offline-shell-browser-smoke.mjs",
     "test:accessibility": "node scripts/accessibility-static-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",

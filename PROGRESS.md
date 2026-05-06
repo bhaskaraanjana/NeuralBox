@@ -4,6 +4,15 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-06 - Version 1.7.5 Android Chat Fixes
+- Bumped app version to 1.7.5.
+- Fixed Android/WebGPU detection so chat startup requires a real `requestAdapter()` result, not only `navigator.gpu`.
+- Added a clearer Offline Library Mode reason for Android browsers that expose WebGPU but cannot provide a compatible adapter.
+- Centralized chat composer send-state so mobile input, voice transcription, and image attach paths cannot force-enable Send when no model engine is active.
+- Added compact model fallback during startup: if a selected model fails with a GPU/memory compatibility error, NeuralBox retries with the smallest text model.
+- Added regression coverage:
+  - `npm run test:android:chat`
+
 ### 2026-05-06 - Version 1.7.4 Updates
 - Bumped app version to 1.7.4.
 - Fixed the startup path so missing WebGPU no longer blocks the app from loading.
