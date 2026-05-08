@@ -16,6 +16,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
 - Added Apple PWA metadata for Add to Home Screen installs.
 - Added regression coverage:
   - `npm run test:ios:compat`
+  - `npm run test:browser:mobile`
 
 ### 2026-05-06 - Version 1.7.5 Android Chat Fixes
 - Bumped app version to 1.7.5.

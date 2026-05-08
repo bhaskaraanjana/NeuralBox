@@ -57,6 +57,7 @@ npm run test:stability
 npm run test:offline:pwa
 npm run test:android:chat
 npm run test:ios:compat
+npm run test:browser:mobile
 npm run test:browser:offline-shell
 npm run test:rendering
 npm run test:routing
