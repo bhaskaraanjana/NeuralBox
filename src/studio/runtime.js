@@ -88,6 +88,15 @@ function makeProgress(onProgress) {
 
 // ---- Pipeline / model cache ---------------------------------
 
+/**
+ * Wrap a loader callback so raw transformers.js progress events (from
+ * library classes like KokoroTTS / Florence2 loaded outside loadPipeline)
+ * are aggregated into a normalized { pct, status } stream.
+ */
+export function aggregateProgress(onProgress) {
+    return makeProgress(onProgress);
+}
+
 const _cache = new Map();
 
 /** True if this exact spec is already resident (no download needed). */
@@ -246,6 +255,50 @@ export function playPCM(float32, sampleRate = 16000) {
     source.start();
     source.onended = () => ctx.close().catch(() => {});
     return () => { try { source.stop(); } catch (_) {} };
+}
+
+/** Split text into sentence-grouped chunks under ~maxChars, for long-form TTS. */
+export function splitForTTS(text, maxChars = 220) {
+    const clean = String(text).replace(/\s+/g, ' ').trim();
+    if (clean.length <= maxChars) return clean ? [clean] : [];
+    // Break into sentences, then greedily pack into chunks.
+    const sentences = clean.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [clean];
+    const chunks = [];
+    let cur = '';
+    for (let s of sentences) {
+        s = s.trim();
+        if (!s) continue;
+        // A single overlong sentence: hard-split on word boundaries.
+        if (s.length > maxChars) {
+            if (cur) { chunks.push(cur); cur = ''; }
+            const words = s.split(' ');
+            let part = '';
+            for (const w of words) {
+                if ((part + ' ' + w).trim().length > maxChars) { if (part) chunks.push(part); part = w; }
+                else part = (part ? part + ' ' : '') + w;
+            }
+            if (part) cur = part;
+            continue;
+        }
+        if ((cur + ' ' + s).trim().length > maxChars) { chunks.push(cur); cur = s; }
+        else cur = (cur ? cur + ' ' : '') + s;
+    }
+    if (cur) chunks.push(cur);
+    return chunks;
+}
+
+/** Concatenate Float32 PCM chunks into one (with an optional silent gap between). */
+export function concatFloat32(chunks, gapSamples = 0) {
+    const list = chunks.filter((c) => c && c.length);
+    if (!list.length) return new Float32Array(0);
+    const total = list.reduce((n, c) => n + c.length, 0) + gapSamples * (list.length - 1);
+    const out = new Float32Array(total);
+    let off = 0;
+    for (let i = 0; i < list.length; i++) {
+        out.set(list[i], off);
+        off += list[i].length + (i < list.length - 1 ? gapSamples : 0);
+    }
+    return out;
 }
 
 /** Encode Float32 PCM to a WAV Blob (for download / <audio>). */
