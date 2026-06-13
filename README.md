@@ -21,11 +21,14 @@ caches it in the browser, and then runs offline.
 - 🧩 **Segmentation** — per-pixel scene parsing (SegFormer).
 - 🌀 **Depth Map** — turn any photo into a 3D depth map (Depth Anything V2).
 - ✂️ **Background Remover** — cut out the subject, export a transparent PNG (RMBG).
-- 📝 **Image Captioner** — describe any image in a sentence (ViT-GPT2).
+- 📝 **Image Captioner** — a quick line (ViT-GPT2) or rich, multi-sentence
+  **Florence-2** detail.
 
 **Audio**
-- 🎙️ **Speech to Text** — local transcription with Whisper (mic or file).
-- 🔊 **Text to Speech** — neural voice synthesis (SpeechT5).
+- 🎙️ **Speech to Text** — transcribe voice or **whole podcasts** with Whisper
+  (base/small/distil tiers + multilingual), timestamps, and SRT/TXT export.
+- 🔊 **Text to Speech** — natural neural voices (**Kokoro-82M**, 11 voices,
+  adjustable speed, reads long text).
 - 👂 **Sound Classifier** — identify 500+ sound events (AST / AudioSet).
 
 **Language**
@@ -42,6 +45,10 @@ caches it in the browser, and then runs offline.
 
 ## Niceties
 
+- **Quality tiers** — most studios offer a Fast default plus an **Accurate** (or
+  Detailed/Max) tier with a stronger model (e.g. DETR & YOLOS-small detection,
+  CLIP ViT-B/16, SegFormer-B2/B5, DeBERTa-v3 zero-shot, RoBERTa-SQuAD2 Q&A,
+  BGE/GTE embeddings), so you can trade speed for genuine accuracy.
 - **Installable PWA** — add to your home screen; works offline after first load.
 - **Pin favorites + recents** — surfaced at the top of the gallery (stored locally).
 - **Storage panel** — see and clear cached model weights from the top bar.
@@ -51,6 +58,7 @@ caches it in the browser, and then runs offline.
 
 - **Vite** multi-page build (`index.html` = Studio, `chat.html` = Pro Chat).
 - **`@huggingface/transformers`** (transformers.js v3) — every studio model.
+- **`kokoro-js`** — natural Text-to-Speech.
 - **`@mlc-ai/web-llm`** — Pro Chat.
 - Vanilla JavaScript + CSS. No UI framework.
 
