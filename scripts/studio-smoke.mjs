@@ -89,6 +89,20 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForSelector('.home-hero-title', { timeout: 5000 });
 
+  // Every studio mounts cleanly at runtime (no model downloads). Skip chat-premium
+  // (it embeds the separate /chat.html app in an iframe).
+  await page.evaluate(() => { location.hash = '#/'; });
+  await page.waitForSelector('.home-card', { timeout: 5000 });
+  const ids = (await page.$$eval('.home-card', (els) => els.map((e) => e.getAttribute('data-id')))).filter(Boolean);
+  const uniqueIds = [...new Set(ids)];
+  assert(uniqueIds.length >= 22, `Expected >=22 studio ids, got ${uniqueIds.length}`);
+  for (const id of uniqueIds) {
+    if (id === 'chat-premium') continue;
+    await page.evaluate((i) => { location.hash = `#/${i}`; }, id);
+    await page.waitForSelector('.studio-head-title', { timeout: 10000 });
+    await page.waitForSelector('.studio-host .sx-pane, .studio-host .sx-split', { timeout: 8000 });
+  }
+
   await browser.close();
   if (errors.length) throw new Error(`Console/page errors: ${errors.join(' | ')}`);
   console.log(`Studio smoke passed (${cardCount} model cards, sections: ${sections.join(', ')}).`);

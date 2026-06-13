@@ -23,6 +23,7 @@ function studioCard(studio, ctx, index, favorites, onToggleFav) {
         class: 'home-card',
         type: 'button',
         style: { '--accent': studio.accent, '--i': String(index) },
+        'data-id': studio.id,
         'data-search': `${studio.title} ${studio.tagline} ${studio.category} ${studio.badge || ''}`.toLowerCase(),
         onClick: () => ctx.navigate(studio.id),
     },
