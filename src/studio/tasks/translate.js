@@ -108,6 +108,14 @@ export default function mount(host, ctx) {
                 copyRow,
             );
             copyRow.style.display = translated ? '' : 'none';
+            if (translated) {
+                ctx.saveHistory({ studio: 'translate', title: translated.slice(0, 60), text: translated });
+                clear(copyRow);
+                copyRow.append(
+                    copyBtn,
+                    ctx.ui.button('Send to →', { variant: 'ghost', onClick: () => ctx.sendResultTo({ kind: 'text', data: translated, from: 'translate' }) }),
+                );
+            }
         } catch (err) {
             toast('Translation failed: ' + (err?.message || err), 'error');
         } finally {
@@ -115,4 +123,8 @@ export default function mount(host, ctx) {
             runBtn.disabled = false;
         }
     }
+
+    // ---- Pipeline hand-off (consume piped text input) ----
+    const _h = ctx.takeHandoff('text');
+    if (_h && _h.data) { input.value = _h.data; }
 }

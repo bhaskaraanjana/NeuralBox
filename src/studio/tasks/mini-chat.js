@@ -128,5 +128,9 @@ export default function mount(host, ctx) {
         }
     }
 
+    // ---- pipeline hand-off: prefill chat input from a piped text result (do NOT auto-send) ----
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { input.value = _h.data; }
+
     return () => { /* pipeline cache persists in runtime; nothing to tear down */ };
 }

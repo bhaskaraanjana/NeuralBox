@@ -251,5 +251,9 @@ export default function mount(host, ctx) {
         video.style.display = 'none';
     }
 
+    // ---- Pipeline hand-off (consume piped image) ----
+    const _h = ctx.takeHandoff("image");
+    if (_h && _h.data) setImage(_h.data);
+
     return () => { stopLive(); picker.destroy?.(); };
 }

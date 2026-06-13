@@ -144,5 +144,9 @@ export default function mount(host, ctx) {
         outBody.append(head, bars, seqTitle, seqs);
     }
 
+    // ---- Pipeline hand-off (consume) ----
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { input.value = _h.data; }
+
     return () => { /* nothing to tear down */ };
 }

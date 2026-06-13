@@ -85,4 +85,7 @@ export default function mount(host, ctx) {
             runBtn.disabled = false;
         }
     }
+
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { input.value = _h.data; }
 }

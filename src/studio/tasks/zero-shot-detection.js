@@ -172,4 +172,8 @@ export default function mount(host, ctx) {
             busy = false; runBtn.disabled = false;
         }
     }
+
+    // Consume a piped image hand-off, if one was sent to this studio.
+    const _h = ctx.takeHandoff("image");
+    if (_h && _h.data) setImage(_h.data);
 }

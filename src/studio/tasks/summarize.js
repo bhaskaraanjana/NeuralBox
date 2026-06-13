@@ -119,6 +119,10 @@ export default function mount(host, ctx) {
             stat.textContent = `${inWords} words → ${outWords} words` + (pct > 0 ? ` · ${pct}% shorter` : '');
             clear(actions);
             actions.append(copyButton(() => summary, 'Copy summary'));
+            if (summary) {
+                ctx.saveHistory({ studio: 'summarize', title: summary.slice(0, 60), text: summary });
+                actions.append(button('Send to →', { variant: 'ghost', onClick: () => ctx.sendResultTo({ kind: 'text', data: summary, from: 'summarize' }) }));
+            }
             actions.style.display = '';
         } catch (err) {
             clear(result);
@@ -130,4 +134,8 @@ export default function mount(host, ctx) {
             runBtn.disabled = false;
         }
     }
+
+    // Pipeline hand-off: prefill the source textarea from a piped text input (don't auto-run).
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { input.value = _h.data; }
 }

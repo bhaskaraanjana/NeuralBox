@@ -34,6 +34,9 @@ export default function mount(host, ctx) {
     const dlBtn = button('Download PNG', { variant: 'ghost', full: true, onClick: () => doDownload() });
     dlBtn.disabled = true;
 
+    const sendBtn = button('Send to →', { variant: 'ghost', full: true, onClick: () => ctx.sendResultTo({ kind: 'image', data: canvas.toDataURL('image/png'), from: 'background-removal' }) });
+    sendBtn.disabled = true;
+
     const picker = imageInput({
         samples: ['portrait', 'tiger', 'cats', 'bread'],
         onImage: (url) => setImage(url),
@@ -46,6 +49,8 @@ export default function mount(host, ctx) {
         runBtn,
         el('div', { style: { height: '10px' } }),
         dlBtn,
+        el('div', { style: { height: '10px' } }),
+        sendBtn,
         el('p', { class: 'sx-muted', style: { marginTop: '12px' } }, 'First run downloads the model (~44MB), then it is cached for instant reuse.'),
         loaderSlot,
     );
@@ -88,6 +93,7 @@ export default function mount(host, ctx) {
         currentURL = url;
         lastBlob = null;
         dlBtn.disabled = true;
+        sendBtn.disabled = true;
         status.textContent = '';
         clear(stageWrap);
         stageWrap.append(placeholder);
@@ -99,6 +105,7 @@ export default function mount(host, ctx) {
         busy = true;
         runBtn.disabled = true;
         dlBtn.disabled = true;
+        sendBtn.disabled = true;
         status.textContent = 'Working…';
         try {
             const { model, processor } = await ensureModel();
@@ -127,6 +134,7 @@ export default function mount(host, ctx) {
             showStage();
             lastBlob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
             dlBtn.disabled = !lastBlob;
+            sendBtn.disabled = false;
             status.textContent = `Cut out at ${image.width}×${image.height}. Background is now transparent.`;
         } catch (err) {
             toast('Background removal failed: ' + (err?.message || err), 'error');
@@ -141,6 +149,10 @@ export default function mount(host, ctx) {
         if (!lastBlob) { toast('Run the cutout first', 'info'); return; }
         downloadBlob(lastBlob, 'neuralbox-cutout.png');
     }
+
+    // ---- Pipeline hand-off: consume a piped-in image (if any). ----
+    const _h = ctx.takeHandoff("image");
+    if (_h && _h.data) setImage(_h.data);
 
     return () => { picker.destroy?.(); };
 }

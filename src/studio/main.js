@@ -86,6 +86,15 @@ function studioHeader(studio) {
             studio.badge ? badge(studio.badge, 'accent') : null,
             badge(studio.device === 'webgpu' ? 'WebGPU' : 'Any device', studio.device === 'webgpu' ? 'gpu' : 'ok'),
             el('span', { class: 'studio-head-size' }, studio.size),
+            button('Share', {
+                variant: 'ghost',
+                iconPath: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/>',
+                onClick: async () => {
+                    const link = `${location.origin}${location.pathname}#/${studio.id}`;
+                    try { await navigator.clipboard.writeText(link); ui.toast('Studio link copied', 'success'); }
+                    catch { ui.toast('Copy failed', 'error'); }
+                },
+            }),
         ),
     );
 }

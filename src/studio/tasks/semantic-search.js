@@ -160,4 +160,8 @@ export default function mount(host, ctx) {
             runBtn.disabled = false;
         }
     }
+
+    // ---- Pipeline hand-off: prefill the QUERY from a piped text input ----
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { queryInput.value = _h.data; }
 }

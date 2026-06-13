@@ -136,5 +136,9 @@ export default function mount(host, ctx) {
         outBody.append(head, modeBadge, bars);
     }
 
+    // ---- Pipeline hand-off (consume a piped TEXT input, if any) ----
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { input.value = _h.data; }
+
     return () => { /* nothing to tear down */ };
 }

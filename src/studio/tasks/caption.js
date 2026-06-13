@@ -55,7 +55,8 @@ export default function mount(host, ctx) {
     );
 
     const captionBox = el('div', { class: 'sx-result-big' }, '—');
-    const copyRow = el('div', { class: 'sx-row end', style: { marginTop: '14px', display: 'none' } }, copyButton(() => caption));
+    const sendBtn = ctx.ui.button('Send to →', { variant: 'ghost', onClick: () => ctx.sendResultTo({ kind: 'text', data: caption, from: 'caption' }) });
+    const copyRow = el('div', { class: 'sx-row end', style: { marginTop: '14px', display: 'none' } }, copyButton(() => caption), sendBtn);
     const outBody = el('div', { class: 'sx-placeholder' },
         el('div', { class: 'ph-emoji' }, '💬'),
         el('div', {}, 'The caption will appear here'),
@@ -162,6 +163,7 @@ export default function mount(host, ctx) {
                 return;
             }
             showCaption();
+            ctx.saveHistory({ studio: 'caption', title: caption.slice(0, 60), text: caption });
         } catch (err) {
             thinking.remove();
             clear(outBody);
@@ -173,6 +175,8 @@ export default function mount(host, ctx) {
             runBtn.disabled = false;
         }
     }
+
+    const _h = ctx.takeHandoff("image"); if (_h && _h.data) setImage(_h.data);
 
     return () => { picker.destroy?.(); };
 }

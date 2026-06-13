@@ -199,5 +199,9 @@ export default function mount(host, ctx) {
         }
     }
 
+    // ---- Pipeline hand-off: consume a piped image input (if any) ----
+    const _h = ctx.takeHandoff("image");
+    if (_h && _h.data) setImage(_h.data);
+
     return () => { picker.destroy?.(); };
 }

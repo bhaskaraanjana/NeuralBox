@@ -125,5 +125,9 @@ export default function mount(host, ctx) {
         }
     }
 
+    // Consume a piped text hand-off (prefill only; do not auto-run).
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { input.value = _h.data; }
+
     return () => { /* model cache persists in module scope */ };
 }

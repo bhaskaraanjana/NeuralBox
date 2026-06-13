@@ -119,10 +119,21 @@ export default function mount(host, ctx) {
                 ? highlight(ctxText, out.answer, out.start, out.end)
                 : escapeHtml(ctxText);
             outBody.append(answerBox, ctxView);
+            // Pipeline hand-off + history wiring (only for an actual answer span).
+            if (hasAnswer) {
+                ctx.saveHistory({ studio: "question-answering", title: out.answer.slice(0, 60), text: out.answer });
+                outBody.append(el('div', { class: 'sx-row', style: { marginTop: '12px' } },
+                    ctx.ui.button("Send to →", { variant: "ghost", onClick: () => ctx.sendResultTo({ kind: "text", data: out.answer, from: "question-answering" }) }),
+                ));
+            }
         } catch (err) {
             toast('Answering failed: ' + (err?.message || err), 'error');
         } finally {
             runBtn.disabled = false;
         }
     }
+
+    // Consume a piped-in text hand-off (prefill the context textarea; do not auto-run).
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { context.value = _h.data; }
 }

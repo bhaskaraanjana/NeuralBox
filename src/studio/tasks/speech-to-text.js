@@ -203,7 +203,10 @@ export default function mount(host, ctx) {
             copyButton(() => text, 'Copy'),
             button('Download .txt', { variant: 'ghost', onClick: () => downloadBlob(new Blob([text], { type: 'text/plain' }), 'transcript.txt') }),
             segs.length ? button('Download .srt', { variant: 'ghost', onClick: () => downloadBlob(new Blob([toSRT(segs)], { type: 'text/plain' }), 'transcript.srt') }) : null,
+            ctx.ui.button('Send to →', { variant: 'ghost', onClick: () => ctx.sendResultTo({ kind: 'text', data: text, from: 'speech-to-text' }) }),
         );
+
+        ctx.saveHistory({ studio: 'speech-to-text', title: text.slice(0, 60), text });
         const full = el('div', { class: 'sx-result' }, text);
 
         const rows = segs.map((c) => {

@@ -104,5 +104,7 @@ export default function mount(host, ctx) {
         return first.charAt(0).toUpperCase() + first.slice(1);
     }
 
+    const _h = ctx.takeHandoff("image"); if (_h && _h.data) setImage(_h.data);
+
     return () => { picker.destroy?.(); };
 }

@@ -173,4 +173,8 @@ export default function mount(host, ctx) {
             runBtn.disabled = false;
         }
     }
+
+    // Consume a piped text hand-off (prefill only; do not auto-run).
+    const _h = ctx.takeHandoff("text");
+    if (_h && _h.data) { input.value = _h.data; }
 }
