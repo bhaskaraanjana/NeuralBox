@@ -4,7 +4,7 @@
 import { el, clear, badge } from './ui.js';
 import { CATEGORIES, STUDIOS, studiosByCategory } from './registry.js';
 
-function studioCard(studio, ctx) {
+function studioCard(studio, ctx, index = 0) {
     const tags = el('div', { class: 'home-card-tags' },
         studio.badge ? badge(studio.badge, 'accent') : null,
         badge(studio.device === 'webgpu' ? 'WebGPU' : 'Any device', studio.device === 'webgpu' ? 'gpu' : 'ok'),
@@ -13,7 +13,7 @@ function studioCard(studio, ctx) {
     const card = el('button', {
         class: 'home-card',
         type: 'button',
-        style: { '--accent': studio.accent },
+        style: { '--accent': studio.accent, '--i': String(index) },
         'data-search': `${studio.title} ${studio.tagline} ${studio.category} ${studio.badge || ''}`.toLowerCase(),
         onClick: () => ctx.navigate(studio.id),
     },
@@ -48,16 +48,38 @@ export async function renderHome(root, ctx) {
     const search = el('input', { class: 'home-search', type: 'search', placeholder: '🔎  Search models — try "detect", "voice", "translate"…' });
     const sections = el('div', { class: 'home-sections' });
 
-    function build(filter = '') {
+    let activeCat = 'all';
+    let currentFilter = '';
+
+    // Category quick-filter pills.
+    const pills = el('div', { class: 'home-pills' });
+    const pillDefs = [{ id: 'all', label: 'All', emoji: '✨' }, ...CATEGORIES.map((c) => ({ id: c.id, label: c.label, emoji: c.emoji }))];
+    const pillEls = [];
+    pillDefs.forEach((p) => {
+        const pill = el('button', {
+            class: `home-pill${p.id === 'all' ? ' active' : ''}`,
+            type: 'button',
+            onClick: () => {
+                activeCat = p.id;
+                pillEls.forEach((x) => x.classList.toggle('active', x === pill));
+                build();
+            },
+        }, el('span', {}, p.emoji), p.label);
+        pillEls.push(pill);
+    });
+    pills.append(...pillEls);
+
+    function build() {
         clear(sections);
-        const q = filter.trim().toLowerCase();
+        const q = currentFilter.trim().toLowerCase();
         let total = 0;
         for (const cat of CATEGORIES) {
+            if (activeCat !== 'all' && cat.id !== activeCat) continue;
             const items = studiosByCategory(cat.id)
                 .filter((s) => !q || `${s.title} ${s.tagline} ${s.category} ${s.badge || ''}`.toLowerCase().includes(q));
             if (!items.length) continue;
             total += items.length;
-            const grid = el('div', { class: 'home-grid' }, ...items.map((s) => studioCard(s, ctx)));
+            const grid = el('div', { class: 'home-grid' }, ...items.map((s, i) => studioCard(s, ctx, i)));
             sections.append(el('section', { class: 'home-section' },
                 el('div', { class: 'home-section-head' },
                     el('h2', { class: 'home-section-title' }, el('span', { class: 'home-section-emoji' }, cat.emoji), cat.label),
@@ -67,16 +89,19 @@ export async function renderHome(root, ctx) {
             ));
         }
         if (!total) {
-            sections.append(el('div', { class: 'home-empty' }, `No models match “${filter}”.`));
+            sections.append(el('div', { class: 'home-empty' },
+                el('div', { class: 'home-empty-emoji' }, '🔍'),
+                el('div', {}, q ? `No models match “${currentFilter}”.` : 'No models in this category.'),
+            ));
         }
     }
 
-    search.addEventListener('input', () => build(search.value));
+    search.addEventListener('input', () => { currentFilter = search.value; build(); });
     build();
 
     root.append(el('div', { class: 'home' },
         hero,
-        el('div', { class: 'home-searchbar' }, search),
+        el('div', { class: 'home-searchbar' }, search, pills),
         sections,
         el('footer', { class: 'home-footer' },
             'NeuralBox · powered by ',

@@ -359,6 +359,25 @@ a:hover { text-decoration: underline; }
 .sx-iframe-wrap { border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--line-1); background: var(--bg-1); }
 .sx-iframe { width: 100%; height: calc(100vh - 220px); min-height: 480px; border: 0; display: block; }
 
+/* Category quick-filter pills */
+.home-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 16px; }
+.home-pill { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-ui); font-size: 0.84rem; font-weight: 600; color: var(--text-2); background: var(--bg-glass); border: 1px solid var(--line-1); border-radius: 999px; padding: 8px 15px; cursor: pointer; transition: color .18s, background .18s, border-color .18s, transform .12s; }
+.home-pill:hover { color: var(--text-0); border-color: var(--line-2); }
+.home-pill:active { transform: scale(0.96); }
+.home-pill.active { color: var(--text-0); background: color-mix(in srgb, var(--brand-1) 22%, transparent); border-color: var(--line-2); }
+.home-pill span { font-size: 0.98rem; line-height: 1; }
+
+.home-empty-emoji { font-size: 2.4rem; margin-bottom: 10px; opacity: 0.7; }
+
+/* Staggered card + view entrance animations */
+@keyframes sx-card-in { from { opacity: 0; transform: translateY(12px) scale(0.985); } to { opacity: 1; transform: none; } }
+.home-card { animation: sx-card-in 0.44s cubic-bezier(.2,.7,.3,1) backwards; animation-delay: calc(var(--i, 0) * 34ms); }
+@keyframes sx-view-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.home, .studio-view { animation: sx-view-in 0.34s ease backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .home-card, .home, .studio-view { animation: none; }
+}
+
 /* NER inline entity highlight */
 .nx-hl { padding: 1px 5px; border-radius: 6px; border: 1px solid; font-weight: 600; }
 
