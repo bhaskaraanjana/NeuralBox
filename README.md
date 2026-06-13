@@ -1,83 +1,93 @@
 # NeuralBox
 
-Local-first AI chat in the browser using WebGPU and WebLLM.
+**Run any AI model in your browser. No server. No sign-up. On any device.**
 
-NeuralBox runs models on-device, stores conversations locally, supports optional web lookup, optional document-grounded responses (RAG), optional voice input, and vision input for supported models.
+NeuralBox is a one-stop studio for in-browser machine learning. Every model runs
+**100% on-device** — object detection, depth, segmentation, speech, translation,
+chat and more. Nothing you upload ever leaves the tab. It uses **WebGPU** when your
+device has it and transparently falls back to **WASM** when it doesn't, so it works
+on phones, laptops, and everything in between.
 
-## Current capabilities
+## Studios
 
-- Local chat with streaming responses and perf stats.
-- Model selection:
-  - Manual model selection.
-  - `Auto` mode with per-request routing and hot swap.
-- Vision input for supported models (image attach, paste, drag/drop).
-- Local document attach for RAG (text/code/log-style files).
-- Optional web-enhanced answers (DuckDuckGo via proxy).
-- Voice input (Whisper tiny.en via Transformers.js).
-- Voice chat overlay mode (listen -> generate -> speak loop).
-- Conversation export/import, Markdown export, and share-text copy.
-- Runtime debug panel and workbench panel for diagnostics.
+Open the gallery and pick a model. Each studio downloads its (small) model once,
+caches it in the browser, and then runs offline.
+
+**Vision**
+- 🎯 **Object Detection** — real YOLO (YOLOS-tiny) with a live camera mode.
+- 🏷️ **Image Labeler** — 1000-class classification (MobileNetV4 / ViT).
+- 🔮 **Zero-Shot Vision** — score an image against any labels you type (CLIP).
+- 🧩 **Segmentation** — per-pixel scene parsing (SegFormer).
+- 🌀 **Depth Map** — turn any photo into a 3D depth map (Depth Anything V2).
+- ✂️ **Background Remover** — cut out the subject, export a transparent PNG (RMBG).
+- 📝 **Image Captioner** — describe any image in a sentence (ViT-GPT2).
+
+**Audio**
+- 🎙️ **Speech to Text** — local transcription with Whisper (mic or file).
+- 🔊 **Text to Speech** — neural voice synthesis (SpeechT5).
+- 👂 **Sound Classifier** — identify 500+ sound events (AST / AudioSet).
+
+**Language**
+- 💬 **Sentiment** · 🧷 **Zero-Shot Text** · 📚 **Summarizer** · 🌍 **Translator**
+  (OPUS-MT) · 🔎 **Semantic Search** (embeddings) · 🔖 **Entity Finder** (NER) ·
+  🧠 **Fill in the Blank** (BERT).
+
+**Chat**
+- 🤖 **Mini Chat** — a tiny streaming LLM (Qwen2.5 / SmolLM2 / Llama-3.2) that runs
+  on any device.
+- 💎 **Pro Chat** — the full WebLLM assistant (model picker, RAG, web search, voice,
+  vision). Requires WebGPU. Lives at `/chat.html` and is embedded as a studio.
 
 ## Tech stack
 
-- Vite
-- `@mlc-ai/web-llm`
-- `@huggingface/transformers` (Whisper ASR)
-- Vanilla JavaScript + CSS
+- **Vite** multi-page build (`index.html` = Studio, `chat.html` = Pro Chat).
+- **`@huggingface/transformers`** (transformers.js v3) — every studio model.
+- **`@mlc-ai/web-llm`** — Pro Chat.
+- Vanilla JavaScript + CSS. No UI framework.
+
+## Architecture
+
+```
+src/studio/
+  main.js        bootstrap: shell + router + studio lifecycle
+  runtime.js     the engine — lazy transformers.js, WebGPU/WASM pick, pipeline cache, media helpers
+  registry.js    single source of truth for the gallery (+ lazy module loaders)
+  router.js      hash router (#/ = home, #/<id> = studio)
+  home.js        the launcher gallery
+  ui.js          shared UI toolkit (sx-* components)
+  styles/studio.css  design system
+  tasks/<id>.js  one self-contained studio per model
+```
+
+Each studio module default-exports `mount(host, ctx)` and is dynamically imported
+only when its route opens, so the gallery loads instantly and model weights download
+on first use.
 
 ## Requirements
 
 - Node.js `>=20 <26`
-- A browser with WebGPU support (latest Chrome/Edge recommended)
+- Any modern browser (WebGPU optional — WASM fallback works everywhere).
+- Cross-origin isolation headers (`COOP: same-origin`, `COEP: require-corp`) are set
+  in `vite.config.js` for both dev and preview; set the same headers when self-hosting
+  so SharedArrayBuffer (multi-threaded WASM) and WebGPU work.
 
-## Setup
+## Setup & run
 
 ```bash
 npm install
-npm run env:check
-```
-
-## Run
-
-Default dev server (configured in `vite.config.js`):
-
-```bash
-npm run dev
-```
-
-Override port when needed:
-
-```bash
-npm run dev -- --port 5174 --host
+npm run dev        # http://localhost:6969
 ```
 
 ## Validate
 
 ```bash
-npm run build
-npm run test:stability
-npm run test:rendering
-npm run test:routing
-npm run test:device
-npm run test:rag:web
+npm run build              # builds both pages + all studio chunks
+npm run test:studio        # Playwright smoke: gallery, routing, studio mount, zero console errors
+npm run test:browser:lifecycle   # Pro Chat lifecycle smoke
 ```
 
-## Model catalog
+## Privacy
 
-Model definitions live in [src/main.js](C:/DEV/NeuralBox/src/main.js) (`MODEL_CATALOG`) and are split in UI as:
-
-- Curated models (default/recommended path)
-- Advanced models (opt-in)
-
-Use the in-app selector for the canonical, current list.
-
-## Privacy and network behavior
-
-- Inference and conversation storage are local to the browser.
-- Web-enhanced mode and auto web search send the query to DuckDuckGo endpoints (through allorigins proxy).
-- First model load downloads model assets and caches them locally.
-
-## Notes
-
-- Vision support currently includes compatibility workarounds for known WebLLM Phi-3.5 embedding-shape constraints; see `doc/VISION_EMBED_SHAPE_INCIDENT_2026-03-19.md`.
-- RAG document ingestion currently enforces a per-file size cap of 5MB for predictable browser performance.
+Inference and all storage are local to the browser. The only network calls are model
+weight downloads from the Hugging Face CDN (cached after first load) and — in Pro Chat
+only — optional web search. Your images, audio, and text never leave your device.
