@@ -266,6 +266,26 @@ export function imageInput({ onImage, samples = ['street', 'cats', 'football', '
     };
 }
 
+/** Center-screen modal. Returns { el, close }. */
+export function modal(title, body) {
+    const overlay = el('div', { class: 'sx-modal-overlay' });
+    const close = () => { overlay.classList.remove('show'); setTimeout(() => overlay.remove(), 220); document.removeEventListener('keydown', onKey); };
+    const onKey = (e) => { if (e.key === 'Escape') close(); };
+    const panel = el('div', { class: 'sx-modal' },
+        el('div', { class: 'sx-modal-head' },
+            el('h3', { class: 'sx-modal-title' }, title),
+            el('button', { class: 'sx-modal-close', type: 'button', 'aria-label': 'Close', onClick: close }, '✕'),
+        ),
+        el('div', { class: 'sx-modal-body' }, body),
+    );
+    overlay.append(panel);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    document.body.append(overlay);
+    requestAnimationFrame(() => overlay.classList.add('show'));
+    return { el: overlay, close };
+}
+
 let _toastHost = null;
 export function toast(message, kind = 'info', ms = 3200) {
     if (!_toastHost) {

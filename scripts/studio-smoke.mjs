@@ -59,6 +59,12 @@ try {
   await page.click('.home-fav');
   await page.waitForFunction(() => [...document.querySelectorAll('.home-section-title')].some((e) => /Pinned/.test(e.textContent)), null, { timeout: 5000 });
 
+  // Storage panel opens and closes.
+  await page.click('.top-icon-btn');
+  await page.waitForSelector('.sx-modal', { timeout: 5000 });
+  await page.click('.sx-modal-close');
+  await page.waitForFunction(() => !document.querySelector('.sx-modal-overlay'), null, { timeout: 5000 });
+
   // Open the Sentiment studio (text studio, no model auto-load) via hash route.
   await page.evaluate(() => { location.hash = '#/sentiment'; });
   await page.waitForSelector('.studio-head-title', { timeout: 10000 });

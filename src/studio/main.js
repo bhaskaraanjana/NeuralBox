@@ -9,6 +9,7 @@ import { startRouter, navigate } from './router.js';
 import { getStudio } from './registry.js';
 import { renderHome } from './home.js';
 import { pushRecent } from './state.js';
+import { openStorageModal } from './storage.js';
 
 const { el: _e } = ui; // keep tree-shaker honest
 
@@ -24,6 +25,8 @@ const topbar = el('header', { class: 'studio-topbar' },
     ),
     el('div', { class: 'top-right' },
         deviceChip,
+        el('button', { class: 'top-icon-btn', type: 'button', title: 'On-device storage', 'aria-label': 'Storage', onClick: () => openStorageModal() },
+            el('span', { html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>' })),
         el('a', { class: 'top-link', href: 'https://github.com/huggingface/transformers.js', target: '_blank', rel: 'noopener', title: 'How it works' }, 'How it works'),
     ),
 );
