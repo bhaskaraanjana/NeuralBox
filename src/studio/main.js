@@ -5,11 +5,14 @@ import './styles/studio.css';
 import * as runtime from './runtime.js';
 import * as ui from './ui.js';
 import { el, clear, button, badge, spinner } from './ui.js';
-import { startRouter, navigate } from './router.js';
-import { getStudio } from './registry.js';
+import { startRouter, navigate, currentRoute } from './router.js';
+import { getStudio, STUDIO_IO } from './registry.js';
 import { renderHome } from './home.js';
-import { pushRecent } from './state.js';
+import { pushRecent, addHistory } from './state.js';
 import { openStorageModal } from './storage.js';
+import { takeHandoff, setHandoff } from './handoff.js';
+import { sendResultTo, openHistoryModal } from './panels.js';
+import { deviceHint } from './studio-kit.js';
 
 const { el: _e } = ui; // keep tree-shaker honest
 
@@ -25,6 +28,8 @@ const topbar = el('header', { class: 'studio-topbar' },
     ),
     el('div', { class: 'top-right' },
         deviceChip,
+        el('button', { class: 'top-icon-btn', type: 'button', title: 'History', 'aria-label': 'History', onClick: () => openHistoryModal(navigate) },
+            el('span', { html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>' })),
         el('button', { class: 'top-icon-btn', type: 'button', title: 'On-device storage', 'aria-label': 'Storage', onClick: () => openStorageModal() },
             el('span', { html: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>' })),
         el('a', { class: 'top-link', href: 'https://github.com/huggingface/transformers.js', target: '_blank', rel: 'noopener', title: 'How it works' }, 'How it works'),
@@ -41,6 +46,15 @@ const ctx = {
     navigate,
     toast: ui.toast,
     hasWebGPU: runtime.hasWebGPU,
+    getStudio,
+    // Pipelines: studios call takeHandoff(kind) on mount to consume a piped input,
+    // and sendResultTo({kind,data,from}) to offer their output to another studio.
+    takeHandoff,
+    sendResultTo: (payload) => sendResultTo(payload, navigate),
+    // History: studios call after producing a text result.
+    saveHistory: (entry) => addHistory(entry).catch(() => {}),
+    // Device/size guidance string for a model spec.
+    deviceHint,
 };
 
 // ---- Lifecycle ----------------------------------------------
@@ -149,6 +163,27 @@ document.addEventListener('keydown', (e) => {
         && !document.querySelector('.sx-modal-overlay')) {
         navigate('home');
     }
+});
+
+// ---- Paste / drop an image anywhere -> route it to a vision studio ----
+function routeDroppedImage(blob) {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    setHandoff({ kind: 'image', data: url, from: 'paste' });
+    const cur = currentRoute();
+    const target = STUDIO_IO[cur]?.in === 'image' ? cur : 'object-detection';
+    ui.toast('Image ready → ' + (getStudio(target)?.title || target), 'success');
+    navigate(target);
+}
+window.addEventListener('paste', (e) => {
+    if (/^(input|textarea)$/i.test(e.target?.tagName || '')) return;
+    const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith('image/'));
+    if (item) routeDroppedImage(item.getAsFile());
+});
+window.addEventListener('dragover', (e) => { if ([...(e.dataTransfer?.types || [])].includes('Files')) e.preventDefault(); });
+window.addEventListener('drop', (e) => {
+    const f = [...(e.dataTransfer?.files || [])].find((x) => x.type.startsWith('image/'));
+    if (f) { e.preventDefault(); routeDroppedImage(f); }
 });
 
 // ---- Go ------------------------------------------------------

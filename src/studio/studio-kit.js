@@ -4,8 +4,22 @@
 // loader boilerplate that every multi-tier studio used to copy.
 // @typedef {import('./types.js').ModelTier} ModelTier
 // ============================================================
-import { field, segmented, loader, clear } from './ui.js';
-import { loadPipeline } from './runtime.js';
+import { el, field, segmented, loader, clear } from './ui.js';
+import { loadPipeline, pickDevice } from './runtime.js';
+
+/**
+ * A short download-size + device guidance string for a model spec, e.g.
+ * "≈ 84 MB · 🧩 WASM (slower — WebGPU is much faster)".
+ * @param {{size?: string}} spec
+ */
+export async function deviceHint(spec) {
+    const size = spec?.size ? `≈ ${String(spec.size).replace(/^~/, '')} download` : '';
+    let device = 'wasm';
+    try { device = await pickDevice(); } catch (_) {}
+    const heavy = /GB|[3-9]\d\d MB|[1-9]\d{3} MB/.test(spec?.size || '');
+    const dev = device === 'webgpu' ? '⚡ WebGPU' : `🧩 WASM${heavy ? ' (slower — WebGPU is much faster)' : ''}`;
+    return [size, dev].filter(Boolean).join(' · ');
+}
 
 /**
  * A quality-tier picker with a built-in per-tier pipeline cache + loader.
@@ -22,14 +36,20 @@ export function createTierPicker(tiers, loaderSlot, { label = 'Quality', hint = 
     const cache = {};
     let switchCb = null;
 
+    const sizeNote = el('p', { class: 'sx-hint', style: { marginTop: '4px' } }, '');
+    const updateNote = () => {
+        const sz = tiers[key].spec?.size;
+        sizeNote.textContent = sz ? `First run downloads ≈ ${String(sz).replace(/^~/, '')}` : '';
+    };
     const seg = segmented(
         keys.map((k) => ({ value: k, label: tiers[k].label })),
         key,
-        (k) => { key = k; switchCb?.(k); },
+        (k) => { key = k; updateNote(); switchCb?.(k); },
     );
+    updateNote();
 
     return {
-        el: field(label, seg, hint),
+        el: el('div', {}, field(label, seg, hint), sizeNote),
         get key() { return key; },
         spec() { return tiers[key].spec; },
         loaded() { return !!cache[key]; },

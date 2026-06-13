@@ -154,6 +154,38 @@ export const STUDIOS = [
     },
 ];
 
+// What each studio accepts as input / can hand off as output (for pipelines).
+// in/out: 'text' | 'image' | 'audio' | 'none'
+export const STUDIO_IO = {
+    'object-detection': { in: 'image', out: 'none' },
+    'zero-shot-detection': { in: 'image', out: 'none' },
+    'image-classification': { in: 'image', out: 'none' },
+    'zero-shot-image': { in: 'image', out: 'none' },
+    'segmentation': { in: 'image', out: 'none' },
+    'depth': { in: 'image', out: 'none' },
+    'background-removal': { in: 'image', out: 'image' },
+    'caption': { in: 'image', out: 'text' },
+    'speech-to-text': { in: 'audio', out: 'text' },
+    'text-to-speech': { in: 'text', out: 'none' },
+    'audio-classification': { in: 'audio', out: 'none' },
+    'sentiment': { in: 'text', out: 'none' },
+    'text-emotion': { in: 'text', out: 'none' },
+    'zero-shot-text': { in: 'text', out: 'none' },
+    'question-answering': { in: 'text', out: 'text' },
+    'summarize': { in: 'text', out: 'text' },
+    'translate': { in: 'text', out: 'text' },
+    'semantic-search': { in: 'text', out: 'none' },
+    'ner': { in: 'text', out: 'none' },
+    'fill-mask': { in: 'text', out: 'none' },
+    'mini-chat': { in: 'text', out: 'text' },
+    'chat-premium': { in: 'none', out: 'none' },
+};
+
+/** Studios that accept the given input kind via hand-off (excluding `exceptId`). */
+export function handoffTargets(kind, exceptId) {
+    return STUDIOS.filter((s) => s.id !== exceptId && STUDIO_IO[s.id]?.in === kind);
+}
+
 export function getStudio(id) {
     return STUDIOS.find((s) => s.id === id) || null;
 }
