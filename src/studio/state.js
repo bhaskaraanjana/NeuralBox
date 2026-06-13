@@ -6,7 +6,9 @@ import { initDatabase } from '../db/database.js';
 
 const FAV_KEY = 'studio_favorites';
 const RECENT_KEY = 'studio_recents';
+const HISTORY_KEY = 'studio_history';
 const MAX_RECENT = 6;
+const MAX_HISTORY = 60;
 
 async function read(key, fallback) {
     try {
@@ -48,4 +50,34 @@ export async function pushRecent(id) {
     const next = [id, ...recents.filter((x) => x !== id)].slice(0, MAX_RECENT);
     await write(RECENT_KEY, next);
     return next;
+}
+
+// ---- Run history (transcripts, captions, summaries, …) ----
+
+export async function getHistory() {
+    const v = await read(HISTORY_KEY, []);
+    return Array.isArray(v) ? v : [];
+}
+
+/**
+ * Save a result to local history.
+ * entry: { studio, title, text } — `text` is the full result for copy/reuse.
+ */
+export async function addHistory(entry) {
+    if (!entry || !entry.text) return;
+    const hist = await getHistory();
+    const item = {
+        id: `h_${hist.length}_${(entry.text || '').length}_${(entry.title || '').slice(0, 8)}`,
+        studio: entry.studio || '',
+        title: (entry.title || entry.text || '').slice(0, 80),
+        text: String(entry.text).slice(0, 20000),
+        at: entry.at || null,
+    };
+    const next = [item, ...hist].slice(0, MAX_HISTORY);
+    await write(HISTORY_KEY, next);
+    return next;
+}
+
+export async function clearHistory() {
+    await write(HISTORY_KEY, []);
 }

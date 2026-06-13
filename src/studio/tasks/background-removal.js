@@ -6,8 +6,9 @@
 // ============================================================
 import { el, clear, button, field, loader, imageInput, badge, downloadBlob, toast } from '../ui.js';
 import { loadAutoModel, getRawImageClass } from '../runtime.js';
+import { M } from '../models.js';
 
-const SPEC = { model: 'briaai/RMBG-1.4', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const SPEC = M.bgRmbg;
 
 export default function mount(host, ctx) {
     let net = null;            // { model, processor }

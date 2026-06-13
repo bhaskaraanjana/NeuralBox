@@ -4,11 +4,12 @@
 // ============================================================
 import { el, clear, button, segmented, textarea, loader, badge, toast } from '../ui.js';
 import { loadPipeline, loadLib, pickDevice } from '../runtime.js';
+import { M } from '../models.js';
 
 const TIERS = {
-    lite: { label: 'Lite', model: 'HuggingFaceTB/SmolLM2-360M-Instruct', size: '~270 MB', dtype: { webgpu: 'q4f16', wasm: 'q4' } },
-    balanced: { label: 'Balanced', model: 'onnx-community/Qwen2.5-0.5B-Instruct', size: '~480 MB', dtype: { webgpu: 'q4f16', wasm: 'q4' } },
-    smart: { label: 'Smart', model: 'onnx-community/Llama-3.2-1B-Instruct', size: '~750 MB', dtype: { webgpu: 'q4f16', wasm: 'q4' } },
+    lite: { label: 'Lite', model: M.chatLite.model, size: '~270 MB', dtype: M.chatLite.dtype },
+    balanced: { label: 'Balanced', model: M.chatBalanced.model, size: '~480 MB', dtype: M.chatBalanced.dtype },
+    smart: { label: 'Smart', model: M.chatSmart.model, size: '~750 MB', dtype: M.chatSmart.dtype },
 };
 const SYSTEM = 'You are NeuralBox Mini, a small AI assistant running entirely in the user\'s browser tab with no server. Be concise, warm, and genuinely helpful.';
 

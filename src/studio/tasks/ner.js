@@ -5,8 +5,9 @@
 // ============================================================
 import { el, clear, button, field, textarea, loader, badge, toast, escapeHtml } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
-const MODEL = { task: 'token-classification', model: 'Xenova/bert-base-NER', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const MODEL = M.ner;
 
 const DEFAULT_TEXT = 'Tim Cook is the CEO of Apple, which is headquartered in Cupertino, California.';
 const SAMPLES = [

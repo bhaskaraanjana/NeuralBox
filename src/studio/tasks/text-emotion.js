@@ -3,8 +3,9 @@
 // ============================================================
 import { el, clear, button, field, textarea, loader, scoreBars, chip, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
-const MODEL = { task: 'text-classification', model: 'Chi-Bi/emotion-text-classifier-onnx', dtype: { webgpu: 'q8', wasm: 'q8' } };
+const MODEL = M.txtEmotion;
 
 const EMOJI = { anger: '😠', disgust: '🤢', fear: '😨', joy: '😄', neutral: '😐', sadness: '😢', surprise: '😲' };
 const COLOR = { anger: '#f87171', disgust: '#a3e635', fear: '#c084fc', joy: '#fbbf24', neutral: '#94a3b8', sadness: '#60a5fa', surprise: '#f472b6' };

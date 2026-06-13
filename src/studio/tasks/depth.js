@@ -4,15 +4,16 @@
 // ============================================================
 import { el, clear, button, field, loader, imageInput, badge, segmented, downloadBlob, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 const SPECS = {
     fast: {
         label: 'Fast',
-        spec: { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-small', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.depthSmall,
     },
     detailed: {
         label: 'Detailed',
-        spec: { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-base', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.depthBase,
     },
 };
 

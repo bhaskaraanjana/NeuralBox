@@ -5,22 +5,22 @@
 // ============================================================
 import { el, clear, button, field, textarea, select, loader, copyButton, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 // Each direction maps to a separate Xenova opus-mt repo (direction baked in).
 const DIRECTIONS = [
-    { value: 'en-fr', label: 'English → French', model: 'Xenova/opus-mt-en-fr' },
-    { value: 'en-es', label: 'English → Spanish', model: 'Xenova/opus-mt-en-es' },
-    { value: 'en-de', label: 'English → German', model: 'Xenova/opus-mt-en-de' },
-    { value: 'en-zh', label: 'English → Chinese', model: 'Xenova/opus-mt-en-zh' },
-    { value: 'en-ru', label: 'English → Russian', model: 'Xenova/opus-mt-en-ru' },
-    { value: 'en-ar', label: 'English → Arabic', model: 'Xenova/opus-mt-en-ar' },
-    { value: 'fr-en', label: 'French → English', model: 'Xenova/opus-mt-fr-en' },
-    { value: 'es-en', label: 'Spanish → English', model: 'Xenova/opus-mt-es-en' },
-    { value: 'de-en', label: 'German → English', model: 'Xenova/opus-mt-de-en' },
-    { value: 'ru-en', label: 'Russian → English', model: 'Xenova/opus-mt-ru-en' },
+    { value: 'en-fr', label: 'English → French', spec: M.transEnFr, model: M.transEnFr.model },
+    { value: 'en-es', label: 'English → Spanish', spec: M.transEnEs, model: M.transEnEs.model },
+    { value: 'en-de', label: 'English → German', spec: M.transEnDe, model: M.transEnDe.model },
+    { value: 'en-zh', label: 'English → Chinese', spec: M.transEnZh, model: M.transEnZh.model },
+    { value: 'en-ru', label: 'English → Russian', spec: M.transEnRu, model: M.transEnRu.model },
+    { value: 'en-ar', label: 'English → Arabic', spec: M.transEnAr, model: M.transEnAr.model },
+    { value: 'fr-en', label: 'French → English', spec: M.transFrEn, model: M.transFrEn.model },
+    { value: 'es-en', label: 'Spanish → English', spec: M.transEsEn, model: M.transEsEn.model },
+    { value: 'de-en', label: 'German → English', spec: M.transDeEn, model: M.transDeEn.model },
+    { value: 'ru-en', label: 'Russian → English', spec: M.transRuEn, model: M.transRuEn.model },
 ];
 
-const DTYPE = { webgpu: 'fp16', wasm: 'q8' };
 const DEFAULT_DIR = 'en-es';
 const DEFAULT_TEXT = 'Hello, how are you? It is a beautiful day.';
 
@@ -77,8 +77,7 @@ export default function mount(host, ctx) {
         const ld = loader(`Loading ${dir.label}`);
         clear(loaderSlot); loaderSlot.append(ld.el);
         try {
-            const spec = { task: 'translation', model: dir.model, dtype: DTYPE };
-            const t = await loadPipeline(spec, (p) => ld.progress(p));
+            const t = await loadPipeline(dir.spec, (p) => ld.progress(p));
             pipes.set(dir.model, t);
             ld.remove();
             return t;

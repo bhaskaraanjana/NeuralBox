@@ -5,15 +5,16 @@
 // ============================================================
 import { el, clear, button, field, textarea, textInput, loader, chip, badge, segmented, toast, escapeHtml } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 const SPECS = {
     fast: {
         label: 'DistilBERT · SQuAD',
-        spec: { task: 'question-answering', model: 'Xenova/distilbert-base-cased-distilled-squad', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.qaDistilbert,
     },
     accurate: {
         label: 'RoBERTa · SQuAD2',
-        spec: { task: 'question-answering', model: 'onnx-community/roberta-base-squad2-ONNX', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.qaRoberta,
     },
 };
 

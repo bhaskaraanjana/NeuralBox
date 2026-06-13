@@ -4,19 +4,20 @@
 // ============================================================
 import { el, clear, button, field, loader, segmented, imageInput, badge, labelColor, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 const SPECS = {
     fast: {
         label: 'Fast',
-        spec: { task: 'image-segmentation', model: 'Xenova/segformer-b0-finetuned-ade-512-512', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.segB0,
     },
     accurate: {
         label: 'Accurate',
-        spec: { task: 'image-segmentation', model: 'Xenova/segformer-b2-finetuned-ade-512-512', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.segB2,
     },
     max: {
         label: 'Max',
-        spec: { task: 'image-segmentation', model: 'Xenova/segformer-b5-finetuned-ade-640-640', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.segB5,
     },
 };
 

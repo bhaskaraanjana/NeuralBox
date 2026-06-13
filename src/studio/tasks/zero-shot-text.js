@@ -5,15 +5,16 @@
 // ============================================================
 import { el, clear, button, field, textarea, textInput, segmented, loader, scoreBars, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 const SPECS = {
     fast: {
         label: 'Fast',
-        spec: { task: 'zero-shot-classification', model: 'Xenova/mobilebert-uncased-mnli', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.zstMobilebert,
     },
     accurate: {
         label: 'Accurate',
-        spec: { task: 'zero-shot-classification', model: 'Xenova/nli-deberta-v3-small', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.zstDeberta,
     },
 };
 

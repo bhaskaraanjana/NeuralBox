@@ -5,24 +5,22 @@
 // ============================================================
 import { el, clear, button, field, textarea, textInput, loader, scoreBars, chip, segmented, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 // One spec per quality tier. Some embedding models expect an instruction
 // prefix on the QUERY only (never the documents) for best retrieval.
 const SPECS = {
     bge: {
         label: 'BGE',
-        queryPrefix: 'Represent this sentence for searching relevant passages: ',
-        spec: { task: 'feature-extraction', model: 'Xenova/bge-small-en-v1.5', dtype: { webgpu: 'fp32', wasm: 'q8' } },
+        spec: M.embBge,
     },
     gte: {
         label: 'GTE',
-        queryPrefix: '',
-        spec: { task: 'feature-extraction', model: 'Xenova/gte-small', dtype: { webgpu: 'fp32', wasm: 'q8' } },
+        spec: M.embGte,
     },
     mini: {
         label: 'MiniLM',
-        queryPrefix: '',
-        spec: { task: 'feature-extraction', model: 'Xenova/all-MiniLM-L6-v2', dtype: { webgpu: 'fp32', wasm: 'q8' } },
+        spec: M.embMini,
     },
 };
 
@@ -126,7 +124,7 @@ export default function mount(host, ctx) {
             // Some models (e.g. BGE) need a retrieval instruction on the QUERY
             // only — never on the documents. Embed query + corpus together;
             // vectors are L2-normalized, so a plain dot product equals cosine similarity.
-            const queryText = SPECS[quality].queryPrefix + query;
+            const queryText = (SPECS[quality].spec.queryPrefix || '') + query;
             const emb = await pipe([queryText, ...docs], { pooling: 'mean', normalize: true });
             const vecs = emb.tolist(); // number[][], 384-dim
             const qVec = vecs[0];

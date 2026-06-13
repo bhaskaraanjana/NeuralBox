@@ -5,8 +5,9 @@
 // ============================================================
 import { el, clear, button, field, textInput, loader, scoreBars, chip, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
-const MODEL = { task: 'fill-mask', model: 'Xenova/bert-base-uncased', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const MODEL = M.fillMask;
 const MASK = '[MASK]';
 
 const SAMPLES = [

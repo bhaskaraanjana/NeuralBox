@@ -4,19 +4,20 @@
 // ============================================================
 import { el, clear, button, field, loader, segmented, imageInput, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
+import { M } from '../models.js';
 
 const SPECS = {
     fast: {
         label: 'Fast',
-        spec: { task: 'object-detection', model: 'Xenova/yolos-tiny', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.detYolosTiny,
     },
     accurate: {
         label: 'Accurate',
-        spec: { task: 'object-detection', model: 'Xenova/yolos-small', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.detYolosSmall,
     },
     max: {
         label: 'Max',
-        spec: { task: 'object-detection', model: 'Xenova/detr-resnet-50', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.detDetr,
     },
 };
 

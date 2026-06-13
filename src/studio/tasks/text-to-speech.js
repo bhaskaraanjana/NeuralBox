@@ -6,8 +6,9 @@
 import { el, clear, button, field, textarea, select, loader, downloadBlob, badge, toast } from '../ui.js';
 import { pickDevice, splitForTTS, concatFloat32, pcmToWavBlob, aggregateProgress } from '../runtime.js';
 import { KokoroTTS } from 'kokoro-js';
+import { M } from '../models.js';
 
-const MODEL = 'onnx-community/Kokoro-82M-v1.0-ONNX';
+const MODEL = M.ttsKokoro.model;
 const RATE = 24000; // Kokoro outputs 24kHz
 
 // A curated subset of Kokoro's 28 voices (US/UK, female/male).

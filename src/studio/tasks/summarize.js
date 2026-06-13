@@ -4,20 +4,21 @@
 // ============================================================
 import { el, clear, button, field, textarea, segmented, badge, loader, copyButton, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 // One model per style tier; runtime picks device + dtype from the {webgpu,wasm} object.
 const STYLES = {
     balanced: {
         label: 'Balanced',
-        spec: { task: 'summarization', model: 'Xenova/distilbart-cnn-12-6', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.sumCnn126,
     },
     fast: {
         label: 'Fast',
-        spec: { task: 'summarization', model: 'Xenova/distilbart-cnn-6-6', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.sumCnn66,
     },
     headline: {
         label: 'Headline',
-        spec: { task: 'summarization', model: 'Xenova/distilbart-xsum-12-6', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.sumXsum126,
     },
 };
 

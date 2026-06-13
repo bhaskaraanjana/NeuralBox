@@ -4,15 +4,16 @@
 // ============================================================
 import { el, clear, button, field, textInput, loader, scoreBars, segmented, imageInput, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 const SPECS = {
     fast: {
         label: 'Fast',
-        spec: { task: 'zero-shot-image-classification', model: 'Xenova/clip-vit-base-patch32', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.zsiClip32,
     },
     accurate: {
         label: 'Accurate',
-        spec: { task: 'zero-shot-image-classification', model: 'Xenova/clip-vit-base-patch16', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+        spec: M.zsiClip16,
     },
 };
 

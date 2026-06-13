@@ -3,8 +3,9 @@
 // ============================================================
 import { el, clear, button, field, textarea, loader, scoreBars, chip, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
-const MODEL = { task: 'text-classification', model: 'Xenova/distilbert-base-uncased-finetuned-sst-2-english', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const MODEL = M.txtSentiment;
 
 const SAMPLES = [
     'I absolutely loved this — best decision I made all year!',

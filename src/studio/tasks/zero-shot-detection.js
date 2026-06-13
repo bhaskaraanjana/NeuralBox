@@ -4,15 +4,16 @@
 // ============================================================
 import { el, clear, button, field, textInput, loader, segmented, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
+import { M } from '../models.js';
 
 const SPECS = {
     fast: {
         label: 'Fast',
-        spec: { task: 'zero-shot-object-detection', model: 'Xenova/owlvit-base-patch32', dtype: { webgpu: 'q4f16', wasm: 'q8' } },
+        spec: M.zsdOwlvit,
     },
     accurate: {
         label: 'Accurate',
-        spec: { task: 'zero-shot-object-detection', model: 'Xenova/owlv2-base-patch16-ensemble', dtype: { webgpu: 'q4f16', wasm: 'q8' } },
+        spec: M.zsdOwlv2,
     },
 };
 

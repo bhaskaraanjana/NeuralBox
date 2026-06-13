@@ -5,10 +5,11 @@
 // ============================================================
 import { el, clear, button, field, segmented, loader, imageInput, badge, copyButton, toast } from '../ui.js';
 import { loadPipeline, loadLib, pickDevice, aggregateProgress } from '../runtime.js';
+import { M } from '../models.js';
 
-const QUICK = { task: 'image-to-text', model: 'Xenova/vit-gpt2-image-captioning', dtype: { webgpu: 'fp16', wasm: 'q8' } };
-const FLORENCE = 'onnx-community/Florence-2-base';
-const FLORENCE_TASK = '<MORE_DETAILED_CAPTION>';
+const QUICK = M.capVitGpt2;
+const FLORENCE = M.capFlorence.model;
+const FLORENCE_TASK = M.capFlorence.task;
 
 export default function mount(host, ctx) {
     let mode = 'quick';

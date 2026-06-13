@@ -6,12 +6,9 @@
 // ============================================================
 import { el, clear, button, field, loader, scoreBars, dropZone, badge, toast } from '../ui.js';
 import { loadPipeline, decodeAudioTo16k } from '../runtime.js';
+import { M } from '../models.js';
 
-const MODEL = {
-    task: 'audio-classification',
-    model: 'Xenova/ast-finetuned-audioset-10-10-0.4593',
-    dtype: { webgpu: 'fp32', wasm: 'q8' },
-};
+const MODEL = M.audAst;
 
 export default function mount(host, ctx) {
     let classifier = null;

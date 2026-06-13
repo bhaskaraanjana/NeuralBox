@@ -1,34 +1,24 @@
 // ============================================================
 // Image Classification — "Image Labeler".
 // Pick an image, get the top-5 labels with confidence bars.
-// Two quality tiers: Fast (MobileNetV4) and Accurate (ViT).
+// Canonical example of createTierPicker + the central model catalog.
 // ============================================================
-import { el, clear, button, field, loader, scoreBars, segmented, badge, imageInput, toast } from '../ui.js';
-import { loadPipeline } from '../runtime.js';
+import { el, clear, button, badge, scoreBars, imageInput, toast } from '../ui.js';
+import { M } from '../models.js';
+import { createTierPicker } from '../studio-kit.js';
 
-const SPECS = {
-    fast: {
-        label: 'ResNet-50',
-        spec: { task: 'image-classification', model: 'Xenova/resnet-50', dtype: { webgpu: 'fp16', wasm: 'q8' } },
-    },
-    accurate: {
-        label: 'ViT-base',
-        spec: { task: 'image-classification', model: 'Xenova/vit-base-patch16-224', dtype: { webgpu: 'fp16', wasm: 'q8' } },
-    },
+const TIERS = {
+    fast: { label: 'ResNet-50', spec: M.clsResnet50 },
+    accurate: { label: 'ViT-base', spec: M.clsVit },
 };
 
 export default function mount(host, ctx) {
-    // One cached pipeline per quality tier (runtime caches the underlying load too).
-    const pipes = { fast: null, accurate: null };
-    let quality = 'fast';
     let currentURL = null;
     let busy = false;
 
-    // ---- DOM ----
     const stage = el('div', { class: 'sx-stage block' });
     const img = el('img', { alt: 'input', crossorigin: 'anonymous' });
     stage.append(img);
-
     const placeholder = el('div', { class: 'sx-placeholder' },
         el('div', { class: 'ph-emoji' }, '🏷️'),
         el('div', {}, 'Pick an image, drop one in, or use your camera'),
@@ -42,70 +32,39 @@ export default function mount(host, ctx) {
         el('div', {}, 'Labels will appear here'),
     );
 
-    const modelBadge = badge(SPECS[quality].label, 'accent');
-    const qualityToggle = segmented(
-        [{ value: 'fast', label: 'Fast' }, { value: 'accurate', label: 'Accurate' }],
-        quality,
-        (v) => {
-            quality = v;
-            modelBadge.textContent = SPECS[quality].label;
-            // Re-run on the new tier if we already have an image to classify.
-            if (currentURL) run();
-        },
-    );
-
     const loaderSlot = el('div');
-    const runBtn = button('Label image', { variant: 'primary', full: true, onClick: () => run() });
+    const tiers = createTierPicker(TIERS, loaderSlot, { hint: 'Fast is instant; Accurate trades speed for precision' });
+    const modelBadge = badge(TIERS[tiers.key].spec.model, 'accent');
+    tiers.onSwitch(() => { modelBadge.textContent = tiers.spec().model; if (currentURL) run(); });
 
-    const picker = imageInput({
-        samples: ['cats', 'tiger', 'bread', 'portrait'],
-        allowCamera: true,
-        onImage: (url) => setImage(url),
-    });
+    const runBtn = button('Label image', { variant: 'primary', full: true, onClick: () => run() });
+    const picker = imageInput({ samples: ['cats', 'tiger', 'bread', 'portrait'], allowCamera: true, onImage: (url) => setImage(url) });
 
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
-        field('Quality', qualityToggle, 'Fast is instant; Accurate trades speed for precision'),
+        tiers.el,
         el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
         loaderSlot,
     );
 
     const output = el('div', { class: 'sx-pane' },
-        el('p', { class: 'sx-pane-title' }, '🏷️ Labels' ),
+        el('p', { class: 'sx-pane-title' }, '🏷️ Labels'),
         stageWrap,
         resultBody,
     );
 
     host.append(el('div', { class: 'sx-split wide-out' }, controls, output));
 
-    // ---- Logic ----
-    function showStage() {
-        if (stageWrap.firstChild !== stage) { clear(stageWrap); stageWrap.append(stage); }
-    }
+    function showStage() { if (stageWrap.firstChild !== stage) { clear(stageWrap); stageWrap.append(stage); } }
 
     function setImage(url) {
         currentURL = url;
         showStage();
-        // Attach before src so cached images (which fire load synchronously-ish) still auto-run.
-        img.onload = () => { if (pipes[quality]) run(); };
+        img.onload = () => { if (tiers.loaded()) run(); };
         img.onerror = () => toast('Could not load that image', 'error');
         img.src = url;
-    }
-
-    async function ensureModel() {
-        if (pipes[quality]) return pipes[quality];
-        const ld = loader(`Loading ${SPECS[quality].label}`);
-        clear(loaderSlot); loaderSlot.append(ld.el);
-        try {
-            pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p));
-            ld.remove();
-        } catch (err) {
-            ld.fail(err);
-            throw err;
-        }
-        return pipes[quality];
     }
 
     function renderResults(out) {
@@ -128,8 +87,8 @@ export default function mount(host, ctx) {
         busy = true;
         runBtn.disabled = true;
         try {
-            const classifier = await ensureModel();
-            const out = await classifier(currentURL, { topk: 5 }); // [{label,score}] desc
+            const classifier = await tiers.ensure();
+            const out = await classifier(currentURL, { topk: 5 });
             if (!out?.length) { toast('No labels returned', 'info'); return; }
             renderResults(out);
         } catch (err) {
@@ -140,7 +99,6 @@ export default function mount(host, ctx) {
         }
     }
 
-    // ImageNet labels are often "tabby, tabby cat" — keep the first, tidy casing.
     function prettyLabel(label) {
         const first = String(label).split(',')[0].trim();
         return first.charAt(0).toUpperCase() + first.slice(1);

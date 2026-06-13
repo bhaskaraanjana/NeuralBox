@@ -5,13 +5,14 @@
 // ============================================================
 import { el, clear, button, field, segmented, select, loader, dropZone, copyButton, downloadBlob, badge, toast } from '../ui.js';
 import { loadPipeline, decodeAudioTo16k } from '../runtime.js';
+import { M } from '../models.js';
 
 // Whisper distil models want shorter chunks (15s) than standard whisper (30s).
 const SPECS = {
-    fast: { label: 'Fast', model: 'onnx-community/whisper-base.en', dtype: { webgpu: 'fp16', wasm: 'q8' }, chunk: 30, stride: 5, multilingual: false, note: 'whisper-base · English · ~145 MB' },
-    best: { label: 'Best', model: 'Xenova/whisper-small.en', dtype: { webgpu: 'fp16', wasm: 'q8' }, chunk: 30, stride: 5, multilingual: false, note: 'whisper-small · English · best accuracy · WebGPU recommended' },
-    turbo: { label: 'Turbo', model: 'onnx-community/distil-small.en', dtype: { webgpu: 'fp16', wasm: 'q8' }, chunk: 15, stride: 3, multilingual: false, note: 'distil-whisper · English · ~6× faster, near-small quality' },
-    multi: { label: 'Multilingual', model: 'onnx-community/whisper-base', dtype: { webgpu: 'fp16', wasm: 'q8' }, chunk: 30, stride: 5, multilingual: true, note: 'whisper-base · 99 languages' },
+    fast: { ...M.asrBaseEn, label: 'Fast', chunk: 30, stride: 5, multilingual: false, note: 'whisper-base · English · ~145 MB' },
+    best: { ...M.asrSmallEn, label: 'Best', chunk: 30, stride: 5, multilingual: false, note: 'whisper-small · English · best accuracy · WebGPU recommended' },
+    turbo: { ...M.asrDistilSmall, label: 'Turbo', chunk: 15, stride: 3, multilingual: false, note: 'distil-whisper · English · ~6× faster, near-small quality' },
+    multi: { ...M.asrBaseMulti, label: 'Multilingual', chunk: 30, stride: 5, multilingual: true, note: 'whisper-base · 99 languages' },
 };
 
 const LANGUAGES = ['auto', 'english', 'spanish', 'french', 'german', 'italian', 'portuguese', 'dutch', 'russian', 'chinese', 'japanese', 'korean', 'arabic', 'hindi'];
