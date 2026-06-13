@@ -1,0 +1,18 @@
+name: Model Doctor
+
+# Proactively catch gated / renamed / removed model repos before users do.
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  doctor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/model-doctor.mjs
