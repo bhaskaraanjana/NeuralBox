@@ -132,13 +132,23 @@ async function handleRoute(routeId) {
     }
 }
 
-// "/" focuses the gallery search (when not already typing).
 document.addEventListener('keydown', (e) => {
-    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
     const tag = (e.target?.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
-    const search = document.querySelector('.home-search');
-    if (search) { e.preventDefault(); search.focus(); }
+    const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable;
+
+    // "/" focuses the gallery search (when not already typing).
+    if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey && !typing) {
+        const search = document.querySelector('.home-search');
+        if (search) { e.preventDefault(); search.focus(); }
+        return;
+    }
+
+    // Escape returns to the gallery from a studio (modals handle their own Escape).
+    if (e.key === 'Escape' && !typing
+        && document.body.classList.contains('in-studio')
+        && !document.querySelector('.sx-modal-overlay')) {
+        navigate('home');
+    }
 });
 
 // ---- Go ------------------------------------------------------

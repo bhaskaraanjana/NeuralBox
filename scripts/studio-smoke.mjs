@@ -82,6 +82,13 @@ try {
   await page.click('.studio-head .sx-btn-ghost');
   await page.waitForSelector('.home-hero-title', { timeout: 5000 });
 
+  // Escape returns to the gallery from a studio.
+  await page.evaluate(() => { location.hash = '#/depth'; });
+  await page.waitForFunction(() => /depth/i.test(document.querySelector('.studio-head-title')?.textContent || ''), null, { timeout: 10000 });
+  await page.evaluate(() => document.body.focus());
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.home-hero-title', { timeout: 5000 });
+
   await browser.close();
   if (errors.length) throw new Error(`Console/page errors: ${errors.join(' | ')}`);
   console.log(`Studio smoke passed (${cardCount} model cards, sections: ${sections.join(', ')}).`);
