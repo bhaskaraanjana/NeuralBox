@@ -49,36 +49,37 @@ function statRow(label, value) {
 export async function openStorageModal() {
     const body = el('div');
     modal('On-device storage', body);
-    body.append(el('div', { class: 'sx-muted' }, 'Reading storage…'));
+    clear(body); body.append(el('div', { class: 'sx-muted' }, 'Reading storage…'));
 
-    const s = await cacheStats();
-    const usedPct = s.quota ? Math.min(100, Math.round((s.usage / s.quota) * 100)) : 0;
+    // Re-render the whole body so every stat (files, bytes, bar) refreshes after a clear.
+    async function render() {
+        const s = await cacheStats();
+        const usedPct = s.quota ? Math.min(100, Math.round((s.usage / s.quota) * 100)) : 0;
+        clear(body);
+        body.append(
+            el('p', { class: 'sx-result', style: { marginBottom: '16px' } },
+                'NeuralBox caches model files in your browser so studios load instantly and keep working offline after the first use.'),
+            statRow('Cached model files', String(s.files)),
+            statRow('Storage used', fmtBytes(s.usage)),
+            s.quota ? statRow('Storage available', fmtBytes(s.quota)) : null,
+            s.quota ? el('div', { class: 'sx-loader-track', style: { marginTop: '10px' } },
+                el('div', { class: 'sx-loader-fill', style: { width: `${usedPct}%` } })) : null,
+            el('div', { class: 'sx-row', style: { marginTop: '20px' } },
+                button('Clear cached models', {
+                    variant: 'danger',
+                    onClick: async (e) => {
+                        const btn = e.currentTarget;
+                        btn.disabled = true;
+                        await clearCaches();
+                        toast('Cleared cached models — they will re-download on next use', 'success');
+                        await render();
+                    },
+                }),
+            ),
+            el('p', { class: 'sx-hint', style: { marginTop: '10px' } },
+                'Clearing frees space; models re-download next time you open a studio. Your pinned favorites and recents are kept.'),
+        );
+    }
 
-    clear(body);
-    body.append(
-        el('p', { class: 'sx-result', style: { marginBottom: '16px' } },
-            'NeuralBox caches model files in your browser so studios load instantly and keep working offline after the first use.'),
-        statRow('Cached model files', String(s.files)),
-        statRow('Storage used', fmtBytes(s.usage)),
-        s.quota ? statRow('Storage available', fmtBytes(s.quota)) : null,
-        s.quota ? el('div', { class: 'sx-loader-track', style: { marginTop: '10px' } },
-            el('div', { class: 'sx-loader-fill', style: { width: `${usedPct}%` } })) : null,
-        el('div', { class: 'sx-row', style: { marginTop: '20px' } },
-            button('Clear cached models', {
-                variant: 'danger',
-                onClick: async (e) => {
-                    const btn = e.currentTarget;
-                    btn.disabled = true;
-                    await clearCaches();
-                    toast('Cleared cached models — they will re-download on next use', 'success');
-                    const s2 = await cacheStats();
-                    const row = body.querySelector('.sx-stat-row strong');
-                    if (row) row.textContent = String(s2.files);
-                    btn.disabled = false;
-                },
-            }),
-        ),
-        el('p', { class: 'sx-hint', style: { marginTop: '10px' } },
-            'Clearing frees space; models re-download next time you open a studio. Your pinned favorites and recents are kept.'),
-    );
+    await render();
 }

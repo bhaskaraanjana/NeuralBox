@@ -14,7 +14,7 @@ export default function mount(host, ctx) {
 
     const stage = el('div', { class: 'sx-stage block' });
     const overlay = el('div', { class: 'sx-overlay' });
-    const img = el('img', { alt: 'input' });
+    const img = el('img', { alt: 'input', crossorigin: 'anonymous' });
     stage.append(img, overlay);
     const placeholder = el('div', { class: 'sx-placeholder' },
         el('div', { class: 'ph-emoji' }, '🔭'),
