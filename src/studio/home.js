@@ -58,7 +58,7 @@ export async function renderHome(root, ctx) {
         ),
     );
 
-    const search = el('input', { class: 'home-search', type: 'search', placeholder: '🔎  Search models — try "detect", "voice", "translate"…' });
+    const search = el('input', { class: 'home-search', type: 'search', 'aria-label': 'Search models', placeholder: '🔎  Search models — try "detect", "voice", "translate"…' });
     const sections = el('div', { class: 'home-sections' });
 
     let activeCat = 'all';
