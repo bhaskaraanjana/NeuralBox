@@ -2,14 +2,23 @@
 // NeuralBox Studio — Home / launcher gallery
 // ============================================================
 import { el, clear, badge } from './ui.js';
-import { CATEGORIES, STUDIOS, studiosByCategory } from './registry.js';
+import { CATEGORIES, STUDIOS, studiosByCategory, getStudio } from './registry.js';
+import { getFavorites, toggleFavorite, getRecents } from './state.js';
 
-function studioCard(studio, ctx, index = 0) {
+function studioCard(studio, ctx, index, favorites, onToggleFav) {
+    const isFav = favorites.has(studio.id);
     const tags = el('div', { class: 'home-card-tags' },
         studio.badge ? badge(studio.badge, 'accent') : null,
         badge(studio.device === 'webgpu' ? 'WebGPU' : 'Any device', studio.device === 'webgpu' ? 'gpu' : 'ok'),
         el('span', { class: 'home-card-size' }, studio.size),
     );
+    const fav = el('button', {
+        class: `home-fav${isFav ? ' on' : ''}`,
+        type: 'button',
+        title: isFav ? 'Unpin' : 'Pin to top',
+        'aria-label': isFav ? 'Unpin' : 'Pin to top',
+        onClick: (e) => { e.stopPropagation(); onToggleFav(studio.id); },
+    }, isFav ? '★' : '☆');
     const card = el('button', {
         class: 'home-card',
         type: 'button',
@@ -18,6 +27,7 @@ function studioCard(studio, ctx, index = 0) {
         onClick: () => ctx.navigate(studio.id),
     },
         el('div', { class: 'home-card-glow' }),
+        fav,
         el('div', { class: 'home-card-emoji' }, studio.emoji),
         el('div', { class: 'home-card-body' },
             el('h3', { class: 'home-card-title' }, studio.title),
@@ -31,6 +41,9 @@ function studioCard(studio, ctx, index = 0) {
 
 export async function renderHome(root, ctx) {
     clear(root);
+
+    let favorites = new Set(await getFavorites());
+    const recents = await getRecents();
 
     const deviceChip = el('span', { class: 'home-chip' }, 'Detecting hardware…');
     const hero = el('header', { class: 'home-hero' },
@@ -51,7 +64,6 @@ export async function renderHome(root, ctx) {
     let activeCat = 'all';
     let currentFilter = '';
 
-    // Category quick-filter pills.
     const pills = el('div', { class: 'home-pills' });
     const pillDefs = [{ id: 'all', label: 'All', emoji: '✨' }, ...CATEGORIES.map((c) => ({ id: c.id, label: c.label, emoji: c.emoji }))];
     const pillEls = [];
@@ -69,25 +81,46 @@ export async function renderHome(root, ctx) {
     });
     pills.append(...pillEls);
 
+    async function onToggleFav(id) {
+        favorites = new Set(await toggleFavorite(id));
+        build();
+    }
+
+    let cardIndex = 0;
+    function renderSection(head, items) {
+        const grid = el('div', { class: 'home-grid' }, ...items.map((s) => studioCard(s, ctx, cardIndex++, favorites, onToggleFav)));
+        return el('section', { class: 'home-section' },
+            el('div', { class: 'home-section-head' },
+                el('h2', { class: 'home-section-title' }, el('span', { class: 'home-section-emoji' }, head.emoji), head.label),
+                el('span', { class: 'home-section-blurb' }, head.blurb),
+            ),
+            grid,
+        );
+    }
+
     function build() {
         clear(sections);
+        cardIndex = 0;
         const q = currentFilter.trim().toLowerCase();
+        const showSpecial = activeCat === 'all' && !q;
         let total = 0;
+
+        if (showSpecial) {
+            const favStudios = [...favorites].map((id) => getStudio(id)).filter(Boolean);
+            if (favStudios.length) { sections.append(renderSection({ label: 'Pinned', emoji: '📌', blurb: 'Your favorites' }, favStudios)); total += favStudios.length; }
+            const recentStudios = recents.map((id) => getStudio(id)).filter(Boolean).filter((s) => !favorites.has(s.id));
+            if (recentStudios.length) { sections.append(renderSection({ label: 'Recent', emoji: '🕘', blurb: 'Jump back in' }, recentStudios)); }
+        }
+
         for (const cat of CATEGORIES) {
             if (activeCat !== 'all' && cat.id !== activeCat) continue;
             const items = studiosByCategory(cat.id)
                 .filter((s) => !q || `${s.title} ${s.tagline} ${s.category} ${s.badge || ''}`.toLowerCase().includes(q));
             if (!items.length) continue;
             total += items.length;
-            const grid = el('div', { class: 'home-grid' }, ...items.map((s, i) => studioCard(s, ctx, i)));
-            sections.append(el('section', { class: 'home-section' },
-                el('div', { class: 'home-section-head' },
-                    el('h2', { class: 'home-section-title' }, el('span', { class: 'home-section-emoji' }, cat.emoji), cat.label),
-                    el('span', { class: 'home-section-blurb' }, cat.blurb),
-                ),
-                grid,
-            ));
+            sections.append(renderSection(cat, items));
         }
+
         if (!total) {
             sections.append(el('div', { class: 'home-empty' },
                 el('div', { class: 'home-empty-emoji' }, '🔍'),
@@ -112,7 +145,6 @@ export async function renderHome(root, ctx) {
         ),
     ));
 
-    // Fill in the live backend once probed.
     try {
         const device = await ctx.runtime.pickDevice();
         deviceChip.textContent = device === 'webgpu' ? '⚡ WebGPU accelerated' : '🧩 WASM (works anywhere)';

@@ -8,6 +8,7 @@ import { el, clear, button, badge, spinner } from './ui.js';
 import { startRouter, navigate } from './router.js';
 import { getStudio } from './registry.js';
 import { renderHome } from './home.js';
+import { pushRecent } from './state.js';
 
 const { el: _e } = ui; // keep tree-shaker honest
 
@@ -102,6 +103,7 @@ async function handleRoute(routeId) {
 
     document.documentElement.style.setProperty('--accent', studio.accent);
     document.body.classList.add('in-studio');
+    pushRecent(studio.id).catch(() => {});
 
     const host = el('div', { class: 'studio-host' }, el('div', { class: 'studio-loading' }, spinner(), `Opening ${studio.title}…`));
     clear(studioBody);
