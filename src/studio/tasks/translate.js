@@ -53,6 +53,8 @@ export default function mount(host, ctx) {
         // Hint the source language without forcing it.
         const LANG = { en: 'English', fr: 'French', es: 'Spanish', de: 'German', ru: 'Russian' };
         input.placeholder = `Type or paste ${LANG[from] || 'source'} text to translate…`;
+        // Warm the newly-selected direction's model so the first run is instant.
+        ensurePipe(currentDir()).catch(() => {});
     });
 
     const controls = el('div', { class: 'sx-pane' },
@@ -127,4 +129,8 @@ export default function mount(host, ctx) {
     // ---- Pipeline hand-off (consume piped text input) ----
     const _h = ctx.takeHandoff('text');
     if (_h && _h.data) { input.value = _h.data; }
+
+    // Warm the currently-selected direction's model on mount so the model
+    // downloads while the user prepares input and the first run is instant.
+    ensurePipe(currentDir()).catch(() => {});
 }

@@ -178,6 +178,10 @@ export default function mount(host, ctx) {
         );
     }
 
+    // ---- Warm the model on mount so the first run is instant ----
+    // (the loader surfaces progress/errors; the pipeline cache dedupes a later run)
+    ensureModel().catch(() => {});
+
     // ---- Cleanup ----
     return () => {
         destroyed = true;

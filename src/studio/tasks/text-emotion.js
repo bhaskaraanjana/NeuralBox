@@ -88,4 +88,7 @@ export default function mount(host, ctx) {
 
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { input.value = _h.data; }
+
+    // Warm the model on mount so it downloads while the user prepares input.
+    ensureModel().catch(() => {});
 }

@@ -177,4 +177,9 @@ export default function mount(host, ctx) {
     // Consume a piped text hand-off (prefill only; do not auto-run).
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { input.value = _h.data; }
+
+    // Warm the model on mount so it downloads while the user prepares input
+    // and the first run is instant. The loader surfaces progress/errors; the
+    // pipeline cache dedupes so warming + a later run won't double-download.
+    ensureModel().catch(() => {});
 }

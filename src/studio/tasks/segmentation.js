@@ -78,6 +78,8 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].label;
+            // Warm the newly-selected tier so the next run is instant (deduped via cache).
+            ensureModel().catch(() => {});
             // Re-run on the new tier if we already have a still image to segment
             // (the live loop picks up the new tier on its own via ensureModel).
             if (!live && currentURL) runOnce();
@@ -260,6 +262,10 @@ export default function mount(host, ctx) {
     // ---- Pipeline hand-off: consume a piped image input (if any) ----
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
+
+    // Warm the currently-selected model on mount so the first run is instant
+    // (the loader surfaces progress/errors; deduped via the runtime cache).
+    ensureModel().catch(() => {});
 
     return () => { stopLive(); picker.destroy?.(); };
 }

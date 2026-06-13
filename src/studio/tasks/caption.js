@@ -35,7 +35,7 @@ export default function mount(host, ctx) {
     const modePicker = segmented(
         [{ value: 'quick', label: 'Quick' }, { value: 'detailed', label: 'Detailed' }],
         mode,
-        (v) => { mode = v; modelBadge.textContent = v === 'detailed' ? 'Florence-2' : 'ViT-GPT2'; if (currentURL && readyFor(v)) runOnce(); },
+        (v) => { mode = v; modelBadge.textContent = v === 'detailed' ? 'Florence-2' : 'ViT-GPT2'; (v === 'detailed' ? ensureFlorence() : ensureQuick()).catch(() => {}); if (currentURL && readyFor(v)) runOnce(); },
     );
     const modelBadge = badge('ViT-GPT2', 'accent');
 
@@ -244,6 +244,10 @@ export default function mount(host, ctx) {
     }
 
     const _h = ctx.takeHandoff("image"); if (_h && _h.data) setImage(_h.data);
+
+    // Warm the default Quick model on mount so the first run is instant.
+    // Detailed/Florence is warmed only when the user switches to that mode.
+    ensureQuick().catch(() => {});
 
     return () => { picker.destroy?.(); };
 }

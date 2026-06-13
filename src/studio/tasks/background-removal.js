@@ -244,5 +244,9 @@ export default function mount(host, ctx) {
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
 
+    // Warm the model on mount so it downloads while the user prepares input;
+    // the first run is then instant. The pipeline cache dedupes a later run.
+    ensureModel().catch(() => {});
+
     return () => { picker.destroy?.(); };
 }

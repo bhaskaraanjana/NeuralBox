@@ -30,37 +30,46 @@ export async function deviceHint(spec) {
  * @returns {{ el: HTMLElement, key: string, spec: () => Object,
  *   ensure: (title?: string) => Promise<any>, onSwitch: (cb:(k:string)=>void)=>void }}
  */
-export function createTierPicker(tiers, loaderSlot, { label = 'Quality', hint = '', initial } = {}) {
+export function createTierPicker(tiers, loaderSlot, { label = 'Quality', hint = '', initial, warm = false } = {}) {
     const keys = Object.keys(tiers);
     let key = initial && tiers[initial] ? initial : keys[0];
-    const cache = {};
+    const cache = {}; // key -> in-flight/resolved load promise (dedupes warm + run)
+    const ready = {}; // key -> true once loaded
     let switchCb = null;
 
     const sizeNote = el('p', { class: 'sx-hint', style: { marginTop: '4px' } }, '');
     const updateNote = () => {
         const sz = tiers[key].spec?.size;
-        sizeNote.textContent = sz ? `First run downloads ≈ ${String(sz).replace(/^~/, '')}` : '';
+        sizeNote.textContent = sz ? `≈ ${String(sz).replace(/^~/, '')} download` : '';
     };
+
+    function ensure(title) {
+        const k = key;
+        if (cache[k]) return cache[k];
+        const ld = loader(title || `Loading ${tiers[k].label}`);
+        clear(loaderSlot); loaderSlot.append(ld.el);
+        cache[k] = loadPipeline(tiers[k].spec, (p) => ld.progress(p)).then(
+            (pipe) => { ld.remove(); ready[k] = true; return pipe; },
+            (err) => { ld.fail(err); delete cache[k]; throw err; },
+        );
+        return cache[k];
+    }
+
     const seg = segmented(
         keys.map((k) => ({ value: k, label: tiers[k].label })),
         key,
-        (k) => { key = k; updateNote(); switchCb?.(k); },
+        (k) => { key = k; updateNote(); if (warm) ensure().catch(() => {}); switchCb?.(k); },
     );
     updateNote();
+    // Warm the initial tier on open so the first run is instant.
+    if (warm) ensure().catch(() => {});
 
     return {
         el: el('div', {}, field(label, seg, hint), sizeNote),
         get key() { return key; },
         spec() { return tiers[key].spec; },
-        loaded() { return !!cache[key]; },
-        async ensure(title) {
-            if (cache[key]) return cache[key];
-            const ld = loader(title || `Loading ${tiers[key].label}`);
-            clear(loaderSlot); loaderSlot.append(ld.el);
-            try { cache[key] = await loadPipeline(tiers[key].spec, (p) => ld.progress(p)); ld.remove(); }
-            catch (err) { ld.fail(err); throw err; }
-            return cache[key];
-        },
+        loaded() { return !!ready[key]; },
+        ensure,
         onSwitch(cb) { switchCb = cb; },
     };
 }

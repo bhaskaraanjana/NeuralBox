@@ -31,7 +31,7 @@ export default function mount(host, ctx) {
     const tierPicker = segmented(
         Object.entries(TIERS).map(([k, v]) => ({ value: k, label: v.label })),
         tier,
-        (v) => { tier = v; sizeBadge.textContent = TIERS[v].size; if (loadedModel && loadedModel !== TIERS[v].model) { generator = null; loadedModel = null; addNote(`Switched to ${TIERS[v].label} — it will load on your next message.`); } },
+        (v) => { tier = v; sizeBadge.textContent = TIERS[v].size; if (loadedModel && loadedModel !== TIERS[v].model) { generator = null; loadedModel = null; addNote(`Switched to ${TIERS[v].label} — it will load on your next message.`); } ensureModel().catch(() => {}); },
     );
     const sizeBadge = el('span', { class: 'sx-muted' }, TIERS[tier].size);
 
@@ -131,6 +131,9 @@ export default function mount(host, ctx) {
     // ---- pipeline hand-off: prefill chat input from a piped text result (do NOT auto-send) ----
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { input.value = _h.data; }
+
+    // ---- warm: start loading the currently-selected model on mount so the first run is instant ----
+    ensureModel().catch(() => {});
 
     return () => { /* pipeline cache persists in runtime; nothing to tear down */ };
 }

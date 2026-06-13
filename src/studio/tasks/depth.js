@@ -54,6 +54,8 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].label;
+            // Warm the newly-selected tier so its first run is instant.
+            ensureModel().catch(() => {});
             // Re-run on the new tier if we already have an image loaded.
             if (currentURL) runOnce();
         },
@@ -227,6 +229,10 @@ export default function mount(host, ctx) {
     // ---- Pipeline hand-off (consume a piped image input) ----
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
+
+    // ---- Warm the currently-selected model on mount so the first run is instant. ----
+    // The loader surfaces progress/errors; the pipeline cache dedupes a later run.
+    ensureModel().catch(() => {});
 
     return () => { stopLive(); picker.destroy?.(); };
 }

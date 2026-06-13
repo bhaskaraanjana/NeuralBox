@@ -44,6 +44,8 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].label;
+            // Warm the newly-selected tier so the next run is instant.
+            ensureModel().catch(() => {});
             // Re-run on the new tier if we already have a classification on screen.
             if (hasRun) run();
         },
@@ -139,6 +141,9 @@ export default function mount(host, ctx) {
     // ---- Pipeline hand-off (consume a piped TEXT input, if any) ----
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { input.value = _h.data; }
+
+    // Warm the currently-selected model on mount so the first run is instant.
+    ensureModel().catch(() => {});
 
     return () => { /* nothing to tear down */ };
 }

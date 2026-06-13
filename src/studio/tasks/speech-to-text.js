@@ -66,7 +66,7 @@ export default function mount(host, ctx) {
     const tierPicker = segmented(
         Object.entries(SPECS).map(([k, v]) => ({ value: k, label: v.label })),
         tier,
-        (v) => { tier = v; tierNote.textContent = SPECS[v].note; langField.style.display = SPECS[v].multilingual ? '' : 'none'; },
+        (v) => { tier = v; tierNote.textContent = SPECS[v].note; langField.style.display = SPECS[v].multilingual ? '' : 'none'; ensureModel().catch(() => {}); },
     );
 
     const langSelect = select(LANGUAGES.map((l) => ({ value: l, label: l === 'auto' ? 'Auto-detect' : l[0].toUpperCase() + l.slice(1) })), lang);
@@ -226,6 +226,9 @@ export default function mount(host, ctx) {
         }
         outBody.append(body);
     }
+
+    // Warm the currently-selected model on mount so the first run is instant.
+    ensureModel().catch(() => {});
 
     return () => { destroyed = true; stopRecording(); releaseStream(); };
 }

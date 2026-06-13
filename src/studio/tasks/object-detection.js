@@ -73,6 +73,8 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].spec.model;
+            // Warm the newly-selected tier so the next run is instant (loader surfaces errors).
+            ensureModel().catch(() => {});
             // Re-run on the new tier if we already have a still image to detect on.
             if (!live && currentURL) runOnce();
         },
@@ -254,6 +256,9 @@ export default function mount(host, ctx) {
     // ---- Pipeline hand-off (consume piped image) ----
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
+
+    // Warm the currently-selected model on mount so the first run is instant (loader surfaces errors).
+    ensureModel().catch(() => {});
 
     return () => { stopLive(); picker.destroy?.(); };
 }

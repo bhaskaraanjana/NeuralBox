@@ -52,6 +52,8 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].label;
+            // Warm the newly-selected tier so its first run is instant.
+            ensureModel().catch(() => {});
             // Re-embed on the new tier if we already have results showing.
             if (!outBody.classList.contains('sx-placeholder')) run();
         },
@@ -164,4 +166,8 @@ export default function mount(host, ctx) {
     // ---- Pipeline hand-off: prefill the QUERY from a piped text input ----
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { queryInput.value = _h.data; }
+
+    // Warm the currently-selected model on mount so the first run is instant.
+    // The loader surfaces progress/errors; the runtime cache dedupes a later run.
+    ensureModel().catch(() => {});
 }

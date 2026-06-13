@@ -87,4 +87,9 @@ export default function mount(host, ctx) {
 
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { input.value = _h.data; }
+
+    // Warm the model on mount so the download runs while the user prepares
+    // input and the first Analyze is instant. The pipeline cache dedupes this
+    // with a later run; the existing loader surfaces any errors.
+    ensureModel().catch(() => {});
 }

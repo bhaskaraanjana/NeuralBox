@@ -43,6 +43,8 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].label;
+            // Warm the newly-selected tier so its first run is instant.
+            ensureModel().catch(() => {});
             // Re-run on the new tier if we already have a question to answer.
             if (context.value.trim() && question.value.trim()) run();
         },
@@ -136,4 +138,8 @@ export default function mount(host, ctx) {
     // Consume a piped-in text hand-off (prefill the context textarea; do not auto-run).
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { context.value = _h.data; }
+
+    // Warm the currently-selected model on mount so it downloads while the user
+    // prepares input and the first run is instant (loader surfaces any error).
+    ensureModel().catch(() => {});
 }

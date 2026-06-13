@@ -47,6 +47,8 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].label;
+            // Warm the newly-selected tier's model so it downloads ahead of the run.
+            ensureModel().catch(() => {});
             // Re-run on the new tier if we already have an image to search.
             if (currentURL) run();
         },
@@ -176,4 +178,8 @@ export default function mount(host, ctx) {
     // Consume a piped image hand-off, if one was sent to this studio.
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
+
+    // Warm the currently-selected model on mount so the first run is instant
+    // (the loader surfaces progress/errors; the pipeline cache dedupes a later run).
+    ensureModel().catch(() => {});
 }

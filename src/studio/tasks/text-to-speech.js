@@ -129,5 +129,10 @@ export default function mount(host, ctx) {
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { input.value = _h.data; }
 
+    // Warm the Kokoro model on mount so the download runs while the user
+    // prepares input — the first Speak click is then instant. The loader
+    // surfaces progress/errors, and ensureTTS() dedupes via the pipeline cache.
+    ensureTTS().catch(() => {});
+
     return () => { /* model cache persists in module scope */ };
 }

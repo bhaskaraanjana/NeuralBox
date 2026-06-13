@@ -54,6 +54,8 @@ export default function mount(host, ctx) {
     ], style, (v) => {
         style = v;
         modelBadge.textContent = STYLES[style].label;
+        // Warm the newly-selected style so its model downloads while the user waits.
+        ensureModel().catch(() => {});
         // Re-run on the new tier if we already have text to summarize.
         if (input.value.trim()) run();
     });
@@ -138,4 +140,8 @@ export default function mount(host, ctx) {
     // Pipeline hand-off: prefill the source textarea from a piped text input (don't auto-run).
     const _h = ctx.takeHandoff("text");
     if (_h && _h.data) { input.value = _h.data; }
+
+    // Warm the currently-selected model on mount so the first run is instant.
+    // The loader surfaces progress/errors; the pipeline cache dedupes with a later run.
+    ensureModel().catch(() => {});
 }

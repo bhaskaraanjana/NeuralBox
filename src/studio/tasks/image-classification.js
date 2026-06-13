@@ -38,7 +38,7 @@ export default function mount(host, ctx) {
     );
 
     const loaderSlot = el('div');
-    const tiers = createTierPicker(TIERS, loaderSlot, { hint: 'Fast is instant; Accurate trades speed for precision' });
+    const tiers = createTierPicker(TIERS, loaderSlot, { hint: 'Fast is instant; Accurate trades speed for precision', warm: true });
     const modelBadge = badge(TIERS[tiers.key].spec.model, 'accent');
     tiers.onSwitch(() => { modelBadge.textContent = tiers.spec().model; if (currentURL) run(); });
 
