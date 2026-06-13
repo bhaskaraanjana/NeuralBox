@@ -39,7 +39,8 @@ await context.addInitScript((modelId) => {
 }, visionModelId);
 
 const page = await context.newPage();
-await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+// The chat app now lives at /chat.html (index.html is the Studio shell).
+await page.goto(`${baseUrl}/chat.html`, { waitUntil: 'domcontentloaded' });
 await page.waitForTimeout(1500);
 
 await page.setInputFiles('#image-input', imagePath);

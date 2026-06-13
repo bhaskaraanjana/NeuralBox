@@ -8,7 +8,8 @@ function assert(condition, message) {
 
 async function main() {
   const [html, mainJs, renderingJs] = await Promise.all([
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    // The chat app's markup now lives in chat.html (index.html is the Studio shell).
+    readFile(new URL('../chat.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/main.js', import.meta.url), 'utf8'),
     readFile(new URL('../src/lib/rendering.js', import.meta.url), 'utf8'),
   ]);

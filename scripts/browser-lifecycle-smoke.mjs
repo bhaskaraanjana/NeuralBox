@@ -53,7 +53,8 @@ await context.addInitScript(() => {
 });
 
 const page = await context.newPage();
-await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
+// The chat app now lives at /chat.html (index.html is the Studio shell).
+await page.goto(`${baseUrl}/chat.html`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#send-btn', { state: 'attached', timeout: 15000 });
 await page.waitForFunction(() => Boolean(window.__NB_TEST_API), null, { timeout: 15000 });
 
