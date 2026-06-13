@@ -1,0 +1,16 @@
+{
+  "name": "NeuralBox — In-browser AI Studio",
+  "short_name": "NeuralBox",
+  "description": "Run any AI model in your browser. No server, no sign-up, works on any device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#060911",
+  "theme_color": "#060911",
+  "categories": ["productivity", "utilities", "education"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
