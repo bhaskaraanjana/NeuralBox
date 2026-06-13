@@ -1,0 +1,146 @@
+// ============================================================
+// Depth Map (Depth Anything V2) — monocular depth estimation.
+// Reference-style vision studio: image in, colorized depth out.
+// ============================================================
+import { el, clear, button, field, loader, imageInput, badge, downloadBlob, toast } from '../ui.js';
+import { loadPipeline } from '../runtime.js';
+
+const MODEL = { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-small', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+
+export default function mount(host, ctx) {
+    let estimator = null;
+    let currentURL = null;
+    let busy = false;
+    let lastBlob = null;
+
+    // ---- DOM ----
+    const srcStage = el('div', { class: 'sx-stage block' });
+    const srcImg = el('img', { alt: 'input', crossorigin: 'anonymous' });
+    srcStage.append(srcImg);
+
+    const depthStage = el('div', { class: 'sx-stage block' });
+    const depthCanvas = el('canvas');
+    depthStage.append(depthCanvas);
+
+    const placeholder = el('div', { class: 'sx-placeholder' },
+        el('div', { class: 'ph-emoji' }, '🏔️'),
+        el('div', {}, 'Pick an image, drop one in, or use your camera'),
+    );
+    const stageWrap = el('div', {}, placeholder);
+
+    const meta = el('div', { class: 'sx-muted', style: { marginTop: '12px' } }, '');
+    const dlSlot = el('div', { class: 'sx-row end', style: { marginTop: '12px' } });
+
+    const loaderSlot = el('div');
+    const runBtn = button('Estimate depth', { variant: 'primary', full: true, onClick: () => runOnce() });
+
+    const picker = imageInput({
+        samples: ['street', 'cats', 'football', 'tiger', 'portrait'],
+        onImage: (url) => setImage(url),
+    });
+
+    const controls = el('div', { class: 'sx-pane' },
+        el('p', { class: 'sx-pane-title' }, '📷 Input'),
+        picker.el,
+        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, badge('Depth Anything V2', 'accent')),
+        runBtn,
+        loaderSlot,
+    );
+
+    const output = el('div', { class: 'sx-pane' },
+        el('p', { class: 'sx-pane-title' }, '🌈 Depth map'),
+        stageWrap,
+        meta,
+        dlSlot,
+    );
+
+    host.append(el('div', { class: 'sx-split wide-out' }, controls, output));
+
+    // ---- Logic ----
+    async function ensureModel() {
+        if (estimator) return estimator;
+        const ld = loader('Loading depth model');
+        clear(loaderSlot); loaderSlot.append(ld.el);
+        try {
+            estimator = await loadPipeline(MODEL, (p) => ld.progress(p));
+            ld.remove();
+        } catch (err) {
+            ld.fail(err);
+            throw err;
+        }
+        return estimator;
+    }
+
+    function showStages() {
+        if (stageWrap.firstChild === placeholder) {
+            clear(stageWrap);
+            stageWrap.append(el('div', { class: 'sx-row', style: { alignItems: 'flex-start' } }, srcStage, depthStage));
+        }
+    }
+
+    function setImage(url) {
+        currentURL = url;
+        srcImg.src = url;
+        meta.textContent = '';
+        clear(dlSlot);
+        lastBlob = null;
+        showStages();
+        srcImg.onload = () => { if (estimator) runOnce(); };
+    }
+
+    function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+
+    function colorize(depth) {
+        const { width: w, height: h, data } = depth;
+        depthCanvas.width = w;
+        depthCanvas.height = h;
+        const dctx = depthCanvas.getContext('2d');
+        const img = dctx.createImageData(w, h);
+        const out = img.data;
+        for (let i = 0; i < w * h; i++) {
+            const v = data[i] / 255;
+            const r = 255 * clamp01(1.5 - Math.abs(4 * v - 3));
+            const g = 255 * clamp01(1.5 - Math.abs(4 * v - 2));
+            const b = 255 * clamp01(1.5 - Math.abs(4 * v - 1));
+            const o = i * 4;
+            out[o] = r; out[o + 1] = g; out[o + 2] = b; out[o + 3] = 255;
+        }
+        dctx.putImageData(img, 0, 0);
+    }
+
+    function offerDownload() {
+        depthCanvas.toBlob((blob) => {
+            if (!blob) return;
+            lastBlob = blob;
+            clear(dlSlot);
+            dlSlot.append(button('Download depth PNG', {
+                variant: 'ghost',
+                iconPath: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+                onClick: () => { if (lastBlob) downloadBlob(lastBlob, 'depth-map.png'); },
+            }));
+        }, 'image/png');
+    }
+
+    async function runOnce() {
+        if (!currentURL || busy) return;
+        busy = true;
+        runBtn.disabled = true;
+        try {
+            await ensureModel();
+            const { predicted_depth, depth } = await estimator(currentURL);
+            colorize(depth);
+            const dims = predicted_depth?.dims;
+            meta.textContent = dims
+                ? `Depth resolved at ${depth.width}×${depth.height} (tensor ${dims.join('×')}). Warm = near, cool = far.`
+                : `Depth resolved at ${depth.width}×${depth.height}. Warm = near, cool = far.`;
+            offerDownload();
+        } catch (err) {
+            toast('Depth estimation failed: ' + (err?.message || err), 'error');
+        } finally {
+            busy = false;
+            runBtn.disabled = false;
+        }
+    }
+
+    return () => { picker.destroy?.(); };
+}
