@@ -149,7 +149,7 @@ export const STUDIOS = [
     {
         id: 'chat-premium', title: 'Pro Chat', category: 'chat',
         tagline: 'The full WebLLM assistant — RAG, voice, vision. Needs WebGPU.',
-        emoji: '💎', accent: '#a78bfa', badge: 'WebGPU', device: 'webgpu', size: '0.5–4 GB', tier: 'heavy',
+        emoji: '💎', accent: '#a78bfa', badge: 'WebLLM', device: 'webgpu', size: '0.5–4 GB', tier: 'heavy',
         load: () => import('./tasks/chat-premium.js'),
     },
 ];

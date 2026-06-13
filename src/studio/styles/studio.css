@@ -230,8 +230,10 @@ select:focus-visible,
    ============================================================ */
 .studio-view { max-width: var(--maxw); margin: 0 auto; padding: clamp(16px, 3vw, 32px) clamp(14px, 4vw, 32px) 64px; }
 
-.studio-head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 26px; }
-.studio-head-main { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 240px; }
+.studio-head { display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px; }
+.studio-head-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.studio-head-main { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.studio-head-titles { min-width: 0; }
 .studio-head-emoji {
   flex: none; width: 54px; height: 54px; display: grid; place-content: center; font-size: 1.7rem;
   border-radius: 16px; background: color-mix(in srgb, var(--accent) 16%, var(--bg-2));
@@ -421,3 +423,40 @@ select:focus-visible,
 @keyframes nb-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
 
 body.in-studio { /* hook for studio-specific tweaks */ }
+
+/* ============================================================
+   Mobile layout pass (<= 560px)
+   ============================================================ */
+@media (max-width: 560px) {
+  .studio-view { padding: 14px 13px 56px; }
+  .studio-head { gap: 12px; margin-bottom: 16px; }
+  .studio-head-emoji { width: 46px; height: 46px; font-size: 1.45rem; border-radius: 13px; }
+  .studio-head-title { font-size: 1.4rem; }
+  .studio-head-tagline { font-size: 0.85rem; line-height: 1.45; }
+  .studio-head-tags { width: 100%; }
+
+  /* Full-width, evenly sized, touch-friendly segmented controls */
+  .sx-segmented { display: flex; width: 100%; flex-wrap: nowrap; }
+  .sx-seg { flex: 1 1 0; min-width: 0; padding: 10px 5px; font-size: 0.8rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .sx-pane { padding: 16px; }
+  .sx-split, .sx-split.wide-out { gap: 14px; }
+
+  /* Comfortable tap targets + no iOS zoom-on-focus (needs >=16px) */
+  .sx-btn { padding: 12px 16px; }
+  .sx-input, .sx-textarea, .sx-select { font-size: 16px; }
+  .sx-chip { padding: 9px 13px; }
+  .sx-sample { width: 52px; height: 52px; }
+
+  /* Inline label+control rows stack cleanly */
+  .sx-pane-title { margin-bottom: 12px; }
+
+  /* Selects/sliders go full width */
+  .sx-select, .sx-field .sx-input[type="range"] { width: 100%; }
+
+  /* Home tightening */
+  .home { padding: 16px 14px 48px; }
+  .home-hero { padding: 18px 0 12px; }
+  .home-card { padding: 16px; }
+  .home-grid { gap: 12px; }
+}

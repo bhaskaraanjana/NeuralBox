@@ -70,22 +70,12 @@ async function unmountCurrent() {
 
 function studioHeader(studio) {
     return el('div', { class: 'studio-head', style: { '--accent': studio.accent } },
-        button('All models', {
-            variant: 'ghost',
-            iconPath: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
-            onClick: () => navigate('home'),
-        }),
-        el('div', { class: 'studio-head-main' },
-            el('span', { class: 'studio-head-emoji' }, studio.emoji),
-            el('div', {},
-                el('h1', { class: 'studio-head-title' }, studio.title),
-                el('p', { class: 'studio-head-tagline' }, studio.tagline),
-            ),
-        ),
-        el('div', { class: 'studio-head-tags' },
-            studio.badge ? badge(studio.badge, 'accent') : null,
-            badge(studio.device === 'webgpu' ? 'WebGPU' : 'Any device', studio.device === 'webgpu' ? 'gpu' : 'ok'),
-            el('span', { class: 'studio-head-size' }, studio.size),
+        el('div', { class: 'studio-head-top' },
+            button('All models', {
+                variant: 'ghost',
+                iconPath: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+                onClick: () => navigate('home'),
+            }),
             button('Share', {
                 variant: 'ghost',
                 iconPath: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/>',
@@ -95,6 +85,18 @@ function studioHeader(studio) {
                     catch { ui.toast('Copy failed', 'error'); }
                 },
             }),
+        ),
+        el('div', { class: 'studio-head-main' },
+            el('span', { class: 'studio-head-emoji' }, studio.emoji),
+            el('div', { class: 'studio-head-titles' },
+                el('h1', { class: 'studio-head-title' }, studio.title),
+                el('p', { class: 'studio-head-tagline' }, studio.tagline),
+            ),
+        ),
+        el('div', { class: 'studio-head-tags' },
+            studio.badge ? badge(studio.badge, 'accent') : null,
+            badge(studio.device === 'webgpu' ? 'WebGPU' : 'Any device', studio.device === 'webgpu' ? 'gpu' : 'ok'),
+            el('span', { class: 'studio-head-size' }, studio.size),
         ),
     );
 }

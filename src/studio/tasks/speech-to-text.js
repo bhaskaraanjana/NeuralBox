@@ -12,7 +12,7 @@ const SPECS = {
     fast: { ...M.asrBaseEn, label: 'Fast', chunk: 30, stride: 5, multilingual: false, note: 'whisper-base · English · ~145 MB' },
     best: { ...M.asrSmallEn, label: 'Best', chunk: 30, stride: 5, multilingual: false, note: 'whisper-small · English · best accuracy · WebGPU recommended' },
     turbo: { ...M.asrDistilSmall, label: 'Turbo', chunk: 15, stride: 3, multilingual: false, note: 'distil-whisper · English · ~6× faster, near-small quality' },
-    multi: { ...M.asrBaseMulti, label: 'Multilingual', chunk: 30, stride: 5, multilingual: true, note: 'whisper-base · 99 languages' },
+    multi: { ...M.asrBaseMulti, label: 'Multi', chunk: 30, stride: 5, multilingual: true, note: 'whisper-base · 99 languages (multilingual)' },
 };
 
 const LANGUAGES = ['auto', 'english', 'spanish', 'french', 'german', 'italian', 'portuguese', 'dutch', 'russian', 'chinese', 'japanese', 'korean', 'arabic', 'hindi'];

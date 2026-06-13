@@ -28,7 +28,8 @@ export default function mount(host, ctx) {
         title: 'NeuralBox Pro Chat',
     });
 
-    host.append(
+    // el() skips null children (native host.append would render null as "null").
+    host.append(el('div', { class: 'sx-stack' },
         el('div', { class: 'sx-row', style: { justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '10px' } },
             el('div', { class: 'sx-row' },
                 badge('WebLLM', 'gpu'),
@@ -38,5 +39,5 @@ export default function mount(host, ctx) {
         ),
         notice,
         el('div', { class: 'sx-iframe-wrap' }, frame),
-    );
+    ));
 }

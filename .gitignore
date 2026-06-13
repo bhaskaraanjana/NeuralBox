@@ -2,3 +2,7 @@ node_modules/
 dist/
 .cache/
 *.log
+
+# local screenshot scratch
+.shots/
+.shots-mobile/
