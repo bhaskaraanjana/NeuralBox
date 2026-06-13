@@ -100,9 +100,12 @@ async function handleRoute(routeId) {
     if (!studio) {
         document.documentElement.style.setProperty('--accent', '#60a5fa');
         document.body.classList.remove('in-studio');
+        document.title = 'NeuralBox — Run any AI model in your browser';
         await renderHome(studioBody, ctx);
         return;
     }
+
+    document.title = `${studio.title} · NeuralBox`;
 
     document.documentElement.style.setProperty('--accent', studio.accent);
     document.body.classList.add('in-studio');

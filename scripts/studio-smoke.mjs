@@ -70,6 +70,7 @@ try {
   await page.waitForSelector('.studio-head-title', { timeout: 10000 });
   const title = await page.$eval('.studio-head-title', (e) => e.textContent.trim());
   assert(/sentiment/i.test(title), `Studio header wrong: ${title}`);
+  await page.waitForFunction(() => /Sentiment/.test(document.title), null, { timeout: 3000 });
   await page.waitForSelector('.sx-pane', { timeout: 5000 });
   await page.waitForSelector('.sx-btn-primary', { timeout: 5000 });
 
