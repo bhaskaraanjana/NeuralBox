@@ -21,6 +21,12 @@ export const STUDIOS = [
         load: () => import('./tasks/object-detection.js'),
     },
     {
+        id: 'zero-shot-detection', title: 'Find Anything', category: 'vision',
+        tagline: 'Detect any object you can name — no training. Powered by OWL-ViT.',
+        emoji: '🔭', accent: '#e879f9', badge: 'OWL-ViT', device: 'any', size: '~150 MB', tier: 'heavy',
+        load: () => import('./tasks/zero-shot-detection.js'),
+    },
+    {
         id: 'image-classification', title: 'Image Labeler', category: 'vision',
         tagline: 'What is this a picture of? 1000-class instant labeling.',
         emoji: '🏷️', accent: '#f472b6', device: 'any', size: '~25 MB', tier: 'light',
@@ -119,6 +125,18 @@ export const STUDIOS = [
         tagline: 'Let BERT guess the missing word. Mark it with [MASK].',
         emoji: '🧠', accent: '#fcd34d', device: 'any', size: '~110 MB', tier: 'medium',
         load: () => import('./tasks/fill-mask.js'),
+    },
+    {
+        id: 'question-answering', title: 'Q&A', category: 'language',
+        tagline: 'Paste text, ask a question, get the exact answer span. DistilBERT.',
+        emoji: '❓', accent: '#67e8f9', device: 'any', size: '~65 MB', tier: 'light',
+        load: () => import('./tasks/question-answering.js'),
+    },
+    {
+        id: 'text-emotion', title: 'Emotion', category: 'language',
+        tagline: 'Read the emotion behind text — joy, anger, fear, sadness and more.',
+        emoji: '🎭', accent: '#f9a8d4', device: 'any', size: '~83 MB', tier: 'medium',
+        load: () => import('./tasks/text-emotion.js'),
     },
 
     // ---- Chat ----

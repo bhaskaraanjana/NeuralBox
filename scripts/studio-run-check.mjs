@@ -35,8 +35,8 @@ try {
 
   await page.goto(`${baseUrl}/#/${STUDIO}`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.sx-pane', { timeout: 15000 });
-  await page.click('.sx-sample');
-  await sleep(300);
+  // Image studios have sample thumbnails; text studios ship with default input.
+  if (await page.$('.sx-sample')) { await page.click('.sx-sample'); await sleep(300); }
   await page.locator('.sx-btn-primary:visible').first().click();
 
   console.log(`[${STUDIO}] running (up to 200s)…`);
@@ -45,8 +45,12 @@ try {
     const out = panes[panes.length - 1] || document.body;
     if (out.querySelector('canvas')) return true;
     if (out.querySelector('.sx-bar-row')) return true;
+    if (out.querySelector('.sx-overlay') && out.querySelector('.sx-overlay').childElementCount > 0) return true;
+    if (out.querySelector('mark')) return true;
     const big = out.querySelector('.sx-result-big');
     if (big && big.textContent.trim() && big.textContent.trim() !== '—') return true;
+    const muted = [...out.querySelectorAll('.sx-muted')].map((m) => m.textContent).join(' ');
+    if (/found|match|no objects|no matches/i.test(muted)) return true;
     if ([...document.querySelectorAll('button')].some((b) => /download/i.test(b.textContent))) return true;
     return false;
   }, null, { timeout: 200000 });

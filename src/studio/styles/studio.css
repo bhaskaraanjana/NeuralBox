@@ -385,6 +385,9 @@ a:hover { text-decoration: underline; }
 /* NER inline entity highlight */
 .nx-hl { padding: 1px 5px; border-radius: 6px; border: 1px solid; font-weight: 600; }
 
+/* QA answer highlight */
+.qa-hl { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text-0); padding: 1px 4px; border-radius: 5px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+
 /* Recording pulse (speech-to-text / audio) */
 @keyframes nb-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
 
