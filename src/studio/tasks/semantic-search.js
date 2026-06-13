@@ -3,10 +3,28 @@
 // Embeds a query + a corpus with all-MiniLM-L6-v2, then ranks
 // documents by cosine similarity (dot product on L2-normed vecs).
 // ============================================================
-import { el, clear, button, field, textarea, textInput, loader, scoreBars, chip, badge, toast } from '../ui.js';
+import { el, clear, button, field, textarea, textInput, loader, scoreBars, chip, segmented, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
-const MODEL = { task: 'feature-extraction', model: 'Xenova/all-MiniLM-L6-v2', dtype: { webgpu: 'fp32', wasm: 'q8' } };
+// One spec per quality tier. Some embedding models expect an instruction
+// prefix on the QUERY only (never the documents) for best retrieval.
+const SPECS = {
+    bge: {
+        label: 'BGE',
+        queryPrefix: 'Represent this sentence for searching relevant passages: ',
+        spec: { task: 'feature-extraction', model: 'Xenova/bge-small-en-v1.5', dtype: { webgpu: 'fp32', wasm: 'q8' } },
+    },
+    gte: {
+        label: 'GTE',
+        queryPrefix: '',
+        spec: { task: 'feature-extraction', model: 'Xenova/gte-small', dtype: { webgpu: 'fp32', wasm: 'q8' } },
+    },
+    mini: {
+        label: 'MiniLM',
+        queryPrefix: '',
+        spec: { task: 'feature-extraction', model: 'Xenova/all-MiniLM-L6-v2', dtype: { webgpu: 'fp32', wasm: 'q8' } },
+    },
+};
 
 const SAMPLE_DOCS = [
     'The Eiffel Tower is a wrought-iron landmark in the heart of Paris.',
@@ -20,12 +38,26 @@ const SAMPLE_DOCS = [
 const SAMPLE_QUERIES = ['a friendly pet', 'how do plants make food?', 'baking bread at home'];
 
 export default function mount(host, ctx) {
-    let extractor = null;
+    // One cached pipeline per quality tier (runtime caches the underlying load too).
+    const pipes = { bge: null, gte: null, mini: null };
+    let quality = 'bge';
 
     // ---- Controls ----
     const docsInput = textarea('One document per line…', SAMPLE_DOCS, 8);
     const queryInput = textInput('Ask in plain language…', SAMPLE_QUERIES[0]);
     queryInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
+
+    const modelBadge = badge(SPECS[quality].label, 'accent');
+    const qualityToggle = segmented(
+        [{ value: 'bge', label: 'BGE' }, { value: 'gte', label: 'GTE' }, { value: 'mini', label: 'MiniLM' }],
+        quality,
+        (v) => {
+            quality = v;
+            modelBadge.textContent = SPECS[quality].label;
+            // Re-embed on the new tier if we already have results showing.
+            if (!outBody.classList.contains('sx-placeholder')) run();
+        },
+    );
 
     const loaderSlot = el('div');
     const runBtn = button('Search by meaning', { variant: 'primary', full: true, onClick: run });
@@ -40,6 +72,7 @@ export default function mount(host, ctx) {
         field('Documents (one per line)', docsInput),
         field('Query', queryInput),
         queryRow,
+        field('Quality', qualityToggle, 'BGE uses a retrieval prompt on the query; GTE and MiniLM are lighter'),
         el('div', { style: { height: '12px' } }),
         runBtn,
         loaderSlot,
@@ -62,12 +95,12 @@ export default function mount(host, ctx) {
 
     // ---- Logic ----
     async function ensureModel() {
-        if (extractor) return extractor;
-        const ld = loader('Loading embedding model');
+        if (pipes[quality]) return pipes[quality];
+        const ld = loader(`Loading ${SPECS[quality].label}`);
         clear(loaderSlot); loaderSlot.append(ld.el);
-        try { extractor = await loadPipeline(MODEL, (p) => ld.progress(p)); ld.remove(); }
+        try { pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p)); ld.remove(); }
         catch (err) { ld.fail(err); throw err; }
-        return extractor;
+        return pipes[quality];
     }
 
     function dot(a, b) {
@@ -90,9 +123,11 @@ export default function mount(host, ctx) {
         runBtn.disabled = true;
         try {
             const pipe = await ensureModel();
-            // Embed query + corpus together; vectors are L2-normalized,
-            // so a plain dot product equals cosine similarity.
-            const emb = await pipe([query, ...docs], { pooling: 'mean', normalize: true });
+            // Some models (e.g. BGE) need a retrieval instruction on the QUERY
+            // only — never on the documents. Embed query + corpus together;
+            // vectors are L2-normalized, so a plain dot product equals cosine similarity.
+            const queryText = SPECS[quality].queryPrefix + query;
+            const emb = await pipe([queryText, ...docs], { pooling: 'mean', normalize: true });
             const vecs = emb.tolist(); // number[][], 384-dim
             const qVec = vecs[0];
 
@@ -115,8 +150,8 @@ export default function mount(host, ctx) {
             outBody.classList.remove('sx-placeholder');
             outBody.append(
                 el('div', { class: 'sx-row', style: { marginBottom: '4px' } },
-                    badge('MiniLM-L6', 'accent'),
-                    el('span', { class: 'sx-muted' }, `${docs.length} docs · 384-dim`),
+                    modelBadge,
+                    el('span', { class: 'sx-muted' }, `${docs.length} docs · ${qVec.length}-dim`),
                 ),
                 summary,
                 results,

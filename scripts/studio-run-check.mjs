@@ -35,6 +35,11 @@ try {
 
   await page.goto(`${baseUrl}/#/${STUDIO}`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.sx-pane', { timeout: 15000 });
+  // Optionally select a quality tier (segmented button) before running.
+  if (process.env.CLICK_TIER) {
+    await page.locator(`button.sx-seg:has-text("${process.env.CLICK_TIER}")`).first().click();
+    await sleep(200);
+  }
   // Image studios have sample thumbnails; text studios ship with default input.
   if (await page.$('.sx-sample')) { await page.click('.sx-sample'); await sleep(300); }
   await page.locator('.sx-btn-primary:visible').first().click();

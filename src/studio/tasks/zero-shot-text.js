@@ -6,14 +6,26 @@
 import { el, clear, button, field, textarea, textInput, segmented, loader, scoreBars, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
-const MODEL = { task: 'zero-shot-classification', model: 'Xenova/mobilebert-uncased-mnli', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const SPECS = {
+    fast: {
+        label: 'Fast',
+        spec: { task: 'zero-shot-classification', model: 'Xenova/mobilebert-uncased-mnli', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    accurate: {
+        label: 'Accurate',
+        spec: { task: 'zero-shot-classification', model: 'Xenova/nli-deberta-v3-small', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+};
 
 const DEFAULT_TEXT = 'I just upgraded my phone and the battery life is incredible.';
 const DEFAULT_LABELS = 'technology, sports, politics, food, travel, business';
 
 export default function mount(host, ctx) {
-    let classifier = null;
+    // One cached pipeline per quality tier (runtime caches the underlying load too).
+    const pipes = { fast: null, accurate: null };
+    let quality = 'fast';
     let multiLabel = false;
+    let hasRun = false;
 
     // ---- Controls ----
     const input = textarea('Type or paste any text to classify…', DEFAULT_TEXT, 5);
@@ -24,6 +36,18 @@ export default function mount(host, ctx) {
         (v) => { multiLabel = v === 'multiple'; },
     );
 
+    const modelBadge = badge(SPECS[quality].label, 'accent');
+    const qualityToggle = segmented(
+        [{ value: 'fast', label: 'Fast' }, { value: 'accurate', label: 'Accurate' }],
+        quality,
+        (v) => {
+            quality = v;
+            modelBadge.textContent = SPECS[quality].label;
+            // Re-run on the new tier if we already have a classification on screen.
+            if (hasRun) run();
+        },
+    );
+
     const loaderSlot = el('div');
     const runBtn = button('Classify text', { variant: 'primary', full: true, onClick: run });
 
@@ -32,6 +56,8 @@ export default function mount(host, ctx) {
         field('', input),
         field('Candidate labels', labelsInput, 'Separate with commas — invent any categories.'),
         field('Match mode', toggle, 'Single picks the best label; Multiple scores each independently.'),
+        field('Quality', qualityToggle, 'Fast is instant; Accurate trades speed for precision'),
+        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         el('div', { style: { height: '12px' } }),
         runBtn,
         loaderSlot,
@@ -52,12 +78,12 @@ export default function mount(host, ctx) {
 
     // ---- Logic ----
     async function ensureModel() {
-        if (classifier) return classifier;
-        const ld = loader('Loading zero-shot model');
+        if (pipes[quality]) return pipes[quality];
+        const ld = loader(`Loading ${SPECS[quality].label}`);
         clear(loaderSlot); loaderSlot.append(ld.el);
-        try { classifier = await loadPipeline(MODEL, (p) => ld.progress(p)); ld.remove(); }
+        try { pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p)); ld.remove(); }
         catch (err) { ld.fail(err); throw err; }
-        return classifier;
+        return pipes[quality];
     }
 
     function parseLabels() {
@@ -75,10 +101,11 @@ export default function mount(host, ctx) {
 
         runBtn.disabled = true;
         try {
-            await ensureModel();
+            const classifier = await ensureModel();
             const out = await classifier(text, labels, { multi_label: multiLabel });
             // out: { sequence, labels:string[], scores:number[] } — parallel, sorted desc.
             const ranked = out.labels.map((label, i) => ({ label, score: out.scores[i] }));
+            hasRun = true;
             renderResult(ranked);
         } catch (err) {
             toast('Classification failed: ' + (err?.message || err), 'error');

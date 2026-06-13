@@ -2,10 +2,24 @@
 // Summarizer (DistilBART CNN) — condense long text into a brief.
 // Generative + slow, so the spinner stays up through inference.
 // ============================================================
-import { el, clear, button, field, textarea, segmented, loader, copyButton, toast } from '../ui.js';
+import { el, clear, button, field, textarea, segmented, badge, loader, copyButton, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
-const MODEL = { task: 'summarization', model: 'Xenova/distilbart-cnn-6-6', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+// One model per style tier; runtime picks device + dtype from the {webgpu,wasm} object.
+const STYLES = {
+    balanced: {
+        label: 'Balanced',
+        spec: { task: 'summarization', model: 'Xenova/distilbart-cnn-12-6', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    fast: {
+        label: 'Fast',
+        spec: { task: 'summarization', model: 'Xenova/distilbart-cnn-6-6', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    headline: {
+        label: 'Headline',
+        spec: { task: 'summarization', model: 'Xenova/distilbart-xsum-12-6', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+};
 
 const SAMPLE = `The city council voted late Tuesday to approve a sweeping plan that will transform the long-neglected riverside district into a mixed-use neighbourhood over the next decade. The proposal, backed by a coalition of local businesses and housing advocates, sets aside nearly forty acres for parks, affordable apartments and small commercial space, while preserving the historic grain warehouses that line the waterfront.
 
@@ -16,7 +30,9 @@ Under the approved timeline, demolition of the abandoned freight terminal will b
 const countWords = (s) => (s.trim().match(/\S+/g) || []).length;
 
 export default function mount(host, ctx) {
-    let summarizer = null;
+    // One cached pipeline per style tier (runtime caches the underlying load too).
+    const pipes = { balanced: null, fast: null, headline: null };
+    let style = 'balanced';
     let maxTokens = 130;
 
     const input = textarea('Paste an article, report or long passage to summarize…', SAMPLE, 12);
@@ -29,11 +45,24 @@ export default function mount(host, ctx) {
         { value: 220, label: 'Long' },
     ], maxTokens, (v) => { maxTokens = v; });
 
+    const modelBadge = badge(STYLES[style].label, 'accent');
+    const styleSeg = segmented([
+        { value: 'balanced', label: 'Balanced' },
+        { value: 'fast', label: 'Fast' },
+        { value: 'headline', label: 'Headline' },
+    ], style, (v) => {
+        style = v;
+        modelBadge.textContent = STYLES[style].label;
+        // Re-run on the new tier if we already have text to summarize.
+        if (input.value.trim()) run();
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📰 Source text'),
         field('', input, 'Runs entirely in your browser — text never leaves your device.'),
+        field('Quality', styleSeg, 'Balanced is the default; Fast is quicker, Headline is one terse line.'),
         field('Summary length', lengthSeg),
-        el('div', { style: { height: '12px' } }),
+        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
         loaderSlot,
     );
@@ -57,12 +86,12 @@ export default function mount(host, ctx) {
     host.append(el('div', { class: 'sx-split' }, controls, output));
 
     async function ensureModel() {
-        if (summarizer) return summarizer;
-        const ld = loader('Loading summarizer');
+        if (pipes[style]) return pipes[style];
+        const ld = loader(`Loading ${STYLES[style].label}`);
         clear(loaderSlot); loaderSlot.append(ld.el);
-        try { summarizer = await loadPipeline(MODEL, (p) => ld.progress(p)); ld.remove(); }
+        try { pipes[style] = await loadPipeline(STYLES[style].spec, (p) => ld.progress(p)); ld.remove(); }
         catch (err) { ld.fail(err); throw err; }
-        return summarizer;
+        return pipes[style];
     }
 
     async function run() {
@@ -78,7 +107,7 @@ export default function mount(host, ctx) {
         result.append(el('span', { class: 'sx-muted' }, 'Summarizing… this can take a moment.'));
         stat.textContent = '';
         try {
-            await ensureModel();
+            const summarizer = await ensureModel();
             const out = await summarizer(text, { max_new_tokens: maxTokens });
             const summary = (out?.[0]?.summary_text || '').trim();
             clear(result);

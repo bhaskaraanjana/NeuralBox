@@ -2,13 +2,24 @@
 // Zero-Shot Object Detection (OWL-ViT) — find ANY object you
 // can name, no training. Image in, boxes out for your prompts.
 // ============================================================
-import { el, clear, button, field, textInput, loader, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
+import { el, clear, button, field, textInput, loader, segmented, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
-const MODEL = { task: 'zero-shot-object-detection', model: 'Xenova/owlvit-base-patch32', dtype: { webgpu: 'q4f16', wasm: 'q8' } };
+const SPECS = {
+    fast: {
+        label: 'Fast',
+        spec: { task: 'zero-shot-object-detection', model: 'Xenova/owlvit-base-patch32', dtype: { webgpu: 'q4f16', wasm: 'q8' } },
+    },
+    accurate: {
+        label: 'Accurate',
+        spec: { task: 'zero-shot-object-detection', model: 'Xenova/owlv2-base-patch16-ensemble', dtype: { webgpu: 'q4f16', wasm: 'q8' } },
+    },
+};
 
 export default function mount(host, ctx) {
-    let detector = null;
+    // One cached pipeline per quality tier (runtime caches the underlying load too).
+    const pipes = { fast: null, accurate: null };
+    let quality = 'fast';
     let currentURL = null;
     let busy = false;
     let lastDets = [];
@@ -27,6 +38,18 @@ export default function mount(host, ctx) {
     const labelsInput = textInput('Comma-separated things to find…', 'a cat, a dog, a person, a car, a traffic light');
     const loaderSlot = el('div');
     const runBtn = button('Find them', { variant: 'primary', full: true, onClick: () => run() });
+
+    const modelBadge = badge(SPECS[quality].label, 'accent');
+    const qualityToggle = segmented(
+        [{ value: 'fast', label: 'Fast' }, { value: 'accurate', label: 'Accurate' }],
+        quality,
+        (v) => {
+            quality = v;
+            modelBadge.textContent = SPECS[quality].label;
+            // Re-run on the new tier if we already have an image to search.
+            if (currentURL) run();
+        },
+    );
 
     const samples = ['street', 'cats', 'football', 'tiger'];
     const sampleRow = el('div', { class: 'sx-samples' },
@@ -48,7 +71,8 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '10px' } }),
         uploadBtn, fileInput,
         field('What should I look for?', labelsInput, 'Separate prompts with commas — e.g. "a red car, a bicycle, sunglasses".'),
-        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, badge('OWL-ViT', 'accent'), el('span', { class: 'sx-muted' }, 'first run ~150 MB')),
+        field('Quality', qualityToggle, 'Fast is instant; Accurate trades speed for precision'),
+        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, modelBadge, el('span', { class: 'sx-muted' }, 'first run ~150 MB')),
         runBtn,
         loaderSlot,
     );
@@ -78,18 +102,18 @@ export default function mount(host, ctx) {
         lastDets = [];
         downloadBtn.style.display = 'none';
         showStage();
-        img.onload = () => { if (detector) run(); };
+        img.onload = () => { if (pipes[quality]) run(); };
         img.onerror = () => toast('Could not load that image', 'error');
         img.src = url;
     }
 
     async function ensureModel() {
-        if (detector) return detector;
-        const ld = loader('Loading OWL-ViT');
+        if (pipes[quality]) return pipes[quality];
+        const ld = loader(`Loading ${SPECS[quality].label}`);
         clear(loaderSlot); loaderSlot.append(ld.el);
-        try { detector = await loadPipeline(MODEL, (p) => ld.progress(p)); ld.remove(); }
+        try { pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p)); ld.remove(); }
         catch (err) { ld.fail(err); throw err; }
-        return detector;
+        return pipes[quality];
     }
 
     function draw(dets) {
@@ -134,7 +158,7 @@ export default function mount(host, ctx) {
         busy = true; runBtn.disabled = true;
         summary.textContent = 'Searching…';
         try {
-            await ensureModel();
+            const detector = await ensureModel();
             const out = await detector(currentURL, labels, { topk: 12, threshold: 0.1 });
             draw(out);
             lastDets = out;

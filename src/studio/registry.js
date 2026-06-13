@@ -40,8 +40,8 @@ export const STUDIOS = [
     },
     {
         id: 'segmentation', title: 'Segmentation', category: 'vision',
-        tagline: 'Paint every pixel by what it is. Scene parsing in real time.',
-        emoji: '🧩', accent: '#a78bfa', device: 'any', size: '~15 MB', tier: 'light',
+        tagline: 'Paint every pixel by what it is. Sharp SegFormer scene parsing.',
+        emoji: '🧩', accent: '#a78bfa', device: 'any', size: '~56 MB', tier: 'medium',
         load: () => import('./tasks/segmentation.js'),
     },
     {
@@ -58,22 +58,22 @@ export const STUDIOS = [
     },
     {
         id: 'caption', title: 'Image Captioner', category: 'vision',
-        tagline: 'Describe any image in a sentence. Vision-to-language.',
-        emoji: '📝', accent: '#fbbf24', device: 'any', size: '~90 MB', tier: 'medium',
+        tagline: 'Describe any image — a quick line or rich Florence-2 detail.',
+        emoji: '📝', accent: '#fbbf24', device: 'any', size: '~90 MB+', tier: 'medium',
         load: () => import('./tasks/caption.js'),
     },
 
     // ---- Audio ----
     {
         id: 'speech-to-text', title: 'Speech to Text', category: 'audio',
-        tagline: 'Transcribe your voice locally with Whisper. Mic or file.',
-        emoji: '🎙️', accent: '#f59e0b', badge: 'Whisper', device: 'any', size: '~40 MB', tier: 'light',
+        tagline: 'Transcribe voice or whole podcasts with Whisper — quality tiers, timestamps, SRT export.',
+        emoji: '🎙️', accent: '#f59e0b', badge: 'Whisper', device: 'any', size: '~145 MB', tier: 'medium',
         load: () => import('./tasks/speech-to-text.js'),
     },
     {
         id: 'text-to-speech', title: 'Text to Speech', category: 'audio',
-        tagline: 'Type anything and hear it spoken. SpeechT5 neural voice.',
-        emoji: '🔊', accent: '#fb923c', device: 'any', size: '~120 MB', tier: 'medium',
+        tagline: 'Type anything and hear a natural voice read it. Kokoro, 11 voices, long text.',
+        emoji: '🔊', accent: '#fb923c', badge: 'Kokoro', device: 'any', size: '~86 MB', tier: 'medium',
         load: () => import('./tasks/text-to-speech.js'),
     },
     {

@@ -2,13 +2,24 @@
 // Depth Map (Depth Anything V2) — monocular depth estimation.
 // Reference-style vision studio: image in, colorized depth out.
 // ============================================================
-import { el, clear, button, field, loader, imageInput, badge, downloadBlob, toast } from '../ui.js';
+import { el, clear, button, field, loader, imageInput, badge, segmented, downloadBlob, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
-const MODEL = { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-small', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const SPECS = {
+    fast: {
+        label: 'Fast',
+        spec: { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-small', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    detailed: {
+        label: 'Detailed',
+        spec: { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-base', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+};
 
 export default function mount(host, ctx) {
-    let estimator = null;
+    // One cached pipeline per quality tier (runtime caches the underlying load too).
+    const pipes = { fast: null, detailed: null };
+    let quality = 'fast';
     let currentURL = null;
     let busy = false;
     let lastBlob = null;
@@ -31,6 +42,18 @@ export default function mount(host, ctx) {
     const meta = el('div', { class: 'sx-muted', style: { marginTop: '12px' } }, '');
     const dlSlot = el('div', { class: 'sx-row end', style: { marginTop: '12px' } });
 
+    const modelBadge = badge(SPECS[quality].label, 'accent');
+    const qualityToggle = segmented(
+        [{ value: 'fast', label: 'Fast' }, { value: 'detailed', label: 'Detailed' }],
+        quality,
+        (v) => {
+            quality = v;
+            modelBadge.textContent = SPECS[quality].label;
+            // Re-run on the new tier if we already have an image loaded.
+            if (currentURL) runOnce();
+        },
+    );
+
     const loaderSlot = el('div');
     const runBtn = button('Estimate depth', { variant: 'primary', full: true, onClick: () => runOnce() });
 
@@ -42,7 +65,8 @@ export default function mount(host, ctx) {
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
-        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, badge('Depth Anything V2', 'accent')),
+        field('Quality', qualityToggle, 'Fast is quick; Detailed uses the larger base model for sharper depth'),
+        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
         loaderSlot,
     );
@@ -58,17 +82,17 @@ export default function mount(host, ctx) {
 
     // ---- Logic ----
     async function ensureModel() {
-        if (estimator) return estimator;
-        const ld = loader('Loading depth model');
+        if (pipes[quality]) return pipes[quality];
+        const ld = loader(`Loading depth model (${SPECS[quality].label})`);
         clear(loaderSlot); loaderSlot.append(ld.el);
         try {
-            estimator = await loadPipeline(MODEL, (p) => ld.progress(p));
+            pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p));
             ld.remove();
         } catch (err) {
             ld.fail(err);
             throw err;
         }
-        return estimator;
+        return pipes[quality];
     }
 
     function showStages() {
@@ -85,7 +109,7 @@ export default function mount(host, ctx) {
         clear(dlSlot);
         lastBlob = null;
         showStages();
-        srcImg.onload = () => { if (estimator) runOnce(); };
+        srcImg.onload = () => { if (pipes[quality]) runOnce(); };
     }
 
     function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
@@ -126,7 +150,7 @@ export default function mount(host, ctx) {
         busy = true;
         runBtn.disabled = true;
         try {
-            await ensureModel();
+            const estimator = await ensureModel();
             const { predicted_depth, depth } = await estimator(currentURL);
             colorize(depth);
             const dims = predicted_depth?.dims;

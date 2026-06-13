@@ -2,13 +2,28 @@
 // Object Detection (YOLOS) — the headline "YOLO" studio.
 // Reference implementation for vision + canvas-overlay studios.
 // ============================================================
-import { el, clear, button, field, loader, imageInput, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
+import { el, clear, button, field, loader, segmented, imageInput, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 
-const MODEL = { task: 'object-detection', model: 'Xenova/yolos-tiny', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const SPECS = {
+    fast: {
+        label: 'Fast',
+        spec: { task: 'object-detection', model: 'Xenova/yolos-tiny', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    accurate: {
+        label: 'Accurate',
+        spec: { task: 'object-detection', model: 'Xenova/yolos-small', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    max: {
+        label: 'Max',
+        spec: { task: 'object-detection', model: 'Xenova/detr-resnet-50', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+};
 
 export default function mount(host, ctx) {
-    let detector = null;
+    // One cached pipeline per quality tier (runtime caches the underlying load too).
+    const pipes = { fast: null, accurate: null, max: null };
+    let quality = 'fast';
     let currentURL = null;
     let threshold = 0.5;
     let live = false;
@@ -42,7 +57,7 @@ export default function mount(host, ctx) {
     thresholdSlider.addEventListener('input', () => {
         threshold = parseFloat(thresholdSlider.value);
         thLabel.textContent = threshold.toFixed(2);
-        if (!live && detector && currentURL) runOnce();
+        if (!live && pipes[quality] && currentURL) runOnce();
     });
 
     const picker = imageInput({
@@ -50,11 +65,24 @@ export default function mount(host, ctx) {
         onImage: (url) => setImage(url),
     });
 
+    const modelBadge = badge(SPECS[quality].spec.model, 'accent');
+    const qualityToggle = segmented(
+        [{ value: 'fast', label: 'Fast' }, { value: 'accurate', label: 'Accurate' }, { value: 'max', label: 'Max' }],
+        quality,
+        (v) => {
+            quality = v;
+            modelBadge.textContent = SPECS[quality].spec.model;
+            // Re-run on the new tier if we already have a still image to detect on.
+            if (!live && currentURL) runOnce();
+        },
+    );
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
+        field('Quality', qualityToggle, 'Fast is instant; Accurate and Max trade speed for precision'),
         field('Confidence threshold', thresholdSlider, null),
-        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, thLabel, badge('YOLOS-tiny', 'accent')),
+        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, thLabel, modelBadge),
         runBtn,
         el('div', { style: { height: '10px' } }),
         liveBtn,
@@ -80,17 +108,17 @@ export default function mount(host, ctx) {
 
     // ---- Logic ----
     async function ensureModel() {
-        if (detector) return detector;
-        const ld = loader('Loading YOLOS detector');
+        if (pipes[quality]) return pipes[quality];
+        const ld = loader(`Loading ${SPECS[quality].label} detector`);
         clear(loaderSlot); loaderSlot.append(ld.el);
         try {
-            detector = await loadPipeline(MODEL, (p) => ld.progress(p));
+            pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p));
             ld.remove();
         } catch (err) {
             ld.fail(err);
             throw err;
         }
-        return detector;
+        return pipes[quality];
     }
 
     function showStage() {
@@ -108,7 +136,7 @@ export default function mount(host, ctx) {
         clear(list);
         lastDets = [];
         downloadBtn.style.display = 'none';
-        img.onload = () => { if (detector) runOnce(); };
+        img.onload = () => { if (pipes[quality]) runOnce(); };
         img.onerror = () => toast('Could not load that image', 'error');
         img.src = url;
     }
@@ -152,7 +180,7 @@ export default function mount(host, ctx) {
         busy = true;
         runBtn.disabled = true;
         try {
-            await ensureModel();
+            const detector = await ensureModel();
             const out = await detector(currentURL, { threshold, percentage: true });
             drawBoxes(out);
             renderList(out);
@@ -195,6 +223,8 @@ export default function mount(host, ctx) {
                 if (!busy && video.videoWidth) {
                     busy = true;
                     try {
+                        // Use the currently-selected tier (loads lazily if switched mid-stream).
+                        const detector = await ensureModel();
                         grabFrame(video, canvas);
                         const raw = await toRawImage(canvas);
                         const out = await detector(raw, { threshold, percentage: true });

@@ -2,10 +2,23 @@
 // Semantic Segmentation (SegFormer / ADE20K) — paints every
 // pixel with the class it belongs to and overlays it on the image.
 // ============================================================
-import { el, clear, button, field, loader, imageInput, badge, labelColor, toast } from '../ui.js';
+import { el, clear, button, field, loader, segmented, imageInput, badge, labelColor, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
-const MODEL = { task: 'image-segmentation', model: 'Xenova/segformer-b0-finetuned-ade-512-512', dtype: { webgpu: 'fp32', wasm: 'q8' } };
+const SPECS = {
+    fast: {
+        label: 'Fast',
+        spec: { task: 'image-segmentation', model: 'Xenova/segformer-b0-finetuned-ade-512-512', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    accurate: {
+        label: 'Accurate',
+        spec: { task: 'image-segmentation', model: 'Xenova/segformer-b2-finetuned-ade-512-512', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    max: {
+        label: 'Max',
+        spec: { task: 'image-segmentation', model: 'Xenova/segformer-b5-finetuned-ade-640-640', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+};
 
 // Parse an hsla() string from labelColor into [r,g,b] 0..255.
 function colorRGB(label) {
@@ -18,7 +31,9 @@ function colorRGB(label) {
 }
 
 export default function mount(host, ctx) {
-    let segmenter = null;
+    // One cached pipeline per quality tier (runtime caches the underlying load too).
+    const pipes = { fast: null, accurate: null, max: null };
+    let quality = 'accurate';
     let currentURL = null;
     let lastSegments = null;
     let opacity = 0.5;
@@ -50,6 +65,18 @@ export default function mount(host, ctx) {
         if (lastSegments) paint(lastSegments);
     });
 
+    const modelBadge = badge(SPECS[quality].label, 'accent');
+    const qualityToggle = segmented(
+        [{ value: 'fast', label: 'Fast' }, { value: 'accurate', label: 'Accurate' }, { value: 'max', label: 'Max' }],
+        quality,
+        (v) => {
+            quality = v;
+            modelBadge.textContent = SPECS[quality].label;
+            // Re-run on the new tier if we already have an image to segment.
+            if (currentURL) runOnce();
+        },
+    );
+
     const picker = imageInput({
         samples: ['street', 'cats', 'football', 'tiger'],
         onImage: (url) => setImage(url),
@@ -58,8 +85,9 @@ export default function mount(host, ctx) {
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
+        field('Quality', qualityToggle, 'Fast is instant; Accurate and Max trade speed for sharper masks'),
         field('Overlay opacity', opSlider, null),
-        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, opLabel, badge('SegFormer-B0', 'accent')),
+        el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, opLabel, modelBadge),
         runBtn,
         loaderSlot,
     );
@@ -75,17 +103,17 @@ export default function mount(host, ctx) {
 
     // ---- Logic ----
     async function ensureModel() {
-        if (segmenter) return segmenter;
-        const ld = loader('Loading SegFormer model');
+        if (pipes[quality]) return pipes[quality];
+        const ld = loader(`Loading SegFormer (${SPECS[quality].label})`);
         clear(loaderSlot); loaderSlot.append(ld.el);
         try {
-            segmenter = await loadPipeline(MODEL, (p) => ld.progress(p));
+            pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p));
             ld.remove();
         } catch (err) {
             ld.fail(err);
             throw err;
         }
-        return segmenter;
+        return pipes[quality];
     }
 
     function showStage() {
@@ -100,7 +128,7 @@ export default function mount(host, ctx) {
         summary.textContent = '';
         clear(list);
         clearOverlay();
-        img.onload = () => { if (segmenter) runOnce(); };
+        img.onload = () => { if (pipes[quality]) runOnce(); };
     }
 
     function clearOverlay() {
@@ -156,7 +184,7 @@ export default function mount(host, ctx) {
         busy = true;
         runBtn.disabled = true;
         try {
-            await ensureModel();
+            const segmenter = await ensureModel();
             const out = await segmenter(currentURL); // [{score, label, mask:RawImage}]
             lastSegments = out;
             paint(out);

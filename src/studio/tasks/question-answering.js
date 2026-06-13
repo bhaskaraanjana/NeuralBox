@@ -1,17 +1,29 @@
 // ============================================================
-// Question Answering (DistilBERT/SQuAD) — extractive QA.
+// Question Answering (extractive QA).
 // Paste context, ask a question, get the answer span highlighted.
+// Two quality tiers: Fast (DistilBERT/SQuAD) and Accurate (RoBERTa/SQuAD2).
 // ============================================================
-import { el, clear, button, field, textarea, textInput, loader, chip, badge, toast, escapeHtml } from '../ui.js';
+import { el, clear, button, field, textarea, textInput, loader, chip, badge, segmented, toast, escapeHtml } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
-const MODEL = { task: 'question-answering', model: 'Xenova/distilbert-base-cased-distilled-squad', dtype: { webgpu: 'fp16', wasm: 'q8' } };
+const SPECS = {
+    fast: {
+        label: 'DistilBERT · SQuAD',
+        spec: { task: 'question-answering', model: 'Xenova/distilbert-base-cased-distilled-squad', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+    accurate: {
+        label: 'RoBERTa · SQuAD2',
+        spec: { task: 'question-answering', model: 'onnx-community/roberta-base-squad2-ONNX', dtype: { webgpu: 'fp16', wasm: 'q8' } },
+    },
+};
 
 const SAMPLE_CONTEXT = 'The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France. It is named after the engineer Gustave Eiffel, whose company designed and built the tower. Constructed from 1887 to 1889, it was initially criticized by some of France\'s leading artists and intellectuals for its design, but it has become a global cultural icon of France. The tower is 330 metres tall and was the tallest man-made structure in the world until 1930.';
 const SAMPLE_QUESTIONS = ['How tall is the Eiffel Tower?', 'Who designed the tower?', 'When was it constructed?'];
 
 export default function mount(host, ctx) {
-    let qa = null;
+    // One cached pipeline per quality tier (runtime caches the underlying load too).
+    const pipes = { fast: null, accurate: null };
+    let quality = 'fast';
 
     const context = textarea('Paste the text to search for answers…', SAMPLE_CONTEXT, 8);
     const question = textInput('Ask a question about the text…', SAMPLE_QUESTIONS[0]);
@@ -21,6 +33,18 @@ export default function mount(host, ctx) {
     const qChips = el('div', { class: 'sx-row', style: { marginTop: '10px', flexWrap: 'wrap' } },
         el('span', { class: 'sx-muted' }, 'Try:'),
         ...SAMPLE_QUESTIONS.map((q) => chip(q, () => { question.value = q; run(); })),
+    );
+
+    const modelBadge = badge(SPECS[quality].label, 'accent');
+    const qualityToggle = segmented(
+        [{ value: 'fast', label: 'Fast' }, { value: 'accurate', label: 'Accurate' }],
+        quality,
+        (v) => {
+            quality = v;
+            modelBadge.textContent = SPECS[quality].label;
+            // Re-run on the new tier if we already have a question to answer.
+            if (context.value.trim() && question.value.trim()) run();
+        },
     );
 
     const answerBox = el('div', { class: 'sx-result-big' }, '—');
@@ -35,7 +59,8 @@ export default function mount(host, ctx) {
         field('', context),
         field('Question', question),
         qChips,
-        el('div', { class: 'sx-row', style: { margin: '12px 0' } }, badge('DistilBERT · SQuAD', 'accent')),
+        field('Quality', qualityToggle, 'Fast is instant; Accurate trades speed for precision'),
+        el('div', { class: 'sx-row', style: { margin: '12px 0' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
         loaderSlot,
     );
@@ -48,12 +73,17 @@ export default function mount(host, ctx) {
     host.append(el('div', { class: 'sx-split' }, controls, output));
 
     async function ensureModel() {
-        if (qa) return qa;
-        const ld = loader('Loading QA model');
+        if (pipes[quality]) return pipes[quality];
+        const ld = loader(`Loading ${SPECS[quality].label}`);
         clear(loaderSlot); loaderSlot.append(ld.el);
-        try { qa = await loadPipeline(MODEL, (p) => ld.progress(p)); ld.remove(); }
-        catch (err) { ld.fail(err); throw err; }
-        return qa;
+        try {
+            pipes[quality] = await loadPipeline(SPECS[quality].spec, (p) => ld.progress(p));
+            ld.remove();
+        } catch (err) {
+            ld.fail(err);
+            throw err;
+        }
+        return pipes[quality];
     }
 
     function highlight(ctxText, answer, start, end) {
@@ -72,16 +102,21 @@ export default function mount(host, ctx) {
         if (!ctxText || !q) { toast('Add both context and a question', 'info'); return; }
         runBtn.disabled = true;
         try {
-            await ensureModel();
+            const qa = await ensureModel();
             const out = await qa(q, ctxText); // { answer, score, start?, end? }
             clear(outBody);
             outBody.classList.remove('sx-placeholder');
             clear(answerBox);
+            // SQuAD2 (Accurate) can return an empty answer for unanswerable questions.
+            const hasAnswer = !!(out.answer && out.answer.trim());
             answerBox.append(
-                el('span', {}, out.answer || '(no answer found)'),
+                el('span', {}, hasAnswer ? out.answer : '(no answer found in the text)'),
                 el('span', { class: 'sx-muted', style: { fontSize: '0.85rem', marginLeft: '10px' } }, `${Math.round((out.score || 0) * 100)}% confident`),
             );
-            ctxView.innerHTML = highlight(ctxText, out.answer || '', out.start, out.end);
+            // Only highlight when there is an actual span; otherwise show the plain context.
+            ctxView.innerHTML = hasAnswer
+                ? highlight(ctxText, out.answer, out.start, out.end)
+                : escapeHtml(ctxText);
             outBody.append(answerBox, ctxView);
         } catch (err) {
             toast('Answering failed: ' + (err?.message || err), 'error');
