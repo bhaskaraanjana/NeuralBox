@@ -129,6 +129,15 @@ async function handleRoute(routeId) {
     }
 }
 
+// "/" focuses the gallery search (when not already typing).
+document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target?.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || e.target?.isContentEditable) return;
+    const search = document.querySelector('.home-search');
+    if (search) { e.preventDefault(); search.focus(); }
+});
+
 // ---- Go ------------------------------------------------------
 startRouter(handleRoute);
 

@@ -79,7 +79,13 @@ export async function renderHome(root, ctx) {
         }, el('span', {}, p.emoji), p.label);
         pillEls.push(pill);
     });
-    pills.append(...pillEls);
+    const surprise = el('button', {
+        class: 'home-pill home-surprise',
+        type: 'button',
+        title: 'Open a random studio',
+        onClick: () => ctx.navigate(STUDIOS[Math.floor(Math.random() * STUDIOS.length)].id),
+    }, el('span', {}, '🎲'), 'Surprise me');
+    pills.append(...pillEls, surprise);
 
     async function onToggleFav(id) {
         favorites = new Set(await toggleFavorite(id));
