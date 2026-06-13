@@ -15,7 +15,8 @@ caches it in the browser, and then runs offline.
 
 **Vision**
 - 🎯 **Object Detection** — real YOLO (YOLOS-tiny) with a live camera mode.
-- 🏷️ **Image Labeler** — 1000-class classification (MobileNetV4 / ViT).
+- 🔭 **Find Anything** — zero-shot detection of any object you name (OWL-ViT).
+- 🏷️ **Image Labeler** — 1000-class classification (ResNet-50 / ViT).
 - 🔮 **Zero-Shot Vision** — score an image against any labels you type (CLIP).
 - 🧩 **Segmentation** — per-pixel scene parsing (SegFormer).
 - 🌀 **Depth Map** — turn any photo into a 3D depth map (Depth Anything V2).
@@ -28,15 +29,23 @@ caches it in the browser, and then runs offline.
 - 👂 **Sound Classifier** — identify 500+ sound events (AST / AudioSet).
 
 **Language**
-- 💬 **Sentiment** · 🧷 **Zero-Shot Text** · 📚 **Summarizer** · 🌍 **Translator**
-  (OPUS-MT) · 🔎 **Semantic Search** (embeddings) · 🔖 **Entity Finder** (NER) ·
-  🧠 **Fill in the Blank** (BERT).
+- 💬 **Sentiment** · 🎭 **Emotion** (7-way) · 🧷 **Zero-Shot Text** · ❓ **Q&A**
+  (DistilBERT/SQuAD) · 📚 **Summarizer** · 🌍 **Translator** (OPUS-MT) ·
+  🔎 **Semantic Search** (embeddings) · 🔖 **Entity Finder** (NER) · 🧠 **Fill
+  in the Blank** (BERT).
 
 **Chat**
 - 🤖 **Mini Chat** — a tiny streaming LLM (Qwen2.5 / SmolLM2 / Llama-3.2) that runs
   on any device.
 - 💎 **Pro Chat** — the full WebLLM assistant (model picker, RAG, web search, voice,
   vision). Requires WebGPU. Lives at `/chat.html` and is embedded as a studio.
+
+## Niceties
+
+- **Installable PWA** — add to your home screen; works offline after first load.
+- **Pin favorites + recents** — surfaced at the top of the gallery (stored locally).
+- **Storage panel** — see and clear cached model weights from the top bar.
+- **Search + category filters** in the gallery.
 
 ## Tech stack
 
