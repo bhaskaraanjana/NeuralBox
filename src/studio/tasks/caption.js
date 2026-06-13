@@ -3,7 +3,7 @@
 // Quick mode: ViT-GPT2 (fast, one sentence).
 // Detailed mode: Florence-2 (rich, multi-sentence VLM).
 // ============================================================
-import { el, clear, button, field, segmented, loader, imageInput, badge, copyButton, toast } from '../ui.js';
+import { el, clear, button, field, segmented, loader, imageInput, badge, copyButton, toast, spinner } from '../ui.js';
 import { loadPipeline, loadLib, pickDevice, aggregateProgress } from '../runtime.js';
 import { M } from '../models.js';
 
@@ -44,6 +44,15 @@ export default function mount(host, ctx) {
         onImage: (url) => setImage(url),
     });
 
+    // --- Batch mode: caption many images at once (additive; single-image mode untouched). ---
+    const batchInput = el('input', { type: 'file', accept: 'image/*', multiple: true, style: { display: 'none' } });
+    batchInput.addEventListener('change', () => {
+        const files = Array.from(batchInput.files || []);
+        batchInput.value = '';
+        if (files.length) runBatch(files);
+    });
+    const batchBtn = button('Batch (multiple images)', { variant: 'ghost', full: true, onClick: () => batchInput.click() });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
@@ -51,6 +60,8 @@ export default function mount(host, ctx) {
         modeNote,
         el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, modelBadge, el('span', { class: 'sx-muted' }, 'Generative — can take a few seconds')),
         runBtn,
+        batchBtn,
+        batchInput,
         loaderSlot,
     );
 
@@ -173,6 +184,62 @@ export default function mount(host, ctx) {
         } finally {
             busy = false;
             runBtn.disabled = false;
+        }
+    }
+
+    // Render a results grid in the output pane and caption each picked image in turn.
+    // Quick mode is used here to keep the batch fast (one fast model load, then N inferences).
+    async function runBatch(files) {
+        if (busy) return;
+        busy = true;
+        runBtn.disabled = true;
+        batchBtn.disabled = true;
+
+        clear(outBody);
+        outBody.classList.remove('sx-placeholder');
+        const status = el('div', { class: 'sx-row', style: { marginBottom: '12px' } },
+            spinner(),
+            el('strong', {}, `Captioning batch — 0 / ${files.length}`),
+        );
+        const grid = el('div', {
+            class: 'sx-batch-grid',
+            style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '14px' },
+        });
+        outBody.append(status, grid);
+
+        const statusLabel = status.querySelector('strong');
+        const urls = [];
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const url = URL.createObjectURL(files[i]);
+                urls.push(url);
+                const capText = el('div', { class: 'sx-muted', style: { marginTop: '8px', fontSize: '13px' } }, 'Captioning…');
+                const cell = el('div', { class: 'sx-card', style: { padding: '10px' } },
+                    el('img', { src: url, alt: files[i].name || 'image', style: { width: '120px', height: '120px', objectFit: 'cover', borderRadius: '8px', display: 'block' } }),
+                    capText,
+                );
+                grid.append(cell);
+                try {
+                    const text = await captionQuick(url); // reuse existing Quick inference
+                    capText.classList.remove('sx-muted');
+                    capText.textContent = text || 'No caption produced.';
+                    if (text) ctx.saveHistory({ studio: 'caption', title: text.slice(0, 60), text });
+                } catch (err) {
+                    capText.classList.remove('sx-muted');
+                    capText.textContent = '⚠️ Failed: ' + (err?.message || err);
+                }
+                statusLabel.textContent = `Captioning batch — ${i + 1} / ${files.length}`;
+            }
+            clear(status);
+            status.append(el('strong', {}, `Done — ${files.length} image${files.length === 1 ? '' : 's'} captioned`));
+        } catch (err) {
+            toast('Batch failed: ' + (err?.message || err), 'error');
+        } finally {
+            busy = false;
+            runBtn.disabled = false;
+            batchBtn.disabled = false;
+            // Object URLs back the rendered thumbnails for the session, so they are kept alive intentionally.
+            void urls;
         }
     }
 

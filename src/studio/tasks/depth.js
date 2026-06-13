@@ -3,7 +3,7 @@
 // Reference-style vision studio: image in, colorized depth out.
 // ============================================================
 import { el, clear, button, field, loader, imageInput, badge, segmented, downloadBlob, toast } from '../ui.js';
-import { loadPipeline } from '../runtime.js';
+import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
 
 const SPECS = {
@@ -24,11 +24,15 @@ export default function mount(host, ctx) {
     let currentURL = null;
     let busy = false;
     let lastBlob = null;
+    let live = false;
+    let stream = null;
+    let rafId = 0;
 
     // ---- DOM ----
     const srcStage = el('div', { class: 'sx-stage block' });
     const srcImg = el('img', { alt: 'input', crossorigin: 'anonymous' });
-    srcStage.append(srcImg);
+    const video = el('video', { autoplay: true, playsinline: true, muted: true, style: { display: 'none' } });
+    srcStage.append(srcImg, video);
 
     const depthStage = el('div', { class: 'sx-stage block' });
     const depthCanvas = el('canvas');
@@ -57,6 +61,7 @@ export default function mount(host, ctx) {
 
     const loaderSlot = el('div');
     const runBtn = button('Estimate depth', { variant: 'primary', full: true, onClick: () => runOnce() });
+    const liveBtn = button('Live camera', { variant: 'ghost', onClick: () => toggleLive() });
 
     const picker = imageInput({
         samples: ['street', 'cats', 'football', 'tiger', 'portrait'],
@@ -69,6 +74,8 @@ export default function mount(host, ctx) {
         field('Quality', qualityToggle, 'Fast is quick; Detailed uses the larger base model for sharper depth'),
         el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
+        el('div', { style: { height: '10px' } }),
+        liveBtn,
         loaderSlot,
     );
 
@@ -104,7 +111,10 @@ export default function mount(host, ctx) {
     }
 
     function setImage(url) {
+        stopLive();
         currentURL = url;
+        video.style.display = 'none';
+        srcImg.style.display = '';
         srcImg.src = url;
         meta.textContent = '';
         clear(dlSlot);
@@ -147,7 +157,7 @@ export default function mount(host, ctx) {
     }
 
     async function runOnce() {
-        if (!currentURL || busy) return;
+        if (!currentURL || busy || live) return;
         busy = true;
         runBtn.disabled = true;
         try {
@@ -167,9 +177,56 @@ export default function mount(host, ctx) {
         }
     }
 
+    // ---- Live camera ----
+    async function toggleLive() {
+        if (live) { stopLive(); return; }
+        try {
+            await ensureModel();
+            live = true;
+            liveBtn.querySelector('span').textContent = 'Stop camera';
+            clear(dlSlot);
+            lastBlob = null;
+            srcImg.style.display = 'none';
+            video.style.display = '';
+            showStages();
+            stream = await startCamera(video, { facingMode: 'environment' });
+            const canvas = el('canvas');
+            const loop = async () => {
+                if (!live) return;
+                if (!busy && video.videoWidth) {
+                    busy = true;
+                    try {
+                        // Use the currently-selected tier (loads lazily if switched mid-stream).
+                        const estimator = await ensureModel();
+                        grabFrame(video, canvas);
+                        const raw = await toRawImage(canvas);
+                        const { depth } = await estimator(raw);
+                        colorize(depth);
+                        meta.textContent = `Live · depth at ${depth.width}×${depth.height}. Warm = near, cool = far.`;
+                    } catch (_) { /* drop frame */ }
+                    finally { busy = false; }
+                }
+                rafId = requestAnimationFrame(loop);
+            };
+            rafId = requestAnimationFrame(loop);
+        } catch (err) {
+            live = false;
+            toast('Camera unavailable: ' + (err?.message || err), 'error');
+        }
+    }
+
+    function stopLive() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = 0;
+        if (live) { live = false; liveBtn.querySelector('span').textContent = 'Live camera'; }
+        if (stream) { stopStream(stream); stream = null; }
+        video.style.display = 'none';
+        srcImg.style.display = '';
+    }
+
     // ---- Pipeline hand-off (consume a piped image input) ----
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
 
-    return () => { picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); };
 }

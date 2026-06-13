@@ -3,7 +3,7 @@
 // you invent on the fly. No fine-tuning, no fixed categories.
 // ============================================================
 import { el, clear, button, field, textInput, loader, scoreBars, segmented, imageInput, badge, toast } from '../ui.js';
-import { loadPipeline } from '../runtime.js';
+import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
 
 const SPECS = {
@@ -25,11 +25,15 @@ export default function mount(host, ctx) {
     let quality = 'fast';
     let currentURL = null;
     let busy = false;
+    let live = false;
+    let stream = null;
+    let rafId = 0;
 
     // ---- Input stage ----
     const stage = el('div', { class: 'sx-stage block' });
     const img = el('img', { alt: 'input', crossorigin: 'anonymous' });
-    stage.append(img);
+    const video = el('video', { autoplay: true, playsinline: true, muted: true, style: { display: 'none' } });
+    stage.append(img, video);
     const placeholder = el('div', { class: 'sx-placeholder' },
         el('div', { class: 'ph-emoji' }, '🪄'),
         el('div', {}, 'Pick an image, then describe what it might be'),
@@ -40,6 +44,7 @@ export default function mount(host, ctx) {
     const labelsInput = textInput('comma, separated, labels', DEFAULT_LABELS);
     const loaderSlot = el('div');
     const runBtn = button('Classify', { variant: 'primary', full: true, onClick: () => run() });
+    const liveBtn = button('Live camera', { variant: 'ghost', onClick: () => toggleLive() });
 
     const modelBadge = badge(SPECS[quality].label, 'accent');
     const qualityToggle = segmented(
@@ -65,6 +70,8 @@ export default function mount(host, ctx) {
         field('Quality', qualityToggle, 'Fast is instant; Accurate trades speed for precision'),
         el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
+        el('div', { style: { height: '10px' } }),
+        liveBtn,
         loaderSlot,
     );
 
@@ -86,7 +93,10 @@ export default function mount(host, ctx) {
     }
 
     function setImage(url) {
+        stopLive();
         currentURL = url;
+        video.style.display = 'none';
+        img.style.display = '';
         img.src = url;
         showStage();
         summary.textContent = '';
@@ -110,6 +120,21 @@ export default function mount(host, ctx) {
         return pipes[quality];
     }
 
+    // Shared inference + render: classify a source (URL / RawImage) against
+    // the labels and paint the bars. Reused by both still-image and live modes.
+    async function classifyAndRender(src, labels, livePrefix) {
+        const classifier = await ensureModel();
+        // Candidate labels are the SECOND POSITIONAL ARG (string[]).
+        const out = await classifier(src, labels); // [{score,label}] desc, softmaxed
+        const ranked = out.slice().sort((a, b) => b.score - a.score);
+        const top = ranked[0];
+        summary.textContent = top
+            ? `${livePrefix}“${top.label}” — ${Math.round(top.score * 100)}% confident`
+            : 'No result.';
+        clear(bars);
+        bars.append(scoreBars(ranked));
+    }
+
     async function run() {
         if (!currentURL) { toast('Pick an image first', 'info'); return; }
         const labels = parseLabels();
@@ -118,16 +143,7 @@ export default function mount(host, ctx) {
         busy = true;
         runBtn.disabled = true;
         try {
-            const classifier = await ensureModel();
-            // Candidate labels are the SECOND POSITIONAL ARG (string[]).
-            const out = await classifier(currentURL, labels); // [{score,label}] desc, softmaxed
-            const ranked = out.slice().sort((a, b) => b.score - a.score);
-            const top = ranked[0];
-            summary.textContent = top
-                ? `“${top.label}” — ${Math.round(top.score * 100)}% confident`
-                : 'No result.';
-            clear(bars);
-            bars.append(scoreBars(ranked));
+            await classifyAndRender(currentURL, labels, '');
         } catch (err) {
             toast('Classification failed: ' + (err?.message || err), 'error');
         } finally {
@@ -136,9 +152,55 @@ export default function mount(host, ctx) {
         }
     }
 
+    // ---- Live camera ----
+    async function toggleLive() {
+        if (live) { stopLive(); return; }
+        if (parseLabels().length < 2) { toast('Add at least 2 candidate labels', 'info'); return; }
+        try {
+            await ensureModel();
+            live = true;
+            liveBtn.querySelector('span').textContent = 'Stop camera';
+            img.style.display = 'none';
+            video.style.display = '';
+            showStage();
+            stream = await startCamera(video, { facingMode: 'environment' });
+            const canvas = el('canvas');
+            const loop = async () => {
+                if (!live) return;
+                // Frame-drop guard keeps the UI responsive on heavier tiers.
+                if (!busy && video.videoWidth) {
+                    busy = true;
+                    try {
+                        // Re-read labels each frame so live edits take effect immediately.
+                        const labels = parseLabels();
+                        if (labels.length >= 2) {
+                            grabFrame(video, canvas);
+                            const raw = await toRawImage(canvas);
+                            await classifyAndRender(raw, labels, 'Live · ');
+                        }
+                    } catch (_) { /* drop frame */ }
+                    finally { busy = false; }
+                }
+                rafId = requestAnimationFrame(loop);
+            };
+            rafId = requestAnimationFrame(loop);
+        } catch (err) {
+            live = false;
+            toast('Camera unavailable: ' + (err?.message || err), 'error');
+        }
+    }
+
+    function stopLive() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = 0;
+        if (live) { live = false; liveBtn.querySelector('span').textContent = 'Live camera'; }
+        if (stream) { stopStream(stream); stream = null; }
+        video.style.display = 'none';
+    }
+
     // ---- Pipeline hand-off: consume a piped image input (call ONCE) ----
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
 
-    return () => { picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); };
 }

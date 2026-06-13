@@ -3,7 +3,7 @@
 // pixel with the class it belongs to and overlays it on the image.
 // ============================================================
 import { el, clear, button, field, loader, segmented, imageInput, badge, labelColor, toast } from '../ui.js';
-import { loadPipeline } from '../runtime.js';
+import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
 
 const SPECS = {
@@ -39,12 +39,16 @@ export default function mount(host, ctx) {
     let lastSegments = null;
     let opacity = 0.5;
     let busy = false;
+    let live = false;
+    let stream = null;
+    let rafId = 0;
 
     // ---- DOM ----
     const stage = el('div', { class: 'sx-stage block' });
     const img = el('img', { alt: 'input', crossorigin: 'anonymous', style: { display: 'block', width: '100%' } });
+    const video = el('video', { autoplay: true, playsinline: true, muted: true, style: { display: 'none', width: '100%' } });
     const overlay = el('canvas', { class: 'sx-overlay', style: { width: '100%', height: '100%', imageRendering: 'pixelated' } });
-    stage.append(img, overlay);
+    stage.append(img, video, overlay);
 
     const placeholder = el('div', { class: 'sx-placeholder' },
         el('div', { class: 'ph-emoji' }, '🗺️'),
@@ -57,6 +61,7 @@ export default function mount(host, ctx) {
 
     const loaderSlot = el('div');
     const runBtn = button('Segment image', { variant: 'primary', full: true, onClick: () => runOnce() });
+    const liveBtn = button('Live camera', { variant: 'ghost', onClick: () => toggleLive() });
 
     const opLabel = el('span', {}, '50%');
     const opSlider = el('input', { type: 'range', class: 'sx-input', min: '0', max: '1', step: '0.05', value: '0.5' });
@@ -73,8 +78,9 @@ export default function mount(host, ctx) {
         (v) => {
             quality = v;
             modelBadge.textContent = SPECS[quality].label;
-            // Re-run on the new tier if we already have an image to segment.
-            if (currentURL) runOnce();
+            // Re-run on the new tier if we already have a still image to segment
+            // (the live loop picks up the new tier on its own via ensureModel).
+            if (!live && currentURL) runOnce();
         },
     );
 
@@ -90,6 +96,8 @@ export default function mount(host, ctx) {
         field('Overlay opacity', opSlider, null),
         el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, opLabel, modelBadge),
         runBtn,
+        el('div', { style: { height: '10px' } }),
+        liveBtn,
         loaderSlot,
     );
 
@@ -122,8 +130,11 @@ export default function mount(host, ctx) {
     }
 
     function setImage(url) {
+        stopLive();
         currentURL = url;
         lastSegments = null;
+        video.style.display = 'none';
+        img.style.display = 'block';
         img.src = url;
         showStage();
         summary.textContent = '';
@@ -199,9 +210,56 @@ export default function mount(host, ctx) {
         }
     }
 
+    // ---- Live camera ----
+    async function toggleLive() {
+        if (live) { stopLive(); return; }
+        try {
+            await ensureModel();
+            live = true;
+            liveBtn.querySelector('span').textContent = 'Stop camera';
+            img.style.display = 'none';
+            video.style.display = 'block';
+            showStage();
+            stream = await startCamera(video, { facingMode: 'environment' });
+            const canvas = el('canvas');
+            const loop = async () => {
+                if (!live) return;
+                if (!busy && video.videoWidth) {
+                    busy = true;
+                    try {
+                        // Use the currently-selected tier (loads lazily if switched mid-stream).
+                        const segmenter = await ensureModel();
+                        grabFrame(video, canvas);
+                        const raw = await toRawImage(canvas);
+                        const out = await segmenter(raw); // [{score, label, mask:RawImage}]
+                        lastSegments = out;
+                        paint(out);          // reuse existing mask painter
+                        renderList(out);     // reuse existing chip list
+                        summary.textContent = `Live · ${out.length} segment${out.length === 1 ? '' : 's'}`;
+                    } catch (_) { /* drop frame */ }
+                    finally { busy = false; }
+                }
+                rafId = requestAnimationFrame(loop);
+            };
+            rafId = requestAnimationFrame(loop);
+        } catch (err) {
+            live = false;
+            toast('Camera unavailable: ' + (err?.message || err), 'error');
+        }
+    }
+
+    function stopLive() {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = 0;
+        if (live) { live = false; liveBtn.querySelector('span').textContent = 'Live camera'; }
+        if (stream) { stopStream(stream); stream = null; }
+        video.style.display = 'none';
+        img.style.display = 'block';
+    }
+
     // ---- Pipeline hand-off: consume a piped image input (if any) ----
     const _h = ctx.takeHandoff("image");
     if (_h && _h.data) setImage(_h.data);
 
-    return () => { picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); };
 }
