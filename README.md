@@ -45,10 +45,20 @@ caches it in the browser, and then runs offline.
 
 ## Niceties
 
+- **Pipelines** — "Send result to →" pipes one studio's output into another
+  (e.g. transcribe a podcast → summarize → find entities; caption → translate).
+- **History** — captions, transcripts, summaries, translations and chat replies
+  are saved locally; reopen, copy, or reuse them from the top bar.
+- **Live camera** — real-time inference for detection, classification, zero-shot
+  vision, segmentation, and depth.
+- **Batch** — caption or background-remove many images at once.
+- **Paste / drop anywhere** — drop or paste an image to jump straight into a
+  vision studio. **Share** a deep link to any studio.
 - **Quality tiers** — most studios offer a Fast default plus an **Accurate** (or
   Detailed/Max) tier with a stronger model (e.g. DETR & YOLOS-small detection,
   CLIP ViT-B/16, SegFormer-B2/B5, DeBERTa-v3 zero-shot, RoBERTa-SQuAD2 Q&A,
   BGE/GTE embeddings), so you can trade speed for genuine accuracy.
+- **Honest model sizes** shown before you commit to a download.
 - **Installable PWA** — add to your home screen; works offline after first load.
 - **Pin favorites + recents** — surfaced at the top of the gallery (stored locally).
 - **Storage panel** — see and clear cached model weights from the top bar.
@@ -66,15 +76,23 @@ caches it in the browser, and then runs offline.
 
 ```
 src/studio/
-  main.js        bootstrap: shell + router + studio lifecycle
+  main.js        bootstrap: shell + router + lifecycle + paste/drop + ctx services
   runtime.js     the engine — lazy transformers.js, WebGPU/WASM pick, pipeline cache, media helpers
-  registry.js    single source of truth for the gallery (+ lazy module loaders)
+  models.js      central model catalog (M) — every id/dtype/size in ONE place
+  registry.js    gallery metadata + lazy loaders + studio I/O map (for pipelines)
+  studio-kit.js  createTierPicker / runWithLoader / deviceHint helpers
   router.js      hash router (#/ = home, #/<id> = studio)
   home.js        the launcher gallery
+  state.js       favorites / recents / history (IndexedDB)
+  handoff.js     panels.js   pipeline hand-off + history/send-to panels
   ui.js          shared UI toolkit (sx-* components)
+  types.js       JSDoc contract typedefs
   styles/studio.css  design system
-  tasks/<id>.js  one self-contained studio per model
+  tasks/<id>.js  one self-contained studio per model (sources specs from models.js)
 ```
+
+Update a model in **one place** (`models.js`). `npm run doctor` checks every
+catalog model still resolves on the Hub; a weekly CI job runs it.
 
 Each studio module default-exports `mount(host, ctx)` and is dynamically imported
 only when its route opens, so the gallery loads instantly and model weights download
@@ -100,8 +118,15 @@ npm run dev        # http://localhost:6969
 ```bash
 npm run build              # builds both pages + all studio chunks
 npm run test:studio        # Playwright smoke: gallery, routing, studio mount, zero console errors
+npm run doctor             # verify every catalog model still resolves on the HF Hub
 npm run test:browser:lifecycle   # Pro Chat lifecycle smoke
 ```
+
+Real end-to-end inference checks (download → run → assert) live in
+`scripts/studio-run-check.mjs` (`STUDIO=<id> [CLICK_TIER=<label>]`),
+`studio-audio-check.mjs`, `studio-chat-check.mjs`, and `pipeline-check.mjs`,
+driven by `scripts/e2e-manifest.mjs`. CI runs build + the node suite + the
+studio smoke on every push/PR.
 
 ## Privacy
 
