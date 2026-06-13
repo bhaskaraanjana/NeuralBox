@@ -2,7 +2,7 @@
 // Zero-Shot Object Detection (OWL-ViT) — find ANY object you
 // can name, no training. Image in, boxes out for your prompts.
 // ============================================================
-import { el, clear, button, field, textInput, loader, badge, labelColor, toast } from '../ui.js';
+import { el, clear, button, field, textInput, loader, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 
 const MODEL = { task: 'zero-shot-object-detection', model: 'Xenova/owlvit-base-patch32', dtype: { webgpu: 'q4f16', wasm: 'q8' } };
@@ -11,6 +11,7 @@ export default function mount(host, ctx) {
     let detector = null;
     let currentURL = null;
     let busy = false;
+    let lastDets = [];
 
     const stage = el('div', { class: 'sx-stage block' });
     const overlay = el('div', { class: 'sx-overlay' });
@@ -52,10 +53,18 @@ export default function mount(host, ctx) {
         loaderSlot,
     );
 
+    const downloadBtn = button('Download result', {
+        variant: 'ghost',
+        iconPath: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+        onClick: () => downloadResult(),
+    });
+    downloadBtn.style.display = 'none';
+
     const output = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '🟦 Matches'),
         stageWrap,
         summary,
+        el('div', { class: 'sx-row', style: { marginTop: '14px' } }, downloadBtn),
     );
 
     host.append(el('div', { class: 'sx-split wide-out' }, controls, output));
@@ -66,6 +75,8 @@ export default function mount(host, ctx) {
         currentURL = url;
         clear(overlay);
         summary.textContent = '';
+        lastDets = [];
+        downloadBtn.style.display = 'none';
         showStage();
         img.onload = () => { if (detector) run(); };
         img.onerror = () => toast('Could not load that image', 'error');
@@ -105,6 +116,16 @@ export default function mount(host, ctx) {
         }
     }
 
+    function downloadResult() {
+        if (!currentURL || !lastDets.length) return;
+        try {
+            const canvas = drawBoxesToCanvas(img, lastDets, { fractional: false });
+            canvas.toBlob((b) => { if (b) downloadBlob(b, 'neuralbox-detections.png'); else toast('Export failed', 'error'); }, 'image/png');
+        } catch (err) {
+            toast('Export failed: ' + (err?.message || err), 'error');
+        }
+    }
+
     async function run() {
         if (!currentURL) { toast('Pick or upload an image first', 'info'); return; }
         const labels = labelsInput.value.split(',').map((s) => s.trim()).filter(Boolean);
@@ -116,6 +137,8 @@ export default function mount(host, ctx) {
             await ensureModel();
             const out = await detector(currentURL, labels, { topk: 12, threshold: 0.1 });
             draw(out);
+            lastDets = out;
+            downloadBtn.style.display = out.length ? '' : 'none';
             summary.textContent = out.length ? `Found ${out.length} match${out.length === 1 ? '' : 'es'}.` : 'No matches — try different or simpler prompts.';
         } catch (err) {
             summary.textContent = '';

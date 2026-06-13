@@ -2,7 +2,7 @@
 // Object Detection (YOLOS) — the headline "YOLO" studio.
 // Reference implementation for vision + canvas-overlay studios.
 // ============================================================
-import { el, clear, button, field, loader, imageInput, badge, labelColor, toast } from '../ui.js';
+import { el, clear, button, field, loader, imageInput, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 
 const MODEL = { task: 'object-detection', model: 'Xenova/yolos-tiny', dtype: { webgpu: 'fp16', wasm: 'q8' } };
@@ -15,6 +15,7 @@ export default function mount(host, ctx) {
     let stream = null;
     let rafId = 0;
     let busy = false;
+    let lastDets = [];
 
     // ---- DOM ----
     const stage = el('div', { class: 'sx-stage block' });
@@ -60,11 +61,19 @@ export default function mount(host, ctx) {
         loaderSlot,
     );
 
+    const downloadBtn = button('Download result', {
+        variant: 'ghost',
+        iconPath: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+        onClick: () => downloadResult(),
+    });
+    downloadBtn.style.display = 'none';
+
     const output = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '🟦 Detections'),
         stageWrap,
         summary,
         list,
+        el('div', { class: 'sx-row', style: { marginTop: '14px' } }, downloadBtn),
     );
 
     host.append(el('div', { class: 'sx-split wide-out' }, controls, output));
@@ -97,6 +106,8 @@ export default function mount(host, ctx) {
         showStage();
         summary.textContent = '';
         clear(list);
+        lastDets = [];
+        downloadBtn.style.display = 'none';
         img.onload = () => { if (detector) runOnce(); };
         img.onerror = () => toast('Could not load that image', 'error');
         img.src = url;
@@ -145,6 +156,8 @@ export default function mount(host, ctx) {
             const out = await detector(currentURL, { threshold, percentage: true });
             drawBoxes(out);
             renderList(out);
+            lastDets = out;
+            downloadBtn.style.display = out.length ? '' : 'none';
             summary.textContent = `Found ${out.length} object${out.length === 1 ? '' : 's'}.`;
         } catch (err) {
             toast('Detection failed: ' + (err?.message || err), 'error');
@@ -154,14 +167,24 @@ export default function mount(host, ctx) {
         }
     }
 
+    function downloadResult() {
+        if (!currentURL || live || !lastDets.length) return;
+        try {
+            const canvas = drawBoxesToCanvas(img, lastDets, { fractional: true });
+            canvas.toBlob((b) => { if (b) downloadBlob(b, 'neuralbox-detections.png'); else toast('Export failed', 'error'); }, 'image/png');
+        } catch (err) {
+            toast('Export failed: ' + (err?.message || err), 'error');
+        }
+    }
+
     // ---- Live camera ----
     async function toggleLive() {
         if (live) { stopLive(); return; }
         try {
             await ensureModel();
             live = true;
-            liveBtn.replaceWith(liveBtn); // no-op keeps ref
             liveBtn.querySelector('span').textContent = 'Stop camera';
+            downloadBtn.style.display = 'none';
             img.style.display = 'none';
             video.style.display = '';
             showStage();

@@ -322,6 +322,39 @@ export function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+/**
+ * Draw an image plus detection boxes onto a full-resolution canvas (for export).
+ * dets: [{ label, score, box:{xmin,ymin,xmax,ymax} }]. fractional=true => box is 0..1.
+ */
+export function drawBoxesToCanvas(img, dets, { fractional = false } = {}) {
+    const w = img.naturalWidth || img.width || 1;
+    const h = img.naturalHeight || img.height || 1;
+    const c = el('canvas');
+    c.width = w; c.height = h;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    ctx.lineWidth = Math.max(2, Math.round(w / 320));
+    const fontPx = Math.max(12, Math.round(w / 42));
+    ctx.font = `700 ${fontPx}px ${getComputedStyle(document.body).fontFamily || 'sans-serif'}`;
+    ctx.textBaseline = 'top';
+    for (const d of dets) {
+        let { xmin, ymin, xmax, ymax } = d.box;
+        if (fractional) { xmin *= w; xmax *= w; ymin *= h; ymax *= h; }
+        const color = labelColor(d.label);
+        ctx.strokeStyle = color;
+        ctx.strokeRect(xmin, ymin, xmax - xmin, ymax - ymin);
+        const label = `${d.label} ${Math.round((d.score || 0) * 100)}%`;
+        const tw = ctx.measureText(label).width;
+        const th = fontPx + 6;
+        const ty = Math.max(0, ymin - th);
+        ctx.fillStyle = color;
+        ctx.fillRect(xmin, ty, tw + 10, th);
+        ctx.fillStyle = '#06101e';
+        ctx.fillText(label, xmin + 5, ty + 3);
+    }
+    return c;
+}
+
 // Deterministic, vivid color from a string label (for boxes / segments).
 export function labelColor(label, alpha = 1) {
     let h = 0;
