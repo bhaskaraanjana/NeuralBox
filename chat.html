@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>NeuralBox - Private AI in Your Browser</title>
+  <meta name="description"
+    content="Run a powerful AI chatbot entirely in your browser. No server, no sign-up, no data leaves your device. Powered by Qwen 3.5 and WebGPU." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <div id="app">
+    <!-- Loading / Model Download Screen -->
+    <div id="loading-screen" class="screen active">
+      <div class="loading-content">
+        <div class="logo-container">
+          <div class="logo-glow"></div>
+          <h1 class="logo">Neural<span>Box</span></h1>
+        </div>
+        <p class="tagline">Private AI. Runs in your browser.</p>
+
+        <div id="webgpu-error" class="error-card" style="display:none;">
+          <div class="error-icon">!</div>
+          <h3>WebGPU Not Available</h3>
+          <p>Your browser doesn't support WebGPU, which is required to run AI models locally.</p>
+          <p class="error-hint">Try the latest version of <strong>Chrome</strong>, <strong>Edge</strong>, or
+            <strong>Firefox</strong>.
+          </p>
+        </div>
+
+        <div id="download-section">
+          <div id="start-model-selector-group" class="model-selector-group" style="margin-bottom: 1rem;"></div>
+          <div id="status-text" class="status-text">Checking device capabilities...</div>
+          <div class="progress-container">
+            <div class="progress-bar">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <span id="progress-percent" class="progress-percent">0%</span>
+          </div>
+          <button id="start-btn" class="btn-primary" style="display:none; width: 100%;">
+            <span class="btn-icon">&gt;</span> Load AI Model
+          </button>
+          <p id="cache-status-note" class="download-note">Powered by WebGPU</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="screen">
+      <!-- Sidebar -->
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+          <h3 class="sidebar-title">Conversations</h3>
+          <button id="sidebar-new-chat" class="sidebar-new-btn" title="New conversation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
+        <div class="sidebar-tools">
+          <input id="conversation-search" type="text" placeholder="Search conversations..." />
+        </div>
+        <div id="conversation-list" class="conversation-list"></div>
+        <div class="sidebar-footer">
+          <div class="sidebar-footer-info">All stored locally</div>
+        </div>
+      </aside>
+      <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+      <!-- Main Chat Area -->
+      <div class="chat-main">
+        <header class="chat-header">
+          <div class="header-left">
+            <button id="sidebar-toggle" class="icon-btn" title="Toggle sidebar">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18" />
+              </svg>
+            </button>
+            <h2 class="header-title">Neural<span>Box</span></h2>
+            <div id="model-badge" class="model-badge">Qwen3.5-0.8B</div>
+            <div id="hot-swap-status" class="hot-swap-status" style="display:none;"></div>
+          </div>
+          <div class="header-right">
+            <button id="new-chat-btn" class="icon-btn" title="New conversation">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+            <button id="voice-chat-btn" class="icon-btn" title="Voice chat mode">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" />
+                <line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            </button>
+            <button id="settings-btn" class="icon-btn" title="Settings">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" />
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div id="debug-panel" class="debug-panel" style="display:none;">
+          <div class="debug-panel-header">
+            <div class="debug-panel-title">Runtime Debug</div>
+            <button id="debug-clear-btn" class="debug-clear-btn" type="button">Clear</button>
+          </div>
+          <div id="debug-state" class="debug-state"></div>
+          <div id="debug-events" class="debug-events"></div>
+        </div>
+        <div id="workbench-panel" class="workbench-panel" style="display:none;">
+          <div class="workbench-panel-header">
+            <div class="workbench-panel-title">Multimodal Workbench</div>
+            <button id="workbench-clear-btn" class="debug-clear-btn" type="button">Clear</button>
+          </div>
+          <div id="workbench-body" class="workbench-body"></div>
+        </div>
+
+        <div id="messages" class="messages-container">
+          <div class="welcome-message">
+            <div class="welcome-icon">AI</div>
+            <h3>Welcome to NeuralBox</h3>
+            <p>Your AI is running <strong>entirely in your browser</strong>. No data ever leaves your device.</p>
+            <div class="welcome-suggestions">
+              <button class="suggestion-chip" data-prompt="Explain quantum computing in simple terms">Explain quantum
+                computing</button>
+              <button class="suggestion-chip" data-prompt="Write a short poem about the ocean">Write a poem about the
+                ocean</button>
+              <button class="suggestion-chip"
+                data-prompt="What are the benefits of learning a second language?">Benefits of learning
+                languages</button>
+              <button class="suggestion-chip" data-prompt="Give me 5 creative project ideas for a weekend">Weekend
+                project ideas</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="input-container">
+          <div class="input-wrapper">
+            <button id="web-search-toggle" class="web-toggle" title="Toggle web search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path
+                  d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
+              </svg>
+              <span class="web-toggle-label">Search</span>
+            </button>
+            <button id="think-toggle" class="web-toggle" title="Toggle Thinking Mode" style="display:none;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
+                <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
+              </svg>
+              <span class="web-toggle-label">Think</span>
+            </button>
+            <button id="mic-btn" class="mic-btn" title="Voice input (Whisper)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
+            <button id="image-btn" class="image-btn" title="Attach image (Vision model only)" style="display:none;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+            </button>
+            <input type="file" id="image-input" accept="image/*" style="display:none;" />
+            <button id="doc-btn" class="doc-btn" title="Attach documents for RAG">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <path d="M14 3h7v7" />
+                <path d="M10 14L21 3" />
+              </svg>
+            </button>
+            <input type="file" id="doc-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" />
+            <textarea id="user-input" placeholder="Ask anything..." rows="1"></textarea>
+            <button id="send-btn" class="send-btn" title="Send message" disabled>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+            </button>
+          </div>
+          <div id="image-preview" class="image-preview" style="display:none;">
+            <img id="image-preview-img" src="" alt="Attached image" />
+            <button id="image-preview-clear" class="image-preview-clear" title="Remove image">X</button>
+          </div>
+          <div id="doc-preview" class="doc-preview" style="display:none;">
+            <span id="doc-preview-text">No docs attached</span>
+            <button id="doc-preview-clear" class="image-preview-clear" title="Clear attached docs">Clear</button>
+          </div>
+          <div id="voice-status" class="voice-status" style="display:none;"></div>
+          <p id="input-disclaimer" class="input-disclaimer">AI runs locally in your browser. Responses may vary in
+            quality.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="settings-panel">
+      <div class="settings-overlay" id="settings-overlay"></div>
+      <div class="settings-content">
+        <div class="settings-header">
+          <h3>Settings</h3>
+          <button id="close-settings" class="icon-btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="settings-tabs">
+          <button id="settings-tab-regular" class="settings-tab active" type="button">Regular</button>
+          <button id="settings-tab-advanced" class="settings-tab" type="button">Advanced</button>
+        </div>
+        <div class="settings-body">
+          <div id="model-selector-group" class="setting-group" data-setting-level="regular">
+            <!-- Populated dynamically by renderModelSelector() -->
+          </div>
+          <div class="setting-group" data-setting-level="regular">
+            <label for="prompt-preset-select">Prompt Presets</label>
+            <div class="setting-inline-row">
+              <select id="prompt-preset-select"></select>
+              <button id="apply-preset-btn" class="btn-primary" type="button">Apply</button>
+            </div>
+          </div>
+          <div class="setting-group" data-setting-level="regular">
+            <label for="workflow-select">Workflow Mode</label>
+            <div class="setting-inline-row">
+              <select id="workflow-select"></select>
+              <button id="apply-workflow-btn" class="btn-primary" type="button">Apply</button>
+            </div>
+            <p class="setting-hint">Adds task-specific instructions (for example: Structured JSON, Code Review, or Study mode).</p>
+          </div>
+          <div class="setting-group" data-setting-level="regular">
+            <label class="toggle-label">
+              <span>Web-Enhanced Mode</span>
+              <input type="checkbox" id="web-search-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">When enabled, searches the web to improve answers. Search queries are sent to DuckDuckGo.</p>
+          </div>
+          <div class="setting-group" data-setting-level="regular">
+            <label class="toggle-label">
+              <span>Auto Web Search</span>
+              <input type="checkbox" id="auto-web-search-setting" checked />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">When Web-Enhanced mode is off, automatically searches for time-sensitive prompts (for example: today, yesterday, latest, breaking).</p>
+          </div>
+          <div class="setting-group rag-setting-group" data-setting-level="regular">
+            <label>Local RAG (Document Q&amp;A)</label>
+            <div id="rag-dropzone" class="rag-dropzone" tabindex="0">
+              <div class="rag-dropzone-title">Drop docs here or use Add Docs</div>
+              <div class="rag-dropzone-subtitle">Accepted: txt, md, csv, json, code, logs</div>
+            </div>
+            <div class="setting-inline-row">
+              <button id="rag-add-btn" class="btn-primary" type="button">Add Docs</button>
+              <button id="rag-clear-btn" class="btn-primary" type="button">Clear All</button>
+            </div>
+            <input type="file" id="rag-file-input" accept=".txt,.md,.markdown,.json,.csv,.log,.js,.ts,.html,.htm,.xml,.yml,.yaml,.ini,.cfg,.py,.java,.c,.cpp,.rs,.go,.sql" multiple style="display:none;" />
+            <p id="rag-status" class="setting-hint">No local docs loaded.</p>
+            <p id="rag-guidance" class="setting-hint"></p>
+            <input id="rag-search-input" type="text" placeholder="Search loaded docs..." />
+            <div id="rag-doc-list" class="rag-doc-list"></div>
+          </div>
+          <div class="setting-group" data-setting-level="regular">
+            <label>Conversation Backup</label>
+            <div class="setting-inline-row">
+              <button id="export-chats-btn" class="btn-primary" type="button">Export</button>
+              <button id="import-chats-btn" class="btn-primary" type="button">Import</button>
+            </div>
+            <input type="file" id="import-chats-input" accept="application/json" style="display:none;" />
+            <div class="setting-inline-row" style="margin-top:0.5rem;">
+              <button id="export-md-btn" class="btn-primary" type="button">Export Markdown</button>
+              <button id="copy-share-btn" class="btn-primary" type="button">Copy Share Text</button>
+            </div>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label for="system-prompt">System Prompt</label>
+            <textarea id="system-prompt" rows="4"
+              placeholder="You are a helpful assistant...">You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. If the active model supports vision, you can analyze user-provided images. You cannot browse the web unless the app explicitly provides search results, and you cannot run code, access local files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.</textarea>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label for="temperature">Temperature: <span id="temp-value">0.7</span></label>
+            <input type="range" id="temperature" min="0" max="1.5" step="0.1" value="0.7" />
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label for="max-tokens">Max Response Tokens: <span id="tokens-value">1024</span></label>
+            <input type="range" id="max-tokens" min="128" max="4096" step="128" value="1024" />
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Trust Layer in Messages</span>
+              <input type="checkbox" id="trust-layer-setting" checked />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows why a model was used, route reason, and generation context under each assistant response.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Deterministic Team Mode</span>
+              <input type="checkbox" id="deterministic-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <div class="setting-inline-row" style="margin-top:0.5rem;">
+              <input id="deterministic-seed" type="text" placeholder="Seed (e.g. 42)" />
+            </div>
+            <p class="setting-hint">When enabled, uses reproducible generation behavior (lower randomness) and applies the optional seed when supported.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Verbose Vision Logs</span>
+              <input type="checkbox" id="vision-verbose-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Adds extra diagnostics to the console for image requests and retries.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Runtime Debug Panel</span>
+              <input type="checkbox" id="debug-panel-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows model routing, hot-swap, cancel, and error events in-app.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <label class="toggle-label">
+              <span>Workbench Panel</span>
+              <input type="checkbox" id="workbench-setting" />
+              <span class="toggle-switch"></span>
+            </label>
+            <p class="setting-hint">Shows actual request context: route reason, image prep, RAG matches, and generation diagnostics.</p>
+          </div>
+          <div class="setting-group" data-setting-level="advanced">
+            <button id="clear-history-btn" class="btn-danger">Clear All Conversations</button>
+          </div>
+          <div class="setting-info"><p>All data stays in your browser. Nothing is sent to any server.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice Chat Overlay -->
+  <div id="voice-chat-overlay" class="voice-chat-overlay">
+    <button id="voice-chat-close" class="voice-chat-close" title="Exit voice chat">X</button>
+    <div id="voice-orb" class="voice-orb">
+      <span class="voice-orb-icon">Mic</span>
+    </div>
+    <div id="voice-chat-label" class="voice-chat-label">Tap to start talking</div>
+    <div id="voice-chat-text" class="voice-chat-text"></div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
+
+
+
+
+
