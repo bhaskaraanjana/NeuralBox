@@ -25,7 +25,7 @@ This section documents every tracked repository file.
 
 - `src/main.js`
   - Core app runtime:
-    - model catalog and selection
+    - model selection
     - model loading/reloading
     - message send/stream pipeline
     - conversation CRUD and sidebar rendering
@@ -35,6 +35,8 @@ This section documents every tracked repository file.
     - voice chat loop
     - image attachment behavior for vision models
     - think mode controls
+- `src/lib/models.js`
+  - Shared model catalog definitions used by startup selection, settings selection, routing, and model-fit UI.
 - `src/lib/rendering.js`
   - Extracted pure helpers for:
     - safe HTTP URL parsing
@@ -45,7 +47,13 @@ This section documents every tracked repository file.
     - normalization
     - chunk splitting
     - retrieval scoring
+    - retrieval profile definitions
     - file-extension utility
+- `src/lib/web-search.js`
+  - Shared web-search helpers:
+    - auto-search trigger detection
+    - recoverable error classification
+    - user-facing recovery and no-result notices
 - `src/lib/routing.js`
   - Shared routing helpers:
     - task analysis
@@ -69,6 +77,8 @@ This section documents every tracked repository file.
   - Environment validation script (Node version + required project files).
 - `scripts/stability-sprint-smoke.mjs`
   - Runtime contract smoke checks.
+- `scripts/model-catalog-test.mjs`
+  - Model catalog integrity checks.
 - `scripts/rendering-safety-test.mjs`
   - Pure rendering + URL safety checks.
 - `scripts/routing-sanity-test.mjs`
@@ -77,6 +87,12 @@ This section documents every tracked repository file.
   - Device/VRAM heuristic sanity checks.
 - `scripts/rag-web-extensive-test.mjs`
   - Extensive RAG ingest/retrieval test with downloaded web docs.
+- `scripts/web-search-helpers-test.mjs`
+  - Web-search trigger/error/recovery helper checks.
+- `scripts/accessibility-static-test.mjs`
+  - Static accessibility contract checks for dialog semantics, live regions, accessible names, aria state, and focus styling.
+- `scripts/create-builder-club-docx.py`
+  - Reproducible generator for the Builder Club presentation DOCX.
 
 ## Documentation Files (Added)
 
@@ -91,3 +107,7 @@ This section documents every tracked repository file.
 - `doc/CONFIG_AND_DEPENDENCIES.md`
 - `doc/CHANGELOG_SUMMARY.md`
 - `doc/KNOWN_GAPS.md`
+- `doc/CODEBASE_SCAN_2026-05-04.md`
+- `doc/IMPROVEMENT_REPORT_2026-05-04.md`
+- `doc/TEST_REPORT_2026-05-04.md`
+- `doc/NeuralBox_Builder_Club_Presentation.docx`

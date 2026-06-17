@@ -2,7 +2,9 @@
   getFileExtension,
   getRagConfidenceLabel,
   getRagMatchScore,
+  getRagRetrievalProfileConfig,
   normalizeRagDocText,
+  normalizeRagRetrievalProfile,
   retrieveRagChunksFromIndex,
   splitTextIntoRagChunks,
   tokenizeRagQuery,
@@ -36,6 +38,18 @@ function run() {
   assert(matches.length === 1, 'RAG retrieval should return only matching chunks.');
   assert(matches[0].docId === '1', 'RAG retrieval should prioritize relevant document.');
   assert(['high', 'medium', 'low'].includes(matches[0].confidenceLabel), 'RAG retrieval should expose confidence label.');
+
+  assert(normalizeRagRetrievalProfile('broad') === 'broad', 'Known RAG profile should normalize.');
+  assert(normalizeRagRetrievalProfile('unknown') === 'balanced', 'Unknown RAG profile should fall back to balanced.');
+  assert(getRagRetrievalProfileConfig('precise').maxMatches === 2, 'Precise profile max match count mismatch.');
+
+  const broadIndex = [
+    { docId: '1', docName: 'a.txt', idx: 0, text: 'runtime architecture details.' },
+    { docId: '2', docName: 'b.txt', idx: 0, text: 'runtime notes.' },
+    { docId: '3', docName: 'c.txt', idx: 0, text: 'runtime checklist.' },
+  ];
+  const broadMatches = retrieveRagChunksFromIndex(broadIndex, 'runtime', { profileId: 'broad' });
+  assert(broadMatches.length === 3, 'Broad profile should allow more context matches.');
 
   assert(getFileExtension('notes.MD') === 'md', 'File extension helper should normalize case.');
 

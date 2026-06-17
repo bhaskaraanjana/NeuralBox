@@ -5,7 +5,7 @@
 ```json
 {
   "name": "neuralbox",
-  "version": "1.6.0",
+  "version": "1.7.4",
   "type": "module",
   "engines": {
     "node": ">=20 <26"
@@ -16,6 +16,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:stability": "node scripts/stability-sprint-smoke.mjs",
+    "test:models": "node scripts/model-catalog-test.mjs",
     "test:rendering": "node scripts/rendering-safety-test.mjs",
     "test:routing": "node scripts/routing-sanity-test.mjs",
     "test:device": "node scripts/device-heuristics-test.mjs",
@@ -26,6 +27,10 @@
     "test:voice": "node scripts/voice-helpers-test.mjs",
     "test:settings": "node scripts/settings-helpers-test.mjs",
     "test:rag:helpers": "node scripts/rag-helpers-test.mjs",
+    "test:web-search": "node scripts/web-search-helpers-test.mjs",
+    "test:offline:pwa": "node scripts/offline-pwa-shell-test.mjs",
+    "test:browser:offline-shell": "node scripts/offline-shell-browser-smoke.mjs",
+    "test:accessibility": "node scripts/accessibility-static-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs",
     "test:browser:lifecycle": "node scripts/browser-lifecycle-smoke.mjs"
@@ -45,6 +50,8 @@
   - Serves built artifacts locally.
 - `npm run test:stability`
   - Stability smoke checks for core UI/runtime contracts.
+- `npm run test:models`
+  - Model catalog integrity checks for IDs, names, tiers, VRAM estimates, and capability coverage.
 - `npm run test:rendering`
   - Rendering/URL-safety checks for extracted helper module.
 - `npm run test:routing`
@@ -64,7 +71,15 @@
 - `npm run test:settings`
   - Settings helper checks for tab normalization, visibility logic, deterministic notices, and seed parsing.
 - `npm run test:rag:helpers`
-  - Pure RAG helper checks for normalization, chunking, token scoring, retrieval, and extension parsing.
+  - Pure RAG helper checks for normalization, chunking, token scoring, retrieval profiles, retrieval, and extension parsing.
+- `npm run test:web-search`
+  - Web-search trigger detection, recoverable error classification, and user-facing recovery notice checks.
+- `npm run test:offline:pwa`
+  - Static PWA/offline shell checks that WebLLM is lazy-loaded and no-WebGPU startup does not hard-return.
+- `npm run test:browser:offline-shell`
+  - Playwright smoke that masks WebGPU and verifies the app opens into Offline Library Mode.
+- `npm run test:accessibility`
+  - Static accessibility checks for dialog semantics, live regions, accessible names, aria state, and focus-visible styling.
 - `npm run test:ascii-ui`
   - Guards UI source strings against non-ASCII regressions that can surface as mojibake.
 - `npm run test:rag:web`
@@ -77,6 +92,11 @@
 - `@mlc-ai/web-llm` `^0.2.82`
 - `@huggingface/transformers` `^3.8.1`
 - `vite` `^6.2.2`
+
+Resolved lockfile note:
+
+- `vite` currently resolves to `6.4.2`.
+- `npm audit --audit-level=moderate` reports 0 vulnerabilities after the 2026-05-04 audit refresh.
 
 ## dev dependencies
 

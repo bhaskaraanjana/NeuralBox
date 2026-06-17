@@ -96,10 +96,25 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
   - `/no_think` when disabled
 - Assistant output parser can render `<think>...</think>` blocks as collapsible details.
 
-## 9) Offline/Cache Behavior
+## 9) Offline/PWA And Cache Behavior
 
-- Model cache check done with `webllm.hasModelInCache`.
-- Start button copy changes based on cache state:
+- The app shell is registered explicitly through `virtual:pwa-register`.
+- WebLLM is lazy-loaded only when model actions need it; the app shell no longer statically imports the large WebLLM chunk.
+- Heavy same-origin ML runtime chunks (`webllm`, `transformers`, and runtime WASM) are runtime-cached after first successful use, not precached during install.
+- If WebGPU is unavailable, startup enters Offline Library Mode instead of returning early:
+  - chat shell opens automatically
+  - local conversations/settings/RAG metadata remain accessible
+  - import/export and settings continue to work
+  - inference, image analysis, and voice-chat generation controls are disabled
+- WebGPU availability is based on `navigator.gpu.requestAdapter`, not only `navigator.gpu`, so Android browsers that expose the API but cannot provide a compatible adapter fail into Offline Library Mode with a clear reason.
+- iOS/iPadOS sessions get explicit WebGPU fallback copy and continue into the app shell when local inference is unavailable.
+- Model cache check is only attempted when WebGPU is available and uses `webllm.hasModelInCache`.
+- Cached offline inference can work when all prerequisites are true:
+  - the app shell/service worker has been installed or cached
+  - the WebLLM runtime chunk was loaded at least once online
+  - the selected model assets are already cached by WebLLM
+  - the browser session exposes WebGPU
+- Start button copy changes based on cache state when inference is available:
   - cached model -> start immediately
   - uncached model -> download then start
 
@@ -122,6 +137,14 @@ Defined in `src/main.js` as `MODEL_CATALOG`.
 
 - Click + `touchend` handlers for many interactive controls.
 - Sidebar slide-in behavior for smaller viewports.
+- Chat composer send-state is centralized so mobile voice/input paths cannot force-enable Send unless a model engine is active.
+- If a selected model fails with a memory/GPU compatibility error, startup retries once with the smallest text model before giving up.
+- iOS storage hardening:
+  - IndexedDB failures fall back to localStorage when available
+  - blocked localStorage falls back to in-memory session storage
+  - startup still opens even when persistent browser storage is unavailable
+- iOS startup avoids background Whisper preload to reduce initial memory/network pressure.
+- Apple PWA metadata is present for Add to Home Screen installs.
 
 ## 13) Local RAG Document Attach
 

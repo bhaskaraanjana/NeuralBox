@@ -17,6 +17,7 @@ export function renderTrustMetaHtml(meta = {}) {
         ? `${ragDocNames.slice(0, 3).join(', ')}${ragDocNames.length > 3 ? ', ...' : ''}`
         : 'n/a';
     const ragConfidence = String(meta.ragConfidence || 'n/a');
+    const ragProfile = String(meta.ragProfile || 'balanced');
     const ragAvgScore = Number.isFinite(Number(meta.ragAvgScore)) ? Number(meta.ragAvgScore) : null;
     const ragBreakdown = meta.ragConfidenceBreakdown && typeof meta.ragConfidenceBreakdown === 'object'
         ? meta.ragConfidenceBreakdown
@@ -35,6 +36,7 @@ export function renderTrustMetaHtml(meta = {}) {
                 <span><strong>Web sources:</strong> ${escapeHtml(String(meta.webSources ?? 0))}</span>
                 <span><strong>Web mode:</strong> ${escapeHtml(String(meta.webMode || 'off'))}</span>
                 <span><strong>RAG matches:</strong> ${escapeHtml(String(meta.ragSources ?? 0))}</span>
+                <span><strong>RAG profile:</strong> ${escapeHtml(ragProfile)}</span>
                 <span><strong>RAG docs:</strong> ${escapeHtml(ragDocSummary)}</span>
                 <span><strong>RAG confidence:</strong> ${escapeHtml(ragConfidence)}</span>
                 <span><strong>RAG avg score:</strong> ${escapeHtml(ragAvgScore != null ? String(ragAvgScore) : 'n/a')}</span>

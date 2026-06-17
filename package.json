@@ -1,6 +1,6 @@
 {
   "name": "neuralbox",
-  "version": "1.6.0",
+  "version": "1.7.6",
   "description": "Run AI in your browser. No server. No sign-up. Private by design.",
   "type": "module",
   "engines": {
@@ -12,6 +12,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:stability": "node scripts/stability-sprint-smoke.mjs",
+    "test:models": "node scripts/model-catalog-test.mjs",
     "test:rendering": "node scripts/rendering-safety-test.mjs",
     "test:routing": "node scripts/routing-sanity-test.mjs",
     "test:device": "node scripts/device-heuristics-test.mjs",
@@ -22,6 +23,13 @@
     "test:voice": "node scripts/voice-helpers-test.mjs",
     "test:settings": "node scripts/settings-helpers-test.mjs",
     "test:rag:helpers": "node scripts/rag-helpers-test.mjs",
+    "test:web-search": "node scripts/web-search-helpers-test.mjs",
+    "test:offline:pwa": "node scripts/offline-pwa-shell-test.mjs",
+    "test:android:chat": "node scripts/android-chat-compatibility-test.mjs",
+    "test:ios:compat": "node scripts/ios-compatibility-test.mjs",
+    "test:browser:mobile": "node scripts/mobile-platform-browser-smoke.mjs",
+    "test:browser:offline-shell": "node scripts/offline-shell-browser-smoke.mjs",
+    "test:accessibility": "node scripts/accessibility-static-test.mjs",
     "test:ascii-ui": "node scripts/ascii-ui-strings-test.mjs",
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs",
     "test:browser:lifecycle": "node scripts/browser-lifecycle-smoke.mjs",
@@ -35,6 +43,8 @@
     "vite": "^6.2.2"
   },
   "devDependencies": {
-    "playwright": "^1.58.2"
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "playwright": "^1.58.2",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }

@@ -1,3 +1,14 @@
+/* Light Theme (Invert & Hue-Rotate Hack) */
+body.light-theme {
+  filter: invert(1) hue-rotate(180deg);
+  background: #f8f4ee;
+}
+body.light-theme img,
+body.light-theme video,
+body.light-theme canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 :root {
   --bg-0: #070b11;
   --bg-1: #0e1520;
@@ -53,6 +64,15 @@ body {
     radial-gradient(1300px 700px at -8% -12%, rgba(59, 130, 246, 0.17) 0%, transparent 45%),
     radial-gradient(1100px 650px at 100% -10%, rgba(34, 197, 94, 0.09) 0%, transparent 45%),
     var(--bg-0);
+}
+
+button:focus-visible,
+[role='button']:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--brand-1);
+  outline-offset: 3px;
 }
 
 #app {
@@ -281,7 +301,14 @@ body {
   display: flex;
   flex-direction: column;
   z-index: 20;
-  transition: transform 0.2s ease;
+  transition: transform 0.2s ease, width 0.2s ease, min-width 0.2s ease;
+  overflow: hidden;
+}
+
+.sidebar.closed {
+  width: 0;
+  min-width: 0;
+  border-right-color: transparent;
 }
 
 .sidebar-header {
@@ -1360,6 +1387,14 @@ body {
   color: var(--text-1);
   font-weight: 700;
   margin-bottom: 0.38rem;
+}
+
+.setting-sub-label {
+  display: block;
+  margin-top: 0.55rem;
+  margin-bottom: 0.32rem;
+  color: var(--text-2);
+  font-size: 0.76rem;
 }
 
 .setting-hint {

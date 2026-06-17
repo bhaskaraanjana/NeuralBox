@@ -24,7 +24,8 @@ Milestones:
 - [x] Wave 1: Mobile density reduction for composer and settings.
 - [x] Wave 1: Preserve all existing runtime IDs and behavior contracts.
 - [x] Wave 2: Manual model-switch flow redesign in settings with clearer state and confirmation.
-- [ ] Wave 2: Accessibility pass (focus order, keyboard affordances, contrast audit).
+- [x] Wave 2: Static accessibility contract pass (dialog semantics, live regions, labels, aria state, focus styling).
+- [ ] Wave 2: Manual screen-reader pass.
 
 ### Theme B: Reliability and Runtime Safety
 
@@ -38,7 +39,7 @@ Milestones:
 - [x] Cancellation and switch fallback helper extraction with tests.
 - [x] Browser lifecycle smoke (import/export + send/stop + switch fallback banner).
 - [x] Add browser smoke for manual model-switch button flow.
-- [ ] Add recovery UX for network/offline web-search failure modes.
+- [x] Add recovery UX for network/offline web-search failure modes.
 
 ### Theme C: RAG and Retrieval Quality
 
@@ -52,7 +53,7 @@ Milestones:
 - [x] RAG ingestion guardrails and guidance text.
 - [x] Pure RAG helper tests (normalization, chunking, scoring, retrieval).
 - [x] Add citation confidence badges for local RAG snippets.
-- [ ] Add configurable retrieval profile presets (precise, balanced, broad).
+- [x] Add configurable retrieval profile presets (precise, balanced, broad).
 
 ### Theme D: Voice and Multimodal Experience
 

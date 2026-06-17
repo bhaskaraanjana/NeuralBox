@@ -4,7 +4,8 @@
 
 - Node.js `>=20 <26`
 - npm (bundled with Node)
-- A WebGPU-capable browser for full app runtime testing
+- A WebGPU-capable browser for full local inference testing
+- The app shell can still open without WebGPU in Offline Library Mode for local data, settings, import/export, and PWA availability checks
 
 ## First-Time Setup
 
@@ -28,6 +29,8 @@ npm run dev -- --port 5174 --host
 
 Open the Vite URL in a browser with WebGPU enabled.
 
+If WebGPU is unavailable, NeuralBox should no longer stop on the startup screen. It should enter Offline Library Mode and open the chat shell with inference controls disabled.
+
 ## Validation Workflow
 
 ```bash
@@ -37,6 +40,7 @@ npm run test:stability
 npm run test:rendering
 npm run test:routing
 npm run test:device
+npm run test:offline:pwa
 npm run test:rag:web
 ```
 

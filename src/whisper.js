@@ -50,7 +50,7 @@ export async function initWhisper(onProgress) {
  * @param {Blob} audioBlob - Audio blob (webm, wav, etc.)
  * @returns {Promise<string>} - Transcribed text
  */
-export async function transcribeAudio(audioBlob) {
+export async function transcribeAudio(audioBlob, onStream) {
     if (!transcriber) {
         throw new Error('Whisper not initialized. Call initWhisper() first.');
     }
@@ -66,7 +66,21 @@ export async function transcribeAudio(audioBlob) {
     const float32Data = audioBuffer.getChannelData(0);
 
     // Run Whisper
-    const result = await transcriber(float32Data);
+    const result = await transcriber(float32Data, {
+        chunk_length_s: 30, // standard for Whisper
+        stride_length_s: 5,
+        callback_function: (beams) => {
+            if (onStream && beams && beams.length > 0) {
+                try {
+                    const tokenIds = beams[0].output_token_ids;
+                    const text = transcriber.tokenizer.decode(tokenIds, { skip_special_tokens: true });
+                    onStream(text);
+                } catch (e) {
+                    // Ignore decode errors during stream
+                }
+            }
+        }
+    });
 
     await audioCtx.close();
 

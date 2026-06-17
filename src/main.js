@@ -2,7 +2,8 @@
 // NeuralBox - Main Application
 // Multi-conversation support
 // ============================================
-import * as webllm from '@mlc-ai/web-llm';
+import { MODEL_CATALOG } from './lib/models.js';
+import { registerSW } from 'virtual:pwa-register';
 import {
     initDatabase,
     loadSettingsRecord,
@@ -20,7 +21,10 @@ import {
 } from './lib/rendering.js';
 import {
     getFileExtension,
+    getRagRetrievalProfileConfig,
     normalizeRagDocText,
+    normalizeRagRetrievalProfile,
+    RAG_RETRIEVAL_PROFILES,
     retrieveRagChunksFromIndex,
     splitTextIntoRagChunks,
 } from './lib/rag.js';
@@ -59,18 +63,77 @@ import {
     normalizeSettingsTab,
     parseDeterministicSeedInput,
 } from './lib/settings.js';
+import {
+    classifyWebSearchError,
+    getWebSearchNoResultsNotice,
+    getWebSearchRecoveryNotice,
+    shouldAutoWebSearch,
+} from './lib/web-search.js';
 import { renderTrustMetaHtml } from './lib/trust.js';
 let whisperModulePromise = null;
 let whisperApi = null;
+let webllmModulePromise = null;
+let webllmApi = null;
 
-const LEGACY_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You can ONLY have text conversations. You CANNOT browse the web, read images, run code, access files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
-const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. If the active model supports vision, you can analyze user-provided images. You cannot browse the web unless the app explicitly provides search results, and you cannot run code, access local files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
+const updateServiceWorker = registerSW({
+    immediate: true,
+    onOfflineReady() {
+        console.info('[PWA] NeuralBox app shell is cached for offline use.');
+    },
+    onNeedRefresh() {
+        console.info('[PWA] A new NeuralBox version is available.');
+    },
+});
+
+const LEGACY_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser via WebGPU. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You can ONLY have text conversations. You CANNOT browse the web, read images, run code, access files, or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
+const DEFAULT_SYSTEM_PROMPT = "You are NeuralBox, a private AI assistant running entirely in the user's browser via WebGPU. You were NOT made by OpenAI, Anthropic, Google, or Meta. You are a local AI model. You have access to real-time web search. If a user asks about current events or if you can browse the web, you should acknowledge that you can and will search the web for up-to-date information automatically. You can read attached local documents via Local RAG. If the active model supports vision, you can analyze user-provided images. You cannot run code or scrape websites. If you don't know something, say so honestly instead of guessing. Keep responses concise and helpful.";
+
+function getPlatformInfo() {
+    const ua = String(navigator.userAgent || '');
+    const platform = String(navigator.platform || '');
+    const isIpadDesktopMode = platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
+    const isIOS = /iPad|iPhone|iPod/i.test(ua) || isIpadDesktopMode;
+    const isAndroid = /Android/i.test(ua);
+    const isSafari = /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+    const isStandalonePwa = Boolean(
+        window.matchMedia?.('(display-mode: standalone)')?.matches ||
+        window.navigator?.standalone,
+    );
+
+    return {
+        isIOS,
+        isAndroid,
+        isSafari,
+        isStandalonePwa,
+        deviceMemoryGB: Number(navigator.deviceMemory || 0),
+    };
+}
+
+function safeLocalStorageGet(key, fallback = null) {
+    try {
+        return window.localStorage?.getItem(key) ?? fallback;
+    } catch (_err) {
+        return fallback;
+    }
+}
+
+function safeLocalStorageSet(key, value) {
+    try {
+        window.localStorage?.setItem(key, value);
+    } catch (err) {
+        console.warn('[Storage] localStorage write failed:', err);
+    }
+}
 
 // ---- State ----
 let engine = null;
 let isGenerating = false;
+let webGpuAvailable = false;
+let offlineShellMode = false;
+const platformInfo = getPlatformInfo();
 let webSearchEnabled = false;
 let autoWebSearchEnabled = true;
+let lastWebSearchFailure = null;
 let generationCancelRequested = false;
 let activeGenerationId = 0;
 let conversationSearchQuery = '';
@@ -82,6 +145,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recordingTimer = null;
 let recordingSeconds = 0;
+let liveRecognition = null; // Web Speech API for live interim transcription
 let voiceChatActive = false;
 
 // Conversations: { id, title, messages[], createdAt, updatedAt }
@@ -103,6 +167,7 @@ const userInput = $('#user-input');
 const sendBtn = $('#send-btn');
 const newChatBtn = $('#new-chat-btn');
 const settingsBtn = $('#settings-btn');
+const themeToggleBtn = $('#theme-toggle-btn');
 const settingsPanel = $('#settings-panel');
 const settingsOverlay = $('#settings-overlay');
 const closeSettings = $('#close-settings');
@@ -141,6 +206,7 @@ const ragStatus = $('#rag-status');
 const ragGuidance = $('#rag-guidance');
 const ragDocList = $('#rag-doc-list');
 const ragSearchInput = $('#rag-search-input');
+const ragRetrievalProfileSelect = $('#rag-retrieval-profile');
 const ragDropzone = $('#rag-dropzone');
 const exportMdBtn = $('#export-md-btn');
 const copyShareBtn = $('#copy-share-btn');
@@ -163,6 +229,9 @@ const inputDisclaimer = $('#input-disclaimer');
 // Voice refs
 const micBtn = $('#mic-btn');
 const voiceStatus = $('#voice-status');
+const audioFileBtn = $('#audio-file-btn');
+const audioFileInput = $('#audio-file-input');
+const transcribeStatus = $('#transcribe-status');
 
 // Voice chat overlay refs
 const voiceChatBtn = $('#voice-chat-btn');
@@ -189,184 +258,6 @@ const docPreviewClear = $('#doc-preview-clear');
 const inputWrapper = $('.input-wrapper');
 
 // ---- Model Config ----
-const MODEL_CATALOG = [
-    {
-        id: 'SmolLM2-135M-Instruct-q0f16-MLC',
-        name: 'SmolLM2 - 135M',
-        size: '~110MB',
-        vramMB: 300,
-        tier: 'nano',
-        desc: 'Tiny fallback model for low-memory devices.',
-    },
-    {
-        id: 'SmolLM2-360M-Instruct-q0f16-MLC',
-        name: 'SmolLM2 - 360M',
-        size: '~200MB',
-        vramMB: 400,
-        tier: 'nano',
-        desc: 'Ultra-fast, minimal footprint. Basic chat only.',
-    },
-    {
-        id: 'Qwen3-0.6B-q4f16_1-MLC',
-        name: 'Qwen 3 - 0.6B',
-        size: '~400MB',
-        vramMB: 600,
-        tier: 'lite',
-        thinking: true,
-        desc: 'Fast and lightweight. Better reasoning than Qwen2.5-0.5B.',
-    },
-    {
-        id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
-        name: 'Llama 3.2 - 1B',
-        size: '~750MB',
-        vramMB: 900,
-        tier: 'lite',
-        desc: 'Balanced small model with solid general chat quality.',
-    },
-    {
-        id: 'SmolLM2-1.7B-Instruct-q4f16_1-MLC',
-        name: 'SmolLM2 - 1.7B',
-        size: '~1GB',
-        vramMB: 1200,
-        tier: 'standard',
-        desc: 'HuggingFace\'s efficient small model. Good for its size.',
-    },
-    {
-        id: 'Qwen3-1.7B-q4f16_1-MLC',
-        name: 'Qwen 3 - 1.7B',
-        size: '~1.1GB',
-        vramMB: 1500,
-        tier: 'standard',
-        thinking: true,
-        desc: 'Great balance of speed and intelligence. Thinking mode.',
-    },
-    {
-        id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-        name: 'Llama 3.2 - 3B',
-        size: '~2GB',
-        vramMB: 2500,
-        tier: 'performance',
-        desc: 'Meta\'s compact model. Reliable all-rounder.',
-    },
-    {
-        id: 'Qwen3-4B-q4f16_1-MLC',
-        name: 'Qwen 3 - 4B',
-        size: '~2.5GB',
-        vramMB: 3500,
-        tier: 'performance',
-        thinking: true,
-        desc: 'Best value. Matches larger models on reasoning tasks.',
-    },
-    {
-        id: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
-        name: 'Phi 3.5 Mini - 3.8B',
-        size: '~2.4GB',
-        vramMB: 3500,
-        tier: 'performance',
-        desc: 'Microsoft\'s model. Strong at math and logic.',
-    },
-    {
-        id: 'Phi-3.5-vision-instruct-q4f16_1-MLC',
-        name: 'Phi 3.5 Vision - 4.2B',
-        size: '~2.7GB',
-        vramMB: 4000,
-        tier: 'vision',
-        vision: true,
-        desc: 'Can understand images! Describe, read text, answer questions about photos.',
-    },
-    {
-        id: 'DeepSeek-R1-Distill-Qwen-7B-q4f16_1-MLC',
-        name: 'DeepSeek R1 Distill - 7B',
-        size: '~4.5GB',
-        vramMB: 5500,
-        tier: 'premium',
-        thinking: true,
-        desc: 'DeepSeek R1 reasoning distilled into 7B. Top-tier thinking.',
-    },
-    {
-        id: 'Qwen3-8B-q4f16_1-MLC',
-        name: 'Qwen 3 - 8B',
-        size: '~5GB',
-        vramMB: 6000,
-        tier: 'premium',
-        thinking: true,
-        desc: 'Best quality. Strong reasoning + thinking mode. Needs 6GB+ VRAM.',
-    },
-    {
-        id: 'gemma-2-2b-it-q4f16_1-MLC',
-        name: 'Gemma 2 - 2B',
-        size: '~1.7GB',
-        vramMB: 2200,
-        tier: 'performance',
-        advanced: true,
-        desc: 'Advanced family option tuned for instruction following.',
-    },
-    {
-        id: 'Mistral-7B-Instruct-v0.3-q4f16_1-MLC',
-        name: 'Mistral 7B Instruct v0.3',
-        size: '~4.4GB',
-        vramMB: 5500,
-        tier: 'premium',
-        advanced: true,
-        desc: 'Advanced instruct-tuned 7B model.',
-    },
-    {
-        id: 'OpenHermes-2.5-Mistral-7B-q4f16_1-MLC',
-        name: 'OpenHermes 2.5 - Mistral 7B',
-        size: '~4.4GB',
-        vramMB: 5500,
-        tier: 'premium',
-        advanced: true,
-        desc: 'Advanced conversational Mistral 7B variant.',
-    },
-    {
-        id: 'NeuralHermes-2.5-Mistral-7B-q4f16_1-MLC',
-        name: 'NeuralHermes 2.5 - Mistral 7B',
-        size: '~4.4GB',
-        vramMB: 5500,
-        tier: 'premium',
-        advanced: true,
-        desc: 'Advanced alternative tuned for assistant-style chat.',
-    },
-    {
-        id: 'Hermes-2-Pro-Llama-3-8B-q4f16_1-MLC',
-        name: 'Hermes 2 Pro - Llama 3 8B',
-        size: '~5.1GB',
-        vramMB: 6200,
-        tier: 'premium',
-        advanced: true,
-        desc: 'Advanced Llama 8B family variant.',
-    },
-    {
-        id: 'Hermes-3-Llama-3.1-8B-q4f16_1-MLC',
-        name: 'Hermes 3 - Llama 3.1 8B',
-        size: '~5.1GB',
-        vramMB: 6200,
-        tier: 'premium',
-        advanced: true,
-        desc: 'Advanced Hermes 3 model for experimentation.',
-    },
-    {
-        id: 'DeepSeek-R1-Distill-Llama-8B-q4f16_1-MLC',
-        name: 'DeepSeek R1 Distill - Llama 8B',
-        size: '~5.3GB',
-        vramMB: 6500,
-        tier: 'premium',
-        thinking: true,
-        advanced: true,
-        desc: 'Advanced reasoning-focused Llama 8B distill.',
-    },
-    {
-        id: 'gemma-2-9b-it-q4f16_1-MLC',
-        name: 'Gemma 2 - 9B',
-        size: '~5.8GB',
-        vramMB: 7000,
-        tier: 'premium',
-        advanced: true,
-        desc: 'Large advanced Gemma model, requires high VRAM.',
-    },
-];
-
 let selectedModelId = MODEL_CATALOG[0].id; // default to smallest
 const AUTO_MODEL_ID = '__auto__';
 let modelSelectionId = MODEL_CATALOG[0].id; // user preference (model id or AUTO_MODEL_ID)
@@ -394,6 +285,7 @@ const WORKBENCH_LIMIT = 40;
 let ragDocuments = [];
 let ragChunks = [];
 let ragDocSearchQuery = '';
+let ragRetrievalProfile = 'balanced';
 const RAG_MAX_DOCS = 24;
 const RAG_MAX_CHARS_PER_DOC = 240000;
 const RAG_CHUNK_SIZE = 900;
@@ -528,8 +420,12 @@ function rebuildRagChunkIndex() {
     ragChunks = next;
 }
 
-function retrieveRagChunks(query, maxMatches = RAG_MAX_MATCHES) {
-    return retrieveRagChunksFromIndex(ragChunks, query, maxMatches);
+function retrieveRagChunks(query, maxMatches = null) {
+    const profile = getRagRetrievalProfileConfig(ragRetrievalProfile);
+    return retrieveRagChunksFromIndex(ragChunks, query, {
+        profileId: profile.id,
+        maxMatches: maxMatches || profile.maxMatches,
+    });
 }
 
 function buildRagContext(matches) {
@@ -672,7 +568,17 @@ function renderRagStatus() {
 
 function renderRagGuidance() {
     if (!ragGuidance) return;
-    ragGuidance.textContent = `Best quality with Qwen 3 1.7B+ or larger. Limits: ${RAG_MAX_DOCS} docs, ${formatCompactNumber(RAG_MAX_CHARS_PER_DOC)} chars/doc, ${(RAG_MAX_FILE_BYTES / (1024 * 1024)).toFixed(0)}MB/file.`;
+    const profile = getRagRetrievalProfileConfig(ragRetrievalProfile);
+    ragGuidance.textContent = `Profile: ${profile.label} - ${profile.description} Limits: ${RAG_MAX_DOCS} docs, ${formatCompactNumber(RAG_MAX_CHARS_PER_DOC)} chars/doc, ${(RAG_MAX_FILE_BYTES / (1024 * 1024)).toFixed(0)}MB/file.`;
+}
+
+function renderRagRetrievalProfiles() {
+    if (!ragRetrievalProfileSelect) return;
+    ragRetrievalProfileSelect.innerHTML = Object.values(RAG_RETRIEVAL_PROFILES)
+        .map((profile) => `<option value="${escapeHtml(profile.id)}">${escapeHtml(profile.label)} - ${escapeHtml(profile.description)}</option>`)
+        .join('');
+    ragRetrievalProfileSelect.value = normalizeRagRetrievalProfile(ragRetrievalProfile);
+    renderRagGuidance();
 }
 
 function persistRagDocs() {
@@ -999,13 +905,28 @@ async function detectDeviceCapabilities() {
         gpuName: 'Unknown',
         gpuClass: 'unknown',
         vramEstimateSource: 'none',
+        webGpuApiAvailable: Boolean(navigator.gpu),
+        webGpuAdapterAvailable: false,
+        webGpuUnavailableReason: navigator.gpu
+            ? ''
+            : platformInfo.isIOS
+                ? 'This iOS browser session does not expose the WebGPU API required for local model inference.'
+                : 'This browser session does not expose the WebGPU API.',
+        platform: platformInfo.isIOS ? 'ios' : (platformInfo.isAndroid ? 'android' : 'desktop'),
     };
 
     try {
         if (!navigator.gpu) return result;
 
         const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-        if (!adapter) return result;
+        if (!adapter) {
+            result.webGpuUnavailableReason = platformInfo.isIOS
+                ? 'This iOS browser exposes WebGPU but could not provide a compatible GPU adapter.'
+                : 'This browser exposes WebGPU but could not provide a compatible GPU adapter.';
+            return result;
+        }
+        result.webGpuAdapterAvailable = true;
+        result.webGpuUnavailableReason = '';
 
         let info = adapter.info || {};
         if ((!info || !info.description) && typeof adapter.requestAdapterInfo === 'function') {
@@ -1035,6 +956,7 @@ async function detectDeviceCapabilities() {
 
     } catch (err) {
         console.warn('GPU detection failed:', err);
+        result.webGpuUnavailableReason = `GPU detection failed: ${err?.message || err || 'unknown error'}`;
     }
 
     return result;
@@ -1148,13 +1070,26 @@ function applyModelUiState() {
     const capabilityLabel = getModelCapabilitiesLabel(model);
     const modelBadge = $('#model-badge');
     if (modelBadge) {
-        modelBadge.textContent = isAutoModelSelected()
+        modelBadge.textContent = offlineShellMode
+            ? 'Offline Library Mode'
+            : isAutoModelSelected()
             ? `Auto | ${model.name}`
             : model.name;
         modelBadge.title = `Capabilities: ${capabilityLabel}`;
     }
 
-    if (isVisionModel()) {
+    if (offlineShellMode) {
+        imageBtn.style.display = 'none';
+        thinkToggle.style.display = 'none';
+        thinkingEnabled = false;
+        thinkToggle.classList.remove('active');
+        thinkToggle.setAttribute('aria-pressed', 'false');
+        if (micBtn) micBtn.disabled = true;
+        if (voiceChatBtn) voiceChatBtn.disabled = true;
+        clearPendingImage();
+        userInput.placeholder = 'Offline Library Mode: inference needs WebGPU.';
+        updateComposerSendState();
+    } else if (isVisionModel()) {
         imageBtn.style.display = 'flex';
     } else {
         const hadImage = Boolean(pendingImage);
@@ -1165,21 +1100,28 @@ function applyModelUiState() {
         }
     }
 
-    if (isThinkingModel()) {
+    if (!offlineShellMode && isThinkingModel()) {
         thinkToggle.style.display = 'flex';
         thinkToggle.classList.toggle('active', thinkingEnabled);
+        thinkToggle.setAttribute('aria-pressed', thinkingEnabled ? 'true' : 'false');
     } else {
         thinkToggle.style.display = 'none';
         thinkingEnabled = false;
         thinkToggle.classList.remove('active');
+        thinkToggle.setAttribute('aria-pressed', 'false');
     }
 
-    if (isThinkingModel() && thinkingEnabled) {
+    if (!offlineShellMode && isThinkingModel() && thinkingEnabled) {
         userInput.placeholder = 'Ask anything... (Thinking mode enabled)';
-    } else if (isVisionModel()) {
+    } else if (!offlineShellMode && isVisionModel()) {
         userInput.placeholder = 'Ask anything... (you can attach images!)';
-    } else {
+    } else if (!offlineShellMode) {
         userInput.placeholder = 'Ask anything...';
+    }
+
+    if (!offlineShellMode) {
+        if (micBtn) micBtn.disabled = false;
+        if (voiceChatBtn) voiceChatBtn.disabled = false;
     }
 
     updateInputDisclaimer();
@@ -1458,32 +1400,32 @@ const PROMPT_PRESETS = [
     {
         id: 'writer',
         label: 'Writer',
-        prompt: 'You are a concise writing assistant. Improve clarity, structure, and tone while preserving user intent. Offer 2-3 variants when useful.',
+        prompt: 'You are a concise writing assistant running locally in the browser. You can utilize attached documents to match style and tone. Improve clarity, structure, and tone while preserving user intent. Offer 2-3 variants when useful.',
     },
     {
         id: 'coder',
         label: 'Coder',
-        prompt: 'You are a practical coding assistant. Provide correct code first, then short explanations. Call out assumptions and suggest tests.',
+        prompt: 'You are a practical coding assistant running locally via WebGPU. You can analyze attached code files. Provide correct code first, then short explanations. Call out assumptions and suggest tests.',
     },
     {
         id: 'research',
         label: 'Research',
-        prompt: 'You are a research assistant. Organize answers into key points, evidence, and caveats. Highlight uncertainty instead of guessing.',
+        prompt: 'You are a research assistant with real-time web search capabilities. You can analyze attached local documents and web search results. Organize answers into key points, evidence, and caveats. Highlight uncertainty instead of guessing.',
     },
     {
         id: 'tutor',
         label: 'Tutor',
-        prompt: 'You are a patient tutor. Explain step-by-step, check understanding, and use examples before introducing advanced terms.',
+        prompt: 'You are a patient tutor running securely on-device. You can explain diagrams from attached images or documents. Explain step-by-step, check understanding, and use examples before introducing advanced terms.',
     },
     {
         id: 'summarizer',
         label: 'Summarizer',
-        prompt: 'You are a concise summarization assistant. Return key points, important details, and a short action checklist.',
+        prompt: 'You are a concise summarization assistant. Summarize attached local documents or web search results efficiently. Return key points, important details, and a short action checklist.',
     },
     {
         id: 'product_manager',
         label: 'Product Manager',
-        prompt: 'You are a product manager assistant. Structure output into Problem, User Impact, Options, Tradeoffs, and Recommendation.',
+        prompt: 'You are a product manager assistant running completely locally. You can analyze attached strategy documents. Structure output into Problem, User Impact, Options, Tradeoffs, and Recommendation.',
     },
 ];
 
@@ -1501,7 +1443,7 @@ const WORKFLOW_MODES = [
     {
         id: 'code_review',
         label: 'Code Review',
-        instruction: '\n\nWorkflow mode: Focus on correctness and regressions first. Return sections: Findings, Risks, Suggested Fixes, Tests.',
+        instruction: '\n\nWorkflow mode: Focus on correctness and regressions first across attached files. Return sections: Findings, Risks, Suggested Fixes, Tests.',
     },
     {
         id: 'study_tutor',
@@ -1613,6 +1555,7 @@ function buildTrustMeta(payload = {}) {
         webSources: Number(payload.webSources || 0),
         webMode: payload.webMode || 'off',
         ragSources: Number(payload.ragSources || 0),
+        ragProfile: normalizeRagRetrievalProfile(payload.ragProfile || ragRetrievalProfile),
         ragDocNames,
         ragConfidence: String(payload.ragConfidence || 'n/a'),
         ragAvgScore: Number.isFinite(Number(payload.ragAvgScore)) ? Number(payload.ragAvgScore) : null,
@@ -1641,17 +1584,55 @@ async function getWhisperApi() {
     return whisperApi;
 }
 
+async function getWebLlmApi() {
+    if (webllmApi) return webllmApi;
+    if (!webllmModulePromise) {
+        webllmModulePromise = import('@mlc-ai/web-llm');
+    }
+    webllmApi = await webllmModulePromise;
+    return webllmApi;
+}
+
+function setOfflineShellMode(enabled, reason = '') {
+    offlineShellMode = Boolean(enabled);
+    if (offlineShellMode) {
+        engine = null;
+        if (webgpuError) {
+            webgpuError.style.display = 'block';
+            webgpuError.innerHTML = `
+                <div class="error-icon">!</div>
+                <h3>Offline Library Mode</h3>
+                <p>${escapeHtml(reason || 'WebGPU is not available, so local model inference is disabled on this device/browser.')}</p>
+                <p class="error-hint">You can still open NeuralBox, browse local conversations, manage settings, export/import chats, and keep the PWA shell available offline.</p>
+            `;
+        }
+        if (downloadSection) {
+            downloadSection.style.display = 'block';
+        }
+    }
+}
+
 function setGeneratingState(active) {
     isGenerating = active;
-    sendBtn.disabled = shouldDisableSendButton({
-        isGenerating: active,
+    updateComposerSendState();
+    sendBtn.classList.toggle('generating', active);
+    sendBtn.title = active ? 'Stop generation' : 'Send message';
+    sendBtn.setAttribute('aria-label', active ? 'Stop generation' : 'Send message');
+    sendBtn.innerHTML = active ? STOP_ICON_SVG : SEND_ICON_SVG;
+    renderDebugPanel();
+}
+
+function isComposerRuntimeReady() {
+    return Boolean(engine) && !offlineShellMode;
+}
+
+function updateComposerSendState() {
+    const runtimeUnavailable = !isGenerating && !isComposerRuntimeReady();
+    sendBtn.disabled = runtimeUnavailable || shouldDisableSendButton({
+        isGenerating,
         inputText: userInput.value,
         hasPendingImage: Boolean(pendingImage),
     });
-    sendBtn.classList.toggle('generating', active);
-    sendBtn.title = active ? 'Stop generation' : 'Send message';
-    sendBtn.innerHTML = active ? STOP_ICON_SVG : SEND_ICON_SVG;
-    renderDebugPanel();
 }
 
 function handleComposerPrimaryAction() {
@@ -1659,7 +1640,7 @@ function handleComposerPrimaryAction() {
         isGenerating,
         inputText: userInput.value,
         hasPendingImage: Boolean(pendingImage),
-        hasEngine: Boolean(engine),
+        hasEngine: isComposerRuntimeReady(),
     });
     if (action === 'cancel') {
         requestGenerationCancel();
@@ -1667,6 +1648,16 @@ function handleComposerPrimaryAction() {
     }
     if (action === 'send') {
         sendMessage(userInput.value);
+        return;
+    }
+    if (userInput.value.trim() || pendingImage) {
+        setInlineNotice(
+            offlineShellMode
+                ? 'Chat generation needs WebGPU on this device/browser. Local library tools still work.'
+                : 'Model is not loaded yet. Start a model before sending a chat message.',
+            'warn',
+            3200,
+        );
     }
 }
 
@@ -1773,7 +1764,7 @@ function getRenderableMessage(role, content) {
 
 function getEffectiveSystemPrompt() {
     const rawPrompt = systemPrompt.value?.trim() || DEFAULT_SYSTEM_PROMPT;
-    if (rawPrompt === LEGACY_SYSTEM_PROMPT) {
+    if (rawPrompt === LEGACY_SYSTEM_PROMPT || (rawPrompt.startsWith("You are NeuralBox") && !rawPrompt.includes("Local RAG"))) {
         return DEFAULT_SYSTEM_PROMPT;
     }
     return rawPrompt;
@@ -1999,6 +1990,7 @@ function toggleWebSearch(enabled, options = {}) {
     const shouldPersist = options.persist !== false;
     webSearchEnabled = enabled;
     webSearchToggle.classList.toggle('active', enabled);
+    webSearchToggle.setAttribute('aria-pressed', enabled ? 'true' : 'false');
     webSearchSetting.checked = enabled;
     updateInputDisclaimer();
 
@@ -2060,19 +2052,6 @@ function attachTestApiIfEnabled() {
     };
 }
 
-function shouldAutoWebSearch(query) {
-    const text = String(query || '').trim().toLowerCase();
-    if (!text) return false;
-    if (/^(search web|web search|search the web)\b/.test(text)) return true;
-    if (/\b(today|yesterday|tomorrow|latest|recent|breaking|right now|currently|as of now|this morning|tonight)\b/.test(text)) {
-        return true;
-    }
-    if (/\b(news|headline|war|attack|bomb|strike|election|score|stock|price|weather|earthquake|fired|hired|ceo)\b/.test(text)) {
-        return true;
-    }
-    return false;
-}
-
 function resolveWebSearchQuery(userText, conversation) {
     const raw = String(userText || '').trim();
     if (!raw) return '';
@@ -2105,6 +2084,12 @@ function updateInputDisclaimer() {
     const ragLabel = ragDocuments.length > 0
         ? ` Local docs: ${ragDocuments.length} indexed.`
         : ' Attach documents with the Docs button for grounded answers.';
+    if (offlineShellMode) {
+        inputDisclaimer.textContent = `Offline Library Mode: local inference is disabled because WebGPU is unavailable. You can still browse, import/export, and manage local data.${ragLabel}`;
+        inputDisclaimer.classList.add('notice-warn');
+        inputDisclaimer.classList.remove('web-active', 'notice-error', 'notice-info');
+        return;
+    }
     if (webSearchEnabled) {
         inputDisclaimer.textContent = `Web-Enhanced mode is on. Search queries are sent to DuckDuckGo. Active model supports: ${capabilityLabel}.${ragLabel}`;
         inputDisclaimer.classList.add('web-active');
@@ -2126,13 +2111,14 @@ function updateInputDisclaimer() {
 }
 
 async function webSearch(query) {
+    lastWebSearchFailure = null;
     try {
         // Strategy: try DuckDuckGo HTML lite (simpler, better for parsing)
         const searchUrl = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
 
         const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
-        if (!response.ok) throw new Error('Search failed');
+        if (!response.ok) throw new Error(`Search endpoint returned HTTP ${response.status}`);
 
         const html = await response.text();
         const results = parseDDGLite(html);
@@ -2145,7 +2131,12 @@ async function webSearch(query) {
         return results.slice(0, 6);
     } catch (err) {
         console.warn('Primary search failed, trying fallback:', err);
-        return await webSearchFallback(query);
+        const primaryFailure = classifyWebSearchError(err);
+        const fallbackResults = await webSearchFallback(query);
+        if (!fallbackResults.length && !lastWebSearchFailure) {
+            lastWebSearchFailure = primaryFailure;
+        }
+        return fallbackResults;
     }
 }
 
@@ -2210,7 +2201,10 @@ async function webSearchFallback(query) {
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(searchUrl)}`;
 
         const response = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
-        if (!response.ok) return [];
+        if (!response.ok) {
+            lastWebSearchFailure = classifyWebSearchError(`Search fallback returned HTTP ${response.status}`);
+            return [];
+        }
 
         const data = await response.json();
         const results = [];
@@ -2242,6 +2236,7 @@ async function webSearchFallback(query) {
         return results.slice(0, 6);
     } catch (err) {
         console.warn('Fallback search also failed:', err);
+        lastWebSearchFailure = classifyWebSearchError(err);
         return [];
     }
 }
@@ -2291,23 +2286,19 @@ function renderSourceCitations(results, container) {
 
 // ---- Init ----
 async function init() {
-    if (!navigator.gpu) {
-        webgpuError.style.display = 'block';
-        downloadSection.style.display = 'none';
-        return;
-    }
-
     await initDatabase();
     await loadSettings();
     loadRagDocsIntoState(await loadRagDocsRecord());
-    renderRagGuidance();
+    renderRagRetrievalProfiles();
     renderPromptPresets();
     renderWorkflowModes();
     renderWorkbenchPanel();
 
-    // Detect device capabilities and auto-select model
-    statusText.textContent = 'Detecting device capabilities...';
+    // Detect device capabilities and auto-select model.
+    const browserHasWebGpuApi = Boolean(navigator.gpu);
+    statusText.textContent = browserHasWebGpuApi ? 'Detecting device capabilities...' : 'Opening offline library mode...';
     deviceCapabilities = await detectDeviceCapabilities();
+    webGpuAvailable = Boolean(deviceCapabilities.webGpuAdapterAvailable);
     const recommended = autoSelectModel(deviceCapabilities);
 
     // Check if user has a saved model preference (manual model or auto)
@@ -2319,8 +2310,17 @@ async function init() {
     }
     selectedModelId = isAutoModelSelected() ? recommended.id : modelSelectionId;
 
+    if (!webGpuAvailable) {
+        setOfflineShellMode(
+            true,
+            `${deviceCapabilities.webGpuUnavailableReason || 'WebGPU is unavailable in this browser session.'} NeuralBox will still open so your installed/offline app shell, settings, conversations, exports, and local library remain accessible.`,
+        );
+    }
+
     applyModelUiState();
     logRuntimeEvent('app_init', {
+        webGpuAvailable,
+        offlineShellMode,
         gpu: deviceCapabilities?.gpuName || 'unknown',
         vramMB: deviceCapabilities?.vramMB || 0,
         vramSource: deviceCapabilities?.vramEstimateSource || 'unknown',
@@ -2334,11 +2334,29 @@ async function init() {
     // Render the initial model selector on the loading screen
     renderStartModelSelector(deviceCapabilities, recommended);
 
+    if (!webGpuAvailable) {
+        renderModelSelector(deviceCapabilities, recommended);
+        statusText.textContent = 'Offline Library Mode ready.';
+        progressFill.style.width = '100%';
+        progressPercent.textContent = 'Offline';
+        startBtn.style.display = 'inline-flex';
+        startBtn.textContent = 'Open Offline Library';
+        startBtn.addEventListener('click', () => void showChatScreen());
+        startBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            void showChatScreen();
+        });
+        setTimeout(() => {
+            void showChatScreen();
+        }, 700);
+        return;
+    }
+
+    // Populate model selector in settings before any async cache/runtime checks.
+    renderModelSelector(deviceCapabilities, recommended);
+
     // Check cache and update UI
     await updateStartScreenUi(deviceCapabilities, recommended);
-
-    // Populate model selector in settings
-    renderModelSelector(deviceCapabilities, recommended);
 
     startBtn.addEventListener('click', loadModel);
     startBtn.addEventListener('touchend', (e) => {
@@ -2408,9 +2426,21 @@ async function updateStartScreenUi(capabilities, recommended) {
     
     statusText.innerHTML = `Checking cache state...`;
     startBtn.style.display = 'none';
+
+    if (!webGpuAvailable) {
+        const noteEl = document.getElementById('cache-status-note');
+        if (noteEl) {
+            noteEl.innerHTML = 'WebGPU is unavailable. Inference is disabled, but the installed app shell and local data still open offline.';
+        }
+        statusText.innerHTML = `Offline Library Mode for <strong>${displayName}</strong>`;
+        startBtn.textContent = 'Open Offline Library';
+        startBtn.style.display = 'inline-flex';
+        return;
+    }
     
     let isCached = false;
     try {
+        const webllm = await getWebLlmApi();
         isCached = await webllm.hasModelInCache(selectedModel.id);
     } catch(err) {
         console.warn('Cache check failed:', err);
@@ -2432,12 +2462,83 @@ async function updateStartScreenUi(capabilities, recommended) {
     startBtn.style.display = 'inline-flex';
 }
 
+function getCompactFallbackModel() {
+    return MODEL_CATALOG
+        .filter((m) => !m.vision)
+        .slice()
+        .sort((a, b) => a.vramMB - b.vramMB)[0] || MODEL_CATALOG[0];
+}
+
+function shouldTryCompactModelFallback(err, attemptedModel, fallbackModel) {
+    if (!fallbackModel || fallbackModel.id === attemptedModel.id) return false;
+    const text = String(err?.message || err || '').toLowerCase();
+    return /memory|outofmemory|allocation|adapter|device|gpu|unsupported|compile|shader/.test(text);
+}
+
+async function createEngineWithRetry(model, initProgressCallback) {
+    let lastLoadErr = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const webllm = await getWebLlmApi();
+            const nextEngine = await webllm.CreateMLCEngine(model.id, {
+                initProgressCallback,
+            });
+            lastLoadErr = null;
+            return nextEngine;
+        } catch (loadErr) {
+            lastLoadErr = loadErr;
+            if (attempt === 0 && isRetryableGenerationError(loadErr)) {
+                reliabilityStats.recoveries += 1;
+                logRuntimeEvent('model_load_retry', {
+                    modelId: model.id,
+                    reason: String(loadErr?.message || loadErr || ''),
+                });
+                statusText.textContent = `Load hiccup detected. Retrying ${model.name}...`;
+                continue;
+            }
+            throw loadErr;
+        }
+    }
+    throw lastLoadErr || new Error(`Failed to load ${model.name}.`);
+}
+
+function shouldBackgroundPreloadWhisper() {
+    if (platformInfo.isIOS) return false;
+    if (offlineShellMode) return false;
+    if (platformInfo.deviceMemoryGB && platformInfo.deviceMemoryGB < 4) return false;
+    return true;
+}
+
+function scheduleWhisperPreload() {
+    if (!shouldBackgroundPreloadWhisper()) return;
+    const run = () => {
+        getWhisperApi().then(api => {
+            api.initWhisper().catch(err => {
+                console.warn('Background whisper preload failed (non-fatal):', err);
+            });
+        }).catch(err => {
+            console.warn('Background whisper import failed (non-fatal):', err);
+        });
+    };
+    if ('requestIdleCallback' in window) {
+        window.requestIdleCallback(run, { timeout: 5000 });
+    } else {
+        setTimeout(run, 2500);
+    }
+}
+
 // ---- Model Loading ----
 async function loadModel() {
+    if (!webGpuAvailable || offlineShellMode) {
+        setOfflineShellMode(true, 'WebGPU is unavailable, so local model inference cannot start in this browser session.');
+        await showChatScreen();
+        return;
+    }
     startBtn.style.display = 'none';
     const targetModel = isAutoModelSelected() ? resolveAutoModelCandidate() : getModelById(modelSelectionId);
     selectedModelId = targetModel.id;
-    const model = targetModel;
+    let model = targetModel;
+    let loadedViaFallback = false;
     statusText.textContent = `Loading ${model.name}...`;
 
     try {
@@ -2457,30 +2558,29 @@ async function loadModel() {
             }
         };
 
-        let lastLoadErr = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                engine = await webllm.CreateMLCEngine(targetModel.id, {
-                    initProgressCallback,
-                });
-                lastLoadErr = null;
-                break;
-            } catch (loadErr) {
-                lastLoadErr = loadErr;
-                if (attempt === 0 && isRetryableGenerationError(loadErr)) {
-                    reliabilityStats.recoveries += 1;
-                    logRuntimeEvent('model_load_retry', {
-                        modelId: targetModel.id,
-                        reason: String(loadErr?.message || loadErr || ''),
-                    });
-                    statusText.textContent = `Load hiccup detected. Retrying ${model.name}...`;
-                    continue;
-                }
-                throw loadErr;
+        try {
+            engine = await createEngineWithRetry(model, initProgressCallback);
+        } catch (primaryErr) {
+            const fallbackModel = getCompactFallbackModel();
+            if (!shouldTryCompactModelFallback(primaryErr, model, fallbackModel)) {
+                throw primaryErr;
             }
-        }
-        if (!engine && lastLoadErr) {
-            throw lastLoadErr;
+            logRuntimeEvent('model_load_compact_fallback', {
+                fromModelId: model.id,
+                toModelId: fallbackModel.id,
+                reason: String(primaryErr?.message || primaryErr || ''),
+            });
+            statusText.textContent = `${model.name} did not fit this device. Trying ${fallbackModel.name}...`;
+            progressFill.style.width = '0%';
+            progressPercent.textContent = 'Fallback';
+            model = fallbackModel;
+            selectedModelId = fallbackModel.id;
+            loadedViaFallback = true;
+            try {
+                engine = await createEngineWithRetry(fallbackModel, initProgressCallback);
+            } catch (fallbackErr) {
+                throw new Error(`${toUserFriendlyError(primaryErr)} Compact fallback also failed: ${toUserFriendlyError(fallbackErr)}`);
+            }
         }
 
         progressFill.style.width = '100%';
@@ -2490,16 +2590,21 @@ async function loadModel() {
         logRuntimeEvent('model_loaded', {
             modelId: selectedModelId,
             modelName: model.name,
+            loadedViaFallback,
         });
         scheduleRuntimeBenchmarkCalibration();
 
         setTimeout(() => {
-            void showChatScreen();
+            void showChatScreen().then(() => {
+                if (loadedViaFallback) {
+                    setInlineNotice(`${targetModel.name} did not fit this device, so NeuralBox started ${model.name} instead.`, 'warn', 5200);
+                }
+            });
         }, 500);
     } catch (err) {
         console.error('Model loading failed:', err);
         reliabilityStats.lastError = String(err?.message || err || '');
-        statusText.textContent = 'Failed to load model: ' + err.message;
+        statusText.textContent = 'Failed to load model: ' + toUserFriendlyError(err);
         startBtn.style.display = 'inline-flex';
         startBtn.textContent = 'Retry';
     }
@@ -2872,10 +2977,14 @@ function escapeHtml(text) {
 
 function openSidebar() {
     sidebar.classList.add('open');
+    sidebar.classList.remove('closed');
+    sidebarToggle?.setAttribute('aria-expanded', 'true');
 }
 
 function closeSidebar() {
     sidebar.classList.remove('open');
+    sidebar.classList.add('closed');
+    sidebarToggle?.setAttribute('aria-expanded', 'false');
 }
 
 // ============================================
@@ -3058,13 +3167,15 @@ async function sendMessage(text) {
         let ragMatches = [];
         let ragDocNames = [];
         let ragConfidence = getRagConfidenceSummary([]);
+        const ragProfile = getRagRetrievalProfileConfig(ragRetrievalProfile);
         if (userText && ragChunks.length > 0) {
             ragMatches = retrieveRagChunks(userText);
             if (ragMatches.length > 0) {
                 ragDocNames = Array.from(new Set(ragMatches.map((m) => String(m.docName || '').trim()).filter(Boolean)));
                 ragConfidence = getRagConfidenceSummary(ragMatches);
-                routeReason = `${routeReason} | Local docs (${ragMatches.length} matches from ${ragDocNames.length} docs)`;
+                routeReason = `${routeReason} | Local docs ${ragProfile.label} (${ragMatches.length} matches from ${ragDocNames.length} docs)`;
                 pushWorkbenchEvent('rag_retrieval', {
+                    profile: ragProfile.id,
                     matches: ragMatches.length,
                     docs: ragDocNames.join(', '),
                     confidence: ragConfidence.topConfidence,
@@ -3092,16 +3203,22 @@ async function sendMessage(text) {
                 routeReason = `${routeReason} | Web lookup ${webMode} (${searchResults.length} results)`;
             } else {
                 routeReason = `${routeReason} | Web lookup ${webMode} (no results)`;
+                const notice = lastWebSearchFailure
+                    ? getWebSearchRecoveryNotice(lastWebSearchFailure, { mode: webMode })
+                    : getWebSearchNoResultsNotice(webMode);
+                setInlineNotice(notice, lastWebSearchFailure ? 'warn' : 'info', 4200);
             }
             pushWorkbenchEvent('web_search', {
                 mode: webMode,
                 query: effectiveSearchQuery,
                 results: searchResults.length,
+                failure: lastWebSearchFailure?.kind || '',
             });
             logRuntimeEvent('web_search', {
                 mode: webMode,
                 query: effectiveSearchQuery,
                 results: searchResults.length,
+                failure: lastWebSearchFailure?.kind || '',
             });
         }
 
@@ -3294,6 +3411,7 @@ async function sendMessage(text) {
             workflow: workflowModeId,
             deterministic: deterministicModeEnabled,
             ragMatches: ragMatches.length,
+            ragProfile: ragProfile.id,
             ragDocNames,
             ragTopConfidence: ragConfidence.topConfidence,
             ragAvgScore: ragConfidence.avgScore,
@@ -3312,6 +3430,7 @@ async function sendMessage(text) {
             webSources: searchResults.length,
             webMode,
             ragSources: ragMatches.length,
+            ragProfile: ragProfile.id,
             ragDocNames,
             ragConfidence: ragConfidence.topConfidence,
             ragAvgScore: ragConfidence.avgScore,
@@ -3538,7 +3657,7 @@ function formatConversationAsMarkdown(conv) {
             const ragDocs = Array.isArray(msg.meta.ragDocNames) && msg.meta.ragDocNames.length
                 ? msg.meta.ragDocNames.join('|')
                 : 'none';
-            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}, rag_docs=${ragDocs}, rag_confidence=${msg.meta.ragConfidence || 'n/a'}_`);
+            lines.push(`_Trust: model=${msg.meta.modelName || msg.meta.modelId || 'unknown'}, route="${msg.meta.routeReason || 'n/a'}", workflow=${msg.meta.workflowLabel || 'n/a'}, deterministic=${msg.meta.deterministic ? 'on' : 'off'}, rag_docs=${ragDocs}, rag_profile=${msg.meta.ragProfile || 'balanced'}, rag_confidence=${msg.meta.ragConfidence || 'n/a'}_`);
             lines.push('');
         }
     }
@@ -3641,7 +3760,7 @@ async function loadSettings() {
     try {
         const settings = await loadSettingsRecord();
         systemPrompt.value = settings.systemPrompt || DEFAULT_SYSTEM_PROMPT;
-        if (systemPrompt.value === LEGACY_SYSTEM_PROMPT) {
+        if (systemPrompt.value === LEGACY_SYSTEM_PROMPT || (systemPrompt.value.startsWith("You are NeuralBox") && !systemPrompt.value.includes("Local RAG"))) {
             systemPrompt.value = DEFAULT_SYSTEM_PROMPT;
         }
         if (settings.temperature != null) {
@@ -3663,7 +3782,8 @@ async function loadSettings() {
         workbenchEnabled = Boolean(settings.workbenchEnabled);
         trustLayerEnabled = settings.trustLayerEnabled !== false;
         deterministicModeEnabled = Boolean(settings.deterministicModeEnabled);
-    activeSettingsTab = normalizeSettingsTab(settings.activeSettingsTab);
+        activeSettingsTab = normalizeSettingsTab(settings.activeSettingsTab);
+        ragRetrievalProfile = normalizeRagRetrievalProfile(settings.ragRetrievalProfile || ragRetrievalProfile);
         workflowModeId = getWorkflowById(settings.workflowModeId || workflowModeId).id;
         const parsedSeed = parseInt(settings.deterministicSeed, 10);
         deterministicSeed = Number.isFinite(parsedSeed) ? parsedSeed : deterministicSeed;
@@ -3688,6 +3808,7 @@ async function loadSettings() {
         if (deterministicSeedInput) {
             deterministicSeedInput.value = String(deterministicSeed);
         }
+        renderRagRetrievalProfiles();
         renderWorkflowModes();
         if (workflowSelect) {
             workflowSelect.value = workflowModeId;
@@ -3711,6 +3832,7 @@ function saveSettings() {
         trustLayerEnabled: trustLayerEnabled,
         deterministicModeEnabled: deterministicModeEnabled,
         deterministicSeed: deterministicSeed,
+        ragRetrievalProfile: ragRetrievalProfile,
         workflowModeId: workflowModeId,
         activeSettingsTab: activeSettingsTab,
     };
@@ -3746,7 +3868,7 @@ userInput.addEventListener('keydown', (e) => {
             isGenerating,
             inputText: userInput.value,
             hasPendingImage: Boolean(pendingImage),
-            hasEngine: Boolean(engine),
+            hasEngine: isComposerRuntimeReady(),
         });
         if (action === 'send') {
             sendMessage(userInput.value);
@@ -3757,11 +3879,7 @@ userInput.addEventListener('keydown', (e) => {
 // Auto-resize
 userInput.addEventListener('input', () => {
     autoResizeInput();
-    sendBtn.disabled = shouldDisableSendButton({
-        isGenerating,
-        inputText: userInput.value,
-        hasPendingImage: Boolean(pendingImage),
-    });
+    updateComposerSendState();
 });
 
 // New chat (header button)
@@ -3769,7 +3887,12 @@ newChatBtn.addEventListener('click', createConversation);
 
 // Sidebar toggle
 sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+        sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+    } else {
+        sidebar.classList.contains('closed') ? openSidebar() : closeSidebar();
+    }
 });
 
 sidebarOverlay.addEventListener('click', closeSidebar);
@@ -3797,13 +3920,16 @@ settingsBtn.addEventListener('click', () => {
     renderWorkflowModes();
     setSettingsTab(activeSettingsTab, { persist: false });
     settingsPanel.classList.add('open');
+    settingsBtn.setAttribute('aria-expanded', 'true');
 });
 settingsOverlay.addEventListener('click', () => {
     settingsPanel.classList.remove('open');
+    settingsBtn.setAttribute('aria-expanded', 'false');
     saveSettings();
 });
 closeSettings.addEventListener('click', () => {
     settingsPanel.classList.remove('open');
+    settingsBtn.setAttribute('aria-expanded', 'false');
     saveSettings();
 });
 if (settingsTabRegular) {
@@ -3831,6 +3957,7 @@ maxTokensSlider.addEventListener('input', () => {
 clearHistoryBtn.addEventListener('click', () => {
     clearAllConversations();
     settingsPanel.classList.remove('open');
+    settingsBtn.setAttribute('aria-expanded', 'false');
 });
 // Suggestion chips
 bindSuggestionChips();
@@ -3894,7 +4021,14 @@ if (docBtn && docInput) {
 if (docInput) {
     docInput.addEventListener('change', async (e) => {
         const files = Array.from(e.target.files || []);
-        await ingestRagFiles(files);
+        const audioFiles = files.filter(f => f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|flac|webm|aac)$/i.test(f.name));
+        const docFiles = files.filter(f => !audioFiles.includes(f));
+        if (audioFiles.length > 0) {
+            await processAudioFileTranscription(audioFiles[0]); // transcribe first audio file
+        }
+        if (docFiles.length > 0) {
+            await ingestRagFiles(docFiles);
+        }
         docInput.value = '';
     });
 }
@@ -3936,6 +4070,14 @@ if (ragFileInput) {
 if (ragClearBtn) {
     ragClearBtn.addEventListener('click', () => {
         clearRagDocs();
+    });
+}
+if (ragRetrievalProfileSelect) {
+    ragRetrievalProfileSelect.addEventListener('change', () => {
+        ragRetrievalProfile = normalizeRagRetrievalProfile(ragRetrievalProfileSelect.value);
+        renderRagGuidance();
+        saveSettings();
+        setInlineNotice(`RAG retrieval profile set to ${getRagRetrievalProfileConfig(ragRetrievalProfile).label}.`, 'info', 2200);
     });
 }
 if (ragSearchInput) {
@@ -4064,6 +4206,11 @@ async function startRecording() {
 
         mediaRecorder.onstop = async () => {
             stream.getTracks().forEach(t => t.stop());
+            // Stop Web Speech API before running Whisper final pass
+            if (liveRecognition) {
+                try { liveRecognition.stop(); } catch (_) {}
+                liveRecognition = null;
+            }
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
             await processRecording(audioBlob);
         };
@@ -4083,6 +4230,34 @@ async function startRecording() {
             if (timerEl) timerEl.textContent = formatVoiceTimer(recordingSeconds);
         }, 1000);
 
+        // Live interim transcription via Web Speech API.
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            liveRecognition = new SpeechRecognition();
+            liveRecognition.continuous = true;
+            liveRecognition.interimResults = true;
+            liveRecognition.lang = 'en-US';
+            const baseText = userInput.value ? userInput.value + (userInput.value.endsWith(' ') ? '' : ' ') : '';
+            let confirmedText = baseText;
+            liveRecognition.onresult = (event) => {
+                let interim = '';
+                let final = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const t = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) final += t + ' ';
+                    else interim += t;
+                }
+                if (final) {
+                    confirmedText += final;
+                }
+                userInput.value = confirmedText + interim;
+                autoResizeInput();
+                updateComposerSendState();
+            };
+            liveRecognition.onerror = () => { liveRecognition = null; };
+            try { liveRecognition.start(); } catch (_) { liveRecognition = null; }
+        }
+
     } catch (err) {
         console.error('Mic access failed:', err);
         voiceStatus.style.display = 'flex';
@@ -4101,6 +4276,7 @@ function stopRecording() {
     micBtn.classList.remove('recording');
 }
 
+
 async function processRecording(audioBlob) {
     voiceStatus.style.display = 'flex';
     voiceStatus.className = 'voice-status transcribing';
@@ -4114,12 +4290,16 @@ async function processRecording(audioBlob) {
         });
 
         voiceStatus.innerHTML = getMicStatusMarkup('transcribing');
-        const text = await whisper.transcribeAudio(audioBlob);
+        const baseText = userInput.value ? userInput.value + (userInput.value.endsWith(' ') ? '' : ' ') : '';
+        const text = await whisper.transcribeAudio(audioBlob, (partial) => {
+            userInput.value = baseText + partial;
+            autoResizeInput();
+        });
 
         if (text) {
-            userInput.value = userInput.value ? userInput.value + ' ' + text : text;
+            userInput.value = baseText + text;
             autoResizeInput();
-            sendBtn.disabled = false;
+            updateComposerSendState();
             userInput.focus();
             voiceStatus.className = 'voice-status';
             voiceStatus.innerHTML = getMicStatusMarkup('transcribed');
@@ -4136,6 +4316,63 @@ async function processRecording(audioBlob) {
     }
 
     micBtn.classList.remove('loading');
+}
+
+// ============================================
+// Audio File Transcription (with live streaming)
+// ============================================
+
+if (audioFileBtn && audioFileInput) {
+    audioFileBtn.addEventListener('click', () => audioFileInput.click());
+    audioFileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        audioFileInput.value = '';
+        await processAudioFileTranscription(file);
+    });
+}
+
+async function processAudioFileTranscription(file) {
+    transcribeStatus.style.display = 'flex';
+    transcribeStatus.className = 'voice-status transcribing';
+    transcribeStatus.innerHTML = getMicStatusMarkup('loading');
+    audioFileBtn.classList.add('loading');
+
+    try {
+        const whisper = await getWhisperApi();
+        await whisper.initWhisper((progress) => {
+            transcribeStatus.innerHTML = getMicStatusMarkup('loading_progress', { progress });
+        });
+
+        transcribeStatus.innerHTML = getMicStatusMarkup('transcribing');
+        const baseText = userInput.value ? userInput.value + (userInput.value.endsWith(' ') ? '' : ' ') : '';
+
+        // Stream partial tokens live into the input box
+        const text = await whisper.transcribeAudio(file, (partial) => {
+            userInput.value = baseText + partial;
+            autoResizeInput();
+        });
+
+        if (text) {
+            userInput.value = baseText + text;
+            autoResizeInput();
+            updateComposerSendState();
+            userInput.focus();
+            transcribeStatus.className = 'voice-status';
+            transcribeStatus.innerHTML = getMicStatusMarkup('transcribed');
+            setTimeout(() => { transcribeStatus.style.display = 'none'; }, 3000);
+        } else {
+            transcribeStatus.innerHTML = getMicStatusMarkup('empty');
+            setTimeout(() => { transcribeStatus.style.display = 'none'; }, 3000);
+        }
+    } catch (err) {
+        console.error('Audio file transcription failed:', err);
+        transcribeStatus.className = 'voice-status';
+        transcribeStatus.innerHTML = getMicStatusMarkup('error', { errorMessage: err?.message || 'Unknown error' });
+        setTimeout(() => { transcribeStatus.style.display = 'none'; }, 5000);
+    }
+
+    audioFileBtn.classList.remove('loading');
 }
 
 // ============================================
@@ -4176,6 +4413,7 @@ function openVoiceChat() {
     voiceChatActive = true;
     voiceChatOverlay.classList.add('active');
     voiceChatBtn.classList.add('active');
+    voiceChatBtn.setAttribute('aria-expanded', 'true');
     setVoiceChatState('idle');
     voiceChatText.textContent = 'Tap the orb to start a voice conversation.';
 }
@@ -4184,6 +4422,7 @@ function closeVoiceChat() {
     voiceChatActive = false;
     voiceChatOverlay.classList.remove('active');
     voiceChatBtn.classList.remove('active');
+    voiceChatBtn.setAttribute('aria-expanded', 'false');
     speechSynthesis.cancel();
     if (isRecording) stopRecording();
     setVoiceChatState('idle');
@@ -4243,7 +4482,11 @@ async function voiceChatListen() {
         });
 
         const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        const userText = await whisper.transcribeAudio(audioBlob);
+        const userText = await whisper.transcribeAudio(audioBlob, (partial) => {
+            if (voiceChatActive && partial) {
+                voiceChatText.textContent = buildVoiceChatTranscript(partial);
+            }
+        });
 
         if (!userText || !voiceChatActive) {
             voiceChatText.textContent = 'No speech detected. Tap to try again.';
@@ -4335,6 +4578,15 @@ voiceOrb.addEventListener('click', () => {
     if (!voiceChatActive) return;
     const state = voiceOrb.className;
     if (isVoiceOrbIdleClassName(state)) voiceChatListen();
+});
+voiceOrb.addEventListener('keydown', (e) => {
+    if (!voiceChatActive) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const state = voiceOrb.className;
+    if (isVoiceOrbIdleClassName(state)) {
+        e.preventDefault();
+        voiceChatListen();
+    }
 });
 voiceOrb.addEventListener('touchend', (e) => {
     if (!voiceChatActive) return;
@@ -4428,11 +4680,7 @@ function attachImageFile(file) {
             pendingImage = { dataUrl: normalized.dataUrl, file, meta: normalized };
             imagePreviewImg.src = normalized.dataUrl;
             imagePreview.style.display = 'flex';
-            sendBtn.disabled = shouldDisableSendButton({
-                isGenerating,
-                inputText: userInput.value,
-                hasPendingImage: true,
-            });
+            updateComposerSendState();
             const est = estimatePhiVisionEmbedSize(normalized.targetHeight, normalized.targetWidth);
             visionDebug('Image prepared', {
                 source: `${normalized.sourceWidth}x${normalized.sourceHeight}`,
@@ -4457,11 +4705,7 @@ function clearPendingImage() {
     pendingImage = null;
     imagePreview.style.display = 'none';
     imagePreviewImg.src = '';
-    sendBtn.disabled = shouldDisableSendButton({
-        isGenerating,
-        inputText: userInput.value,
-        hasPendingImage: false,
-    });
+    updateComposerSendState();
 }
 
 function getImageFromClipboard(clipboardData) {
@@ -4552,7 +4796,36 @@ thinkToggle.addEventListener('click', () => {
     applyModelUiState();
 });
 
+// Prevent accidental page reloads
+window.addEventListener('beforeunload', (e) => {
+    if (engine) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+// Theme toggle handling
+themeToggleBtn.addEventListener('click', () => {
+    document.body.classList.toggle('light-theme');
+    const isLight = document.body.classList.contains('light-theme');
+    safeLocalStorageSet('neuralbox-light-theme', isLight ? 'true' : 'false');
+});
+
+// Load initial theme
+if (safeLocalStorageGet('neuralbox-light-theme') !== 'false') {
+    document.body.classList.add('light-theme');
+}
+
 // ---- Start ----
 setGeneratingState(false);
 attachTestApiIfEnabled();
-init();
+
+init()
+    .then(() => {
+        scheduleWhisperPreload();
+    })
+    .catch((err) => {
+        console.error('Startup failed, opening compatibility shell:', err);
+        setOfflineShellMode(true, `Startup compatibility fallback: ${toUserFriendlyError(err)}`);
+        void showChatScreen();
+    });

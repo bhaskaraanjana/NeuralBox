@@ -42,14 +42,15 @@
 - [x] Revalidate stability/build/browser lifecycle after visual system rewrite.
 - [x] Implement Wave 2 manual model-switch UX redesign in settings.
 - [x] Add browser smoke coverage for manual model-switch flow.
-- [ ] Run focused accessibility pass for settings + RAG controls.
-- [ ] Add recovery UX for web-search offline/network failures.
+- [x] Run focused static accessibility pass for settings + RAG controls.
+- [x] Add recovery UX for web-search offline/network failures.
+- [ ] Run manual screen-reader and keyboard-only accessibility pass.
 
 ## P4 - RAG Explainability And Controls
 
 - [x] Add citation confidence badges for local RAG snippets.
 - [x] Expose RAG confidence telemetry in trust metadata.
-- [ ] Add configurable retrieval profile presets (precise, balanced, broad).
+- [x] Add configurable retrieval profile presets (precise, balanced, broad).
 
 ## Progress Summary
 

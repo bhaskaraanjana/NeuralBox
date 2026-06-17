@@ -16,6 +16,7 @@ async function main() {
 
   // Send/stop dual button contract.
   assert(/id="send-btn"/.test(html), 'Missing #send-btn in index.html');
+  assert(/from '\.\/lib\/models\.js'/.test(mainJs), 'Model catalog should be imported from shared module');
   assert(!/id="stop-btn"/.test(html), 'Legacy #stop-btn should not exist');
   assert(/sendBtn\.classList\.toggle\('generating', active\)/.test(mainJs), 'Send button generating state toggle missing');
   assert(/sendBtn\.innerHTML = active \? STOP_ICON_SVG : SEND_ICON_SVG;/.test(mainJs), 'Send/stop icon swap missing');

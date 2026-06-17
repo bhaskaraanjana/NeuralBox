@@ -6,3 +6,4 @@ dist/
 # local screenshot scratch
 .shots/
 .shots-mobile/
+doc/.presentation_assets/

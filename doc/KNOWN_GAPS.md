@@ -17,7 +17,8 @@ This file records implementation observations from the current source snapshot.
 
 ## 3) Browser support constraints
 
-- App hard depends on WebGPU for model runtime.
+- Local model inference still depends on WebGPU.
+- The app shell no longer hard-stops when WebGPU is missing; it enters Offline Library Mode for local data/settings/import/export access.
 - Voice features depend on microphone permissions and browser media support.
 - Text-to-speech quality and voice availability depend on platform/browser voice packs.
 
@@ -25,6 +26,7 @@ This file records implementation observations from the current source snapshot.
 
 - Web-enhanced mode routes requests through allorigins + DuckDuckGo endpoints.
 - If either endpoint rate-limits, changes format, or is blocked, search enrichment can degrade.
+- NeuralBox now classifies common web-search failures and continues locally with inline recovery guidance, but the upstream endpoint dependency remains.
 
 ## 5) VRAM estimation is still heuristic
 
@@ -36,3 +38,13 @@ This file records implementation observations from the current source snapshot.
 
 - Debug events are intentionally in-memory only and capped (current max: 100 events).
 - Events are cleared on page reload; only panel enabled/disabled preference is persisted.
+
+## 7) Main orchestrator size
+
+- `src/main.js` is smaller after extracting the model catalog, but it remains the central app orchestrator.
+- Future architecture work should split settings, conversations, web search runtime, RAG UI, and voice chat into feature controllers.
+
+## 8) Accessibility validation depth
+
+- Static accessibility contracts now exist for labels, live regions, dialog semantics, aria state, keyboard focus, and keyboard activation.
+- A manual screen-reader and keyboard-only pass is still recommended before a public launch.

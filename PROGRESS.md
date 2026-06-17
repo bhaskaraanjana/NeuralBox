@@ -4,7 +4,152 @@ Last Updated: 2026-04-09 (America/St_Johns)
 
 ## Session Log
 
+### 2026-05-06 - Version 1.7.6 iOS Compatibility Fixes
+- Bumped app version to 1.7.6.
+- Hardened storage startup for iOS/Safari:
+  - IndexedDB failures fall back to localStorage
+  - blocked localStorage falls back to in-memory session storage
+  - settings/conversations/model selection/RAG loads return safe defaults instead of aborting startup
+- Wrapped theme localStorage reads/writes so Safari private-mode storage errors do not stop the app.
+- Added final startup compatibility fallback that opens the app shell if initialization throws.
+- Deferred background Whisper preload until after startup and skipped it on iOS to avoid first-load memory/network pressure.
+- Added Apple PWA metadata for Add to Home Screen installs.
+- Added regression coverage:
+  - `npm run test:ios:compat`
+  - `npm run test:browser:mobile`
+
+### 2026-05-06 - Version 1.7.5 Android Chat Fixes
+- Bumped app version to 1.7.5.
+- Fixed Android/WebGPU detection so chat startup requires a real `requestAdapter()` result, not only `navigator.gpu`.
+- Added a clearer Offline Library Mode reason for Android browsers that expose WebGPU but cannot provide a compatible adapter.
+- Centralized chat composer send-state so mobile input, voice transcription, and image attach paths cannot force-enable Send when no model engine is active.
+- Added compact model fallback during startup: if a selected model fails with a GPU/memory compatibility error, NeuralBox retries with the smallest text model.
+- Added regression coverage:
+  - `npm run test:android:chat`
+
+### 2026-05-06 - Version 1.7.4 Updates
+- Bumped app version to 1.7.4.
+- Fixed the startup path so missing WebGPU no longer blocks the app from loading.
+- Added Offline Library Mode for no-WebGPU/offline shell sessions: the chat shell opens, local conversations/settings/import/export stay accessible, and inference-only controls are disabled.
+- Lazy-loaded WebLLM so the app shell can boot from the PWA cache without needing the large `webllm` runtime chunk.
+- Added explicit PWA service-worker registration with `virtual:pwa-register`.
+- Added follow-up runtime caching for cached offline inference:
+  - same-origin `webllm` and `transformers` chunks now use CacheFirst after first successful online use
+  - same-origin runtime WASM files now use CacheFirst after first successful online use
+  - app-shell install remains lightweight because these heavy files are not precached
+- Added regression coverage:
+  - `npm run test:offline:pwa`
+  - `npm run test:browser:offline-shell`
+- Validation run:
+  - `npm run test:offline:pwa` (pass)
+  - `npm run env:check` (pass)
+  - `npm run test:stability` (pass)
+  - `npm run build` (pass)
+  - `npm run test:browser:offline-shell` against preview (pass)
+
+### 2026-05-04 - Version 1.7.3 Updates
+- Bumped app version to 1.7.3.
+- Fixed Vercel deployment failure caused by Workbox attempting to pre-cache the 6 MB `webllm` bundle (exceeding the 2 MiB default limit).
+- Updated `vite.config.js` Workbox config: tightened `globPatterns` to only capture the app shell, added explicit `globIgnores` for `webllm-*.js` and `transformers-*.js`, and raised `maximumFileSizeToCacheInBytes` to 10 MiB as a safety net.
+- Service worker now pre-caches only 950 KB (app shell only), not the 6 MB ML bundle.
+- Build verified clean locally before push.
+
+### 2026-05-04 - Version 1.7.2 Updates
+- Bumped app version to 1.7.2.
+- Merged the separate audio-file-transcription button into the existing doc-attach button. The button now accepts all file types: text/code docs (→ RAG) and audio files (→ live-streamed Whisper transcription).
+- Added **Web Speech API live interim transcription** to the microphone recording flow — text now appears in the input box word-by-word as you speak in real-time; Whisper still runs on the final recording for maximum accuracy.
+- Added `vercel.json` with `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers required for WebGPU and SharedArrayBuffer, plus SPA rewrite rule.
+- Build passes cleanly (`npm run build`).
+
+### 2026-05-04 - Version 1.7.1 Updates
+- Bumped app version to 1.7.1 and exposed it in the settings panel.
+- Added a new **audio file transcription** button (music note icon) to the chat input toolbar.
+- Implemented `processAudioFileTranscription()` in `main.js` with full **live streaming** — partial Whisper tokens are streamed live into the input box character-by-character as the audio is processed.
+- Added `#audio-file-btn`, `#audio-file-input`, and `#transcribe-status` elements to `index.html`.
+- Accepts all browser-supported audio formats (mp3, wav, m4a, webm, ogg, flac, etc.).
+
+### 2026-05-04 - Version 1.6.9 Updates
+
+- Bumped app version to 1.6.9 and exposed it in the settings panel.
+- Introduced an "Average Joe" vs "Expert" experience mode selector on app startup.
+- Added logic in `main.js` to intercept startup and prompt new users for their preferred UI complexity.
+- Implemented CSS overrides in `style.css` (`.mode-average-joe`) to elegantly hide advanced options like prompt presets, RAG attachment buttons, workflow selectors, and system debug panels for casual users.
+
+### 2026-05-04 - Version 1.6.8 Updates
+
+- Bumped app version to 1.6.8 and exposed it in the settings panel.
+- Lowered the default temperature from 0.7 to 0.3 to significantly reduce hallucinations in the small browser-based models.
+
+### 2026-05-04 - Version 1.6.7 Updates
+
+- Bumped app version to 1.6.7 and exposed it in the settings panel.
+- Added an automatic migration script in `main.js` to ensure users upgrading from version 1.6.4 or older have their saved `localStorage` default prompts automatically overridden with the new 1.6.5 default prompt.
+
+### 2026-05-04 - Version 1.6.6 Updates
+
+- Bumped app version to 1.6.6 and exposed it in the settings panel.
+- Made the sidebar fully retractable on desktop view via the header toggle button.
+- Set Light Mode as the default theme for new users.
+
+### 2026-05-04 - Version 1.6.5 Updates
+
+- Bumped app version to 1.6.5 and exposed it in the settings panel.
+- Rewrote all prompt presets in `main.js` (Writer, Coder, Research, Tutor, Summarizer, Product Manager) to explicitly mention and encourage the use of local RAG document ingestion, WebGPU, and real-time web search capabilities.
+- Updated `WORKFLOW_MODES` and `DEFAULT_SYSTEM_PROMPT` in `main.js` to standardize the AI's awareness of its latest multimodal, local-first abilities.
+
+### 2026-05-04 - Version 1.6.4 Updates
+
+- Bumped app version to 1.6.4 and exposed it in the settings panel.
+- Rewrote the system prompt in `index.html` to explicitly inform the local model of its web search capabilities.
+- Fixed an accidental deletion of the `<!DOCTYPE html>` declaration.
+
+### 2026-05-04 - Version 1.6.3 Updates
+
+- Bumped app version to 1.6.3 and exposed it in the settings panel.
+- Implemented a Light Mode theme toggle using an advanced CSS `invert` and `hue-rotate` trick.
+- Added a persistence layer (`localStorage`) to remember the user's theme preference across sessions.
+- Added a theme toggle button to the main app header.
+
+### 2026-05-04 - Version 1.6.2 Updates
+
+- Bumped app version to 1.6.2 and exposed it in the settings panel.
+- Rewrote `README.md` to feature a beautiful, modern layout accurately reflecting the app's latest features (WebGPU, Voice, Trust Layer, Local RAG).
+
+### 2026-05-04 - Version 1.6.1 Updates
+
+- Bumped app version to 1.6.1 and exposed it in the settings panel.
+- Configured Vite development server with `@vitejs/plugin-basic-ssl` for local WebGPU testing via HTTPS.
+- Added `beforeunload` listener to protect against accidental browser refreshes while the AI model is loaded.
+- Modified Vite watcher config to ignore `*.md` files to prevent unnecessary full-page dev reloads.
+- Updated Whisper API to preload in the background on initial app startup.
+- Implemented real-time text streaming for Whisper voice transcriptions.
+
+### 2026-05-04 - Codebase superiority sweep
+
+- Added documentation baseline and improvement/test reports:
+  - `doc/CODEBASE_SCAN_2026-05-04.md`
+  - `doc/IMPROVEMENT_REPORT_2026-05-04.md`
+  - `doc/TEST_REPORT_2026-05-04.md`
+- Cleared dependency audit findings with audited lockfile refresh.
+- Added accessibility contract hardening:
+  - Dialog semantics for settings and voice overlay.
+  - Live regions for startup, hot swap, voice, and RAG status.
+  - Accessible names and aria state for icon/dynamic controls.
+  - Keyboard activation for voice orb and visible focus styling.
+  - New `npm run test:accessibility`.
+- Added web-search recovery helpers:
+  - `src/lib/web-search.js`
+  - Failure classification and inline recovery notices.
+  - New `npm run test:web-search`.
+- Added configurable RAG retrieval profiles:
+  - Precise, Balanced, Broad.
+  - Settings UI, persistence, trust metadata, Markdown export, workbench telemetry, and tests.
+- Extracted model catalog to `src/lib/models.js` with catalog integrity test:
+  - New `npm run test:models`.
+- Validation for individual slices passed during implementation; final full-suite validation is recorded in `doc/TEST_REPORT_2026-05-04.md`.
+
 ### 2026-04-09 - RAG confidence citation feature add
+
 - Added confidence-aware RAG retrieval output:
   - `src/lib/rag.js` now includes `getRagConfidenceLabel(score, queryTokenCount)` and retrieval output now includes `confidenceLabel`.
 - Added user-facing local citation confidence UI:
@@ -28,6 +173,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` (pass)
 
 ### 2026-04-09 - Wave 2 manual model-switch UX + smoke coverage
+
 - Continued roadmap execution after Wave 1 rehaul with focused model-selection UX cleanup.
 - Updated `src/main.js` model selection flows:
   - Reworked settings model selector to show clear Active / Current mode / Pending mode summaries.
@@ -48,6 +194,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` (pass)
 
 ### 2026-04-09 - Feature roadmap + complete UI rehaul wave kickoff
+
 - Created product roadmap artifact:
   - Added `doc/FEATURE_ROADMAP.md` with themes, milestones, sprint plan, and success metrics.
 - Executed complete UI rehaul pass in `src/style.css`:
@@ -63,6 +210,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` (pass)
 
 ### 2026-04-08 - Voice/settings modularization and mobile/settings UX hardening
+
 - Continued deepscan execution to close remaining architecture + UX checklist gaps.
 - Added new helper modules:
   - `src/lib/voice.js`
@@ -106,6 +254,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` against local preview server (pass)
 
 ### 2026-04-08 - Browser smoke harness for import/export and send-stop lifecycle
+
 - Continued deep-scan execution by adding browser-level lifecycle verification.
 - Added opt-in test API hook in `src/main.js`:
   - New `attachTestApiIfEnabled()` exposes `window.__NB_TEST_API` when `localStorage.neuralbox_test_api=1` or `?nb_test=1`.
@@ -136,6 +285,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run test:browser:lifecycle` against local preview server on `http://127.0.0.1:4173` (pass)
 
 ### 2026-04-08 - Tap event dedupe helper for mobile interaction stability
+
 - Continued deep-scan execution for mobile interaction correctness and duplicate touch/click handling.
 - Added shared event utility: `src/lib/events.js`
   - `bindTap()` unifies click + touchend handling and suppresses synthetic click duplication after touch.
@@ -161,6 +311,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Generation lifecycle hardening (cancellation + switch fallback)
+
 - Continued deep-scan execution for model-switch fallback and generation cancellation consistency.
 - Added new generation helper module: `src/lib/generation.js`
   - `isGenerationInterrupted()` for cancellation/interruption checks.
@@ -190,6 +341,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Composer lifecycle refactor and coverage
+
 - Continued deep-scan execution on send/stop lifecycle robustness.
 - Added new shared composer helper module: `src/lib/composer.js`
   - `resolvePrimaryComposerAction()` centralizes send vs stop vs no-op behavior.
@@ -217,6 +369,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - UI encoding hardening and ASCII guard
+
 - Continued deep-scan execution on UI corruption risk ("random characters" / mojibake symptoms).
 - Replaced non-ASCII separators in runtime UI strings:
   - `src/main.js`: replaced bullet/em-dash separators with ASCII-safe `|` and `-` in workbench and start-screen status text.
@@ -234,6 +387,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Trust metadata module extraction and validation
+
 - Continued deep-scan execution with focused P1 refactor completion:
   - Extracted trust-layer renderer from `src/main.js` into `src/lib/trust.js`.
   - Updated `src/main.js` to import `renderTrustMetaHtml` from shared trust module.
@@ -252,6 +406,7 @@ Last Updated: 2026-04-09 (America/St_Johns)
   - `npm run build` (pass)
 
 ### 2026-04-08 - Stability deepscan execution (P0 start)
+
 - Ran repo-wide deep scan and validated current baseline:
   - `npm run build`
   - `npm run test:stability`

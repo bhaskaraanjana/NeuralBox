@@ -1,4 +1,4 @@
-﻿import { chromium } from 'playwright';
+import { chromium } from 'playwright';
 
 const baseUrl = process.env.BASE_URL || 'http://127.0.0.1:4173';
 
@@ -8,8 +8,8 @@ function assert(condition, message) {
   }
 }
 
-const browser = await chromium.launch({ headless: true });
-const context = await browser.newContext({ acceptDownloads: true });
+const browser = await chromium.launch({ headless: true, args: ['--ignore-certificate-errors'] });
+const context = await browser.newContext({ acceptDownloads: true, ignoreHTTPSErrors: true });
 
 const errors = [];
 context.on('page', (page) => {
@@ -70,6 +70,7 @@ await page.waitForFunction(() => {
   const panel = document.querySelector('#settings-panel');
   return Boolean(panel && panel.classList.contains('open'));
 });
+await page.waitForSelector('#model-select', { state: 'attached', timeout: 15000 });
 
 const pendingManualSwitch = await page.evaluate(() => {
   const select = document.querySelector('#model-select');
