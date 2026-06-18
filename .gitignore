@@ -7,3 +7,5 @@ dist/
 .shots/
 .shots-mobile/
 doc/.presentation_assets/
+
+.vercel
