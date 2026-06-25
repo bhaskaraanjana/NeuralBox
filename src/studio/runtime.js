@@ -65,65 +65,91 @@ function resolveDtype(dtype, device) {
 // ---- Progress aggregation -----------------------------------
 
 // transformers.js fires per-file events; we roll them into one honest
-// 0-100% with an explicit lifecycle phase. The phase matters: between
-// "all files downloaded" and "pipeline resolved" the library compiles /
-// warms the model and emits NO events at all, so without a phase the bar
-// looks frozen at 100%. We surface that as a 'preparing' phase instead.
+// 0-100% with an explicit lifecycle phase.
 //
-// Phases: 'connecting' (runtime import / no file events yet) →
-//         'downloading' (bytes moving) → 'preparing' (compile/warmup) →
-//         'ready'.
+// The hard truths about the real event stream (verified against the library)
+// that dictate this design — and the exact symptoms each caused:
+//
+//  1. Files arrive in WAVES, not all up front. A model loads tiny config /
+//     tokenizer JSON first (done in <1s), and only THEN announces the big
+//     multi-hundred-MB weight files. So "every file I've heard about is done"
+//     is NOT "the download is finished" — usually it's just the end of the JSON
+//     wave. A few KB of JSON reading as 100%/95% (then frozen there while the
+//     real weights silently download) is the "stuck at a random number" bug.
+//
+//  2. The denominator is unknowable up front, so any percentage over a partial
+//     file set lies. We therefore only show a real PERCENTAGE once the known
+//     bytes are weight-sized (> MEANINGFUL_BYTES). Until then — JSON wave, or a
+//     file served without Content-Length — we stay INDETERMINATE and report the
+//     bytes downloaded instead of a fake %. This never invents a number it
+//     can't back up, and the denominator that does drive the bar is stable
+//     (weight files are announced together), so the % only rises.
+//
+//  3. The library compiles the ONNX session with NO events, in the gap between
+//     the last file 'done' and the 'ready' event. We can't measure it, so once
+//     every known file is done (and real bytes have arrived) we go indeterminate
+//     "Preparing…" rather than freezing the bar. A brief same-state flash during
+//     a between-waves gap is harmless; the bar animates instead of looking hung.
+//
+// Phases: 'connecting' (no file events yet) → 'downloading' (bytes moving) →
+//         'preparing' (all known files done; compiling/warming, no events) →
+//         'ready' (pipeline resolved — signalled by the library's 'ready').
+//
+// Weight files are always well over a megabyte; no tokenizer/config bundle here
+// is. So this cleanly separates "still fetching tiny metadata" from "fetching
+// real weights" without guessing the file list or relying on timers.
+const MEANINGFUL_BYTES = 2 * 1024 * 1024;
+
 function makeProgress(onProgress) {
     if (typeof onProgress !== 'function') return undefined;
     const files = new Map(); // file -> { loaded, total, done }
-    let lastPct = 0;
     let sawReady = false;
+    let dlFloor = 0; // monotonic floor, only within a continuous determinate run
 
     const emit = (status, file) => {
-        let loaded = 0, total = 0, allDone = files.size > 0;
+        let loaded = 0, total = 0;
+        let allDone = files.size > 0;
         for (const f of files.values()) {
             loaded += f.loaded;
             if (f.total > 0) total += f.total;
             if (!f.done) allDone = false;
         }
 
+        // Phase.
         let phase;
         if (sawReady) phase = 'ready';
         else if (files.size === 0) phase = 'connecting';
-        else if (allDone) phase = 'preparing'; // downloads done; compiling/warming
+        else if (allDone && loaded >= MEANINGFUL_BYTES) phase = 'preparing';
         else phase = 'downloading';
 
-        let pct;
+        // Percentage + whether it's trustworthy enough to render as a number.
+        // Determinate only while actively downloading a weight-sized payload with
+        // a known total. Everything else animates indeterminately.
+        let pct = 0;
+        let determinate = false;
         if (phase === 'ready') {
             pct = 100;
-        } else if (phase === 'connecting') {
-            pct = lastPct; // nothing measurable yet — bar shows indeterminate
-        } else if (total > 0) {
-            pct = Math.round((loaded / total) * 100);
+        } else if (phase === 'downloading' && total >= MEANINGFUL_BYTES && !allDone) {
+            pct = Math.min(99, Math.round((loaded / total) * 100));
+            if (pct < dlFloor) pct = dlFloor; else dlFloor = pct; // stable denom → only rises
+            determinate = true;
         } else {
-            pct = lastPct;
+            dlFloor = 0; // reset so a later determinate run starts honest
         }
-        // Be honest: 100% means the model is actually ready to run. Two cases
-        // produce a false 100% mid-load — (a) files served without a
-        // Content-Length report loaded === total on every tick, and (b) once
-        // every byte is in, the 'preparing' (compile/warmup) phase still has
-        // real work left. Cap below 100 until we truly see 'ready'.
-        if (phase !== 'ready') pct = Math.min(pct, 99);
-        pct = Math.max(0, Math.min(100, pct));
-        if (pct >= lastPct || phase === 'ready') lastPct = pct;
 
-        onProgress({ status, phase, pct: lastPct, file: file || '', loaded, total, files: files.size });
+        onProgress({ status, phase, pct, determinate, loaded, total, file: file || '' });
     };
 
     return (e) => {
         const status = e.status;
-        if (e.file) {
-            // Register the file as soon as we hear about it (initiate/download),
-            // so we leave the 0% "connecting" state the moment work begins.
+        if (e.file && status !== 'ready') {
+            // Register on first sighting (initiate/download) so we leave the
+            // 0% "connecting" state the moment real work begins. Re-initiate of
+            // an already-seen file keeps its accumulated bytes (a no-op here).
             if (!files.has(e.file)) files.set(e.file, { loaded: 0, total: 0, done: false });
             const f = files.get(e.file);
             if (status === 'progress') {
-                if (typeof e.loaded === 'number') f.loaded = e.loaded;
+                if (typeof e.loaded === 'number' && e.loaded > f.loaded) f.loaded = e.loaded;
                 if (typeof e.total === 'number' && e.total > 0) f.total = e.total;
             } else if (status === 'done') {
                 f.done = true;

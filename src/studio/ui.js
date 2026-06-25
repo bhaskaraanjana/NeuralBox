@@ -137,7 +137,7 @@ export function loader(title = 'Loading model') {
     // Stall watchdog: if neither the % nor the phase changes for a while,
     // the load is likely wedged (blocked fetch, COEP, offline, dead CDN).
     // We surface that instead of spinning forever with no signal.
-    let lastPct = -1, lastPhase = '', lastChange = Date.now(), stalled = false, done = false;
+    let lastPct = -1, lastPhase = '', lastActivityKey = '', lastChange = Date.now(), stalled = false, done = false;
     const STALL_MS = 12000;
     const stallTimer = setInterval(() => {
         if (done) return;
@@ -160,24 +160,29 @@ export function loader(title = 'Loading model') {
         progress(p) {
             const pct = typeof p === 'number' ? p : (p?.pct ?? 0);
             const phase = p?.phase || '';
-            if (pct !== lastPct || phase !== lastPhase) bumpActivity();
+            // The runtime tells us whether the % is trustworthy to render as a
+            // number; anything else animates indeterminately (never a fake/frozen
+            // number). A bare numeric arg (legacy callers) is treated as measured.
+            const cached = p?.cached;
+            const ready = p?.status === 'ready' || phase === 'ready' || (typeof p === 'number' && pct >= 100);
+            const measuring = !ready && !cached && (typeof p === 'number' ? pct > 0 : !!p?.determinate);
+
+            // Activity = the bar visibly moved. For indeterminate phases the bar
+            // is always animating, so bytes-in counts as activity too.
+            const activityKey = measuring ? `m${pct}` : `${phase}:${p?.loaded || 0}`;
+            if (activityKey !== lastActivityKey) bumpActivity();
+            lastActivityKey = activityKey;
             lastPct = pct; lastPhase = phase;
 
-            const cached = p?.cached;
-            const ready = p?.status === 'ready' || phase === 'ready' || pct >= 100;
-            // Indeterminate (animated track, no number) whenever we have no real
-            // measurement: connecting, cached flash, or the compile/warmup phase.
-            const measuring = phase === 'downloading' || (pct > 0 && pct < 100 && !cached && phase !== 'preparing' && phase !== 'connecting');
             setIndeterminate(!measuring && !ready);
-
             fill.style.width = ready ? '100%' : (measuring ? `${pct}%` : '');
             pctEl.textContent = measuring ? `${pct}%` : '';
 
             if (cached) status.textContent = 'Loaded from cache';
             else if (ready) status.textContent = 'Warming up…';
             else if (phase === 'preparing') status.textContent = 'Preparing model (compiling)…';
-            else if (phase === 'downloading' || measuring) status.textContent = 'Downloading model… ' + bytesNote(p);
-            else status.textContent = 'Connecting…';
+            else if (phase === 'connecting' || (!measuring && (p?.loaded || 0) <= 0)) status.textContent = 'Connecting…';
+            else status.textContent = 'Downloading model… ' + bytesNote(p);
         },
         status(text) { if (!stalled) status.textContent = text; },
         fail(err) {
@@ -190,10 +195,12 @@ export function loader(title = 'Loading model') {
     };
 }
 
-/** "(34 / 88 MB)" once we know the total; "(34 MB)" while still sizing up. */
+/** "(34 / 88 MB)" once we know the total; "(34 MB)" while still sizing up.
+ *  Below ~0.1 MB (the tiny JSON-config wave) there's nothing worth showing —
+ *  return '' so the status reads as a clean "Downloading model…". */
 function bytesNote(p) {
     const loaded = p?.loaded || 0;
-    if (loaded <= 0) return '';
+    if (loaded < 0.1 * 1048576) return '';
     const mb = (n) => (n / 1048576).toFixed(n < 10485760 ? 1 : 0);
     return p?.total > 0 ? `(${mb(loaded)} / ${mb(p.total)} MB)` : `(${mb(loaded)} MB)`;
 }
