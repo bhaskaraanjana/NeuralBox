@@ -341,11 +341,35 @@ select:focus-visible,
 /* Loader */
 .sx-loader { background: var(--bg-1); border: 1px solid var(--line-1); border-radius: var(--radius-md); padding: 18px; max-width: 420px; }
 .sx-loader-head { display: flex; align-items: center; gap: 10px; color: var(--text-0); font-size: 0.96rem; margin-bottom: 6px; }
-.sx-loader-status { font-size: 0.82rem; color: var(--text-3); margin-bottom: 10px; }
-.sx-loader-track { height: 8px; border-radius: 999px; background: var(--bg-3); overflow: hidden; }
+.sx-loader-status { font-size: 0.82rem; color: var(--text-3); margin-bottom: 10px; line-height: 1.4; }
+.sx-loader-track { position: relative; height: 8px; border-radius: 999px; background: var(--bg-3); overflow: hidden; }
 .sx-loader-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #fff)); transition: width 0.25s ease; }
-.sx-loader-pct { display: block; text-align: right; font-family: var(--font-mono); font-size: 0.76rem; color: var(--text-2); margin-top: 6px; }
+.sx-loader-pct { display: block; text-align: right; font-family: var(--font-mono); font-size: 0.76rem; color: var(--text-2); margin-top: 6px; min-height: 1em; }
+
+/* Indeterminate: no measurable %, so animate a sliding sliver instead of
+   a frozen bar (connecting + compile/warmup phases). */
+.sx-loader-indeterminate .sx-loader-fill {
+    width: 35% !important;
+    border-radius: 999px;
+    animation: sx-loader-slide 1.2s ease-in-out infinite;
+}
+@keyframes sx-loader-slide {
+    0% { margin-left: -35%; }
+    100% { margin-left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .sx-loader-indeterminate .sx-loader-fill { animation: sx-loader-pulse 1.6s ease-in-out infinite; margin-left: 0; width: 100% !important; transform-origin: left; }
+    @keyframes sx-loader-pulse { 0%,100% { opacity: 0.35; } 50% { opacity: 0.85; } }
+}
+
+/* Stalled: load hasn't advanced in a while — warn without erroring. */
+.sx-loader-stalled { border-color: color-mix(in srgb, var(--warn, #e0a030) 55%, var(--line-1)); }
+.sx-loader-stalled .sx-loader-status { color: var(--warn, #e0a030); }
+.sx-loader-stalled .sx-loader-fill { animation-duration: 2s; opacity: 0.6; }
+
+.sx-loader-error { border-color: color-mix(in srgb, var(--err) 55%, var(--line-1)); }
 .sx-loader-error .sx-loader-status { color: var(--err); }
+.sx-loader-error .sx-loader-fill { animation: none; background: var(--err); width: 100% !important; opacity: 0.5; }
 
 /* Score bars */
 .sx-bars { display: flex; flex-direction: column; gap: 10px; }

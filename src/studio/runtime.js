@@ -64,25 +64,74 @@ function resolveDtype(dtype, device) {
 
 // ---- Progress aggregation -----------------------------------
 
-// transformers.js fires per-file events; we roll them into one 0-100%.
+// transformers.js fires per-file events; we roll them into one honest
+// 0-100% with an explicit lifecycle phase. The phase matters: between
+// "all files downloaded" and "pipeline resolved" the library compiles /
+// warms the model and emits NO events at all, so without a phase the bar
+// looks frozen at 100%. We surface that as a 'preparing' phase instead.
+//
+// Phases: 'connecting' (runtime import / no file events yet) →
+//         'downloading' (bytes moving) → 'preparing' (compile/warmup) →
+//         'ready'.
 function makeProgress(onProgress) {
     if (typeof onProgress !== 'function') return undefined;
-    const files = new Map();
+    const files = new Map(); // file -> { loaded, total, done }
     let lastPct = 0;
-    return (e) => {
-        if (e.status === 'progress' && e.file) {
-            files.set(e.file, { loaded: e.loaded || 0, total: e.total || 0 });
-        } else if (e.status === 'done' && e.file && files.has(e.file)) {
-            const f = files.get(e.file);
-            files.set(e.file, { loaded: f.total, total: f.total });
+    let sawReady = false;
+
+    const emit = (status, file) => {
+        let loaded = 0, total = 0, allDone = files.size > 0;
+        for (const f of files.values()) {
+            loaded += f.loaded;
+            if (f.total > 0) total += f.total;
+            if (!f.done) allDone = false;
         }
-        let loaded = 0, total = 0;
-        for (const f of files.values()) { loaded += f.loaded; total += f.total; }
-        let pct = total > 0 ? Math.round((loaded / total) * 100) : lastPct;
-        if (e.status === 'ready') pct = 100;
+
+        let phase;
+        if (sawReady) phase = 'ready';
+        else if (files.size === 0) phase = 'connecting';
+        else if (allDone) phase = 'preparing'; // downloads done; compiling/warming
+        else phase = 'downloading';
+
+        let pct;
+        if (phase === 'ready') {
+            pct = 100;
+        } else if (phase === 'connecting') {
+            pct = lastPct; // nothing measurable yet — bar shows indeterminate
+        } else if (total > 0) {
+            pct = Math.round((loaded / total) * 100);
+        } else {
+            pct = lastPct;
+        }
+        // Be honest: 100% means the model is actually ready to run. Two cases
+        // produce a false 100% mid-load — (a) files served without a
+        // Content-Length report loaded === total on every tick, and (b) once
+        // every byte is in, the 'preparing' (compile/warmup) phase still has
+        // real work left. Cap below 100 until we truly see 'ready'.
+        if (phase !== 'ready') pct = Math.min(pct, 99);
         pct = Math.max(0, Math.min(100, pct));
-        if (pct >= lastPct || e.status === 'ready') lastPct = pct;
-        onProgress({ status: e.status, pct: lastPct, file: e.file || '', name: e.name, loaded, total });
+        if (pct >= lastPct || phase === 'ready') lastPct = pct;
+
+        onProgress({ status, phase, pct: lastPct, file: file || '', loaded, total, files: files.size });
+    };
+
+    return (e) => {
+        const status = e.status;
+        if (e.file) {
+            // Register the file as soon as we hear about it (initiate/download),
+            // so we leave the 0% "connecting" state the moment work begins.
+            if (!files.has(e.file)) files.set(e.file, { loaded: 0, total: 0, done: false });
+            const f = files.get(e.file);
+            if (status === 'progress') {
+                if (typeof e.loaded === 'number') f.loaded = e.loaded;
+                if (typeof e.total === 'number' && e.total > 0) f.total = e.total;
+            } else if (status === 'done') {
+                f.done = true;
+                if (f.total > 0) f.loaded = f.total;
+            }
+        }
+        if (status === 'ready') sawReady = true;
+        emit(status, e.file);
     };
 }
 
@@ -120,6 +169,9 @@ export async function loadPipeline(spec, onProgress) {
         onProgress?.({ status: 'ready', pct: 100, cached: true });
         return _cache.get(key);
     }
+    // Signal immediately so the UI leaves 0% during the runtime import + request
+    // setup window (which fires no file events of its own).
+    onProgress?.({ status: 'connecting', phase: 'connecting', pct: 0 });
     const { pipeline } = await loadLib();
     const p = pipeline(spec.task, spec.model, {
         dtype,
@@ -150,6 +202,7 @@ export async function loadAutoModel(spec, onProgress) {
         onProgress?.({ status: 'ready', pct: 100, cached: true });
         return _cache.get(key);
     }
+    onProgress?.({ status: 'connecting', phase: 'connecting', pct: 0 });
     const { AutoModel, AutoProcessor } = await loadLib();
     const pc = makeProgress(onProgress);
     const res = (async () => {

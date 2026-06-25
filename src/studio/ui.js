@@ -118,34 +118,102 @@ export function spinner() {
     return el('span', { class: 'sx-spinner', html: '<svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="40 60"/></svg>' });
 }
 
-/** A model-loading card with an aggregated progress bar. */
+/** A model-loading card with an aggregated progress bar.
+ *  Honest about every phase: connecting (indeterminate), downloading
+ *  (measured %), preparing (compile/warmup — no events, indeterminate),
+ *  and stalls (no progress for a while → a hint + how to recover). */
 export function loader(title = 'Loading model') {
-    const status = el('div', { class: 'sx-loader-status' }, 'Preparing…');
+    const status = el('div', { class: 'sx-loader-status' }, 'Connecting…');
     const fill = el('div', { class: 'sx-loader-fill' });
-    const pctEl = el('span', { class: 'sx-loader-pct' }, '0%');
-    const root = el('div', { class: 'sx-loader' },
+    const pctEl = el('span', { class: 'sx-loader-pct' }, '');
+    const track = el('div', { class: 'sx-loader-track' }, fill);
+    const root = el('div', { class: 'sx-loader sx-loader-indeterminate' },
         el('div', { class: 'sx-loader-head' }, spinner(), el('strong', {}, title)),
         status,
-        el('div', { class: 'sx-loader-track' }, fill),
+        track,
         pctEl,
     );
+
+    // Stall watchdog: if neither the % nor the phase changes for a while,
+    // the load is likely wedged (blocked fetch, COEP, offline, dead CDN).
+    // We surface that instead of spinning forever with no signal.
+    let lastPct = -1, lastPhase = '', lastChange = Date.now(), stalled = false, done = false;
+    const STALL_MS = 12000;
+    const stallTimer = setInterval(() => {
+        if (done) return;
+        if (Date.now() - lastChange > STALL_MS && !stalled) {
+            stalled = true;
+            root.classList.add('sx-loader-stalled');
+            status.innerHTML = 'Still working… if this is stuck, check your connection, '
+                + 'disable ad/script blockers for this site, or reload.';
+        }
+    }, 2000);
+    const bumpActivity = () => {
+        lastChange = Date.now();
+        if (stalled) { stalled = false; root.classList.remove('sx-loader-stalled'); }
+    };
+
+    const setIndeterminate = (on) => root.classList.toggle('sx-loader-indeterminate', on);
+
     return {
         el: root,
         progress(p) {
             const pct = typeof p === 'number' ? p : (p?.pct ?? 0);
-            fill.style.width = `${pct}%`;
-            pctEl.textContent = `${pct}%`;
-            if (p?.status === 'ready' || pct >= 100) status.textContent = 'Warming up…';
-            else if (p?.cached) status.textContent = 'Loaded from cache';
-            else status.textContent = pct > 0 ? 'Downloading model…' : 'Connecting…';
+            const phase = p?.phase || '';
+            if (pct !== lastPct || phase !== lastPhase) bumpActivity();
+            lastPct = pct; lastPhase = phase;
+
+            const cached = p?.cached;
+            const ready = p?.status === 'ready' || phase === 'ready' || pct >= 100;
+            // Indeterminate (animated track, no number) whenever we have no real
+            // measurement: connecting, cached flash, or the compile/warmup phase.
+            const measuring = phase === 'downloading' || (pct > 0 && pct < 100 && !cached && phase !== 'preparing' && phase !== 'connecting');
+            setIndeterminate(!measuring && !ready);
+
+            fill.style.width = ready ? '100%' : (measuring ? `${pct}%` : '');
+            pctEl.textContent = measuring ? `${pct}%` : '';
+
+            if (cached) status.textContent = 'Loaded from cache';
+            else if (ready) status.textContent = 'Warming up…';
+            else if (phase === 'preparing') status.textContent = 'Preparing model (compiling)…';
+            else if (phase === 'downloading' || measuring) status.textContent = 'Downloading model… ' + bytesNote(p);
+            else status.textContent = 'Connecting…';
         },
-        status(text) { status.textContent = text; },
+        status(text) { if (!stalled) status.textContent = text; },
         fail(err) {
+            done = true; clearInterval(stallTimer);
             root.classList.add('sx-loader-error');
-            status.textContent = String(err?.message || err || 'Failed to load');
+            root.classList.remove('sx-loader-indeterminate', 'sx-loader-stalled');
+            status.textContent = friendlyError(err);
         },
-        remove() { root.remove(); },
+        remove() { done = true; clearInterval(stallTimer); root.remove(); },
     };
+}
+
+/** "(34 / 88 MB)" once we know the total; "(34 MB)" while still sizing up. */
+function bytesNote(p) {
+    const loaded = p?.loaded || 0;
+    if (loaded <= 0) return '';
+    const mb = (n) => (n / 1048576).toFixed(n < 10485760 ? 1 : 0);
+    return p?.total > 0 ? `(${mb(loaded)} / ${mb(p.total)} MB)` : `(${mb(loaded)} MB)`;
+}
+
+/** Turn a raw load/runtime error into something a user can act on. */
+function friendlyError(err) {
+    const msg = String(err?.message || err || 'Failed to load');
+    if (/Failed to fetch|NetworkError|ERR_|load failed/i.test(msg))
+        return 'Network error while downloading the model. Check your connection or any ad/script blocker, then try again.';
+    if (/Unauthorized|401|403|gated/i.test(msg))
+        return 'This model could not be fetched (access restricted). Try a different model.';
+    if (/404|not found/i.test(msg))
+        return 'Model files not found. This model may have moved — try a different one.';
+    if (/quota|QuotaExceeded|storage/i.test(msg))
+        return 'Out of browser storage for the model cache. Free up space or clear site data, then retry.';
+    if (/out of memory|OOM|allocation|device lost/i.test(msg))
+        return 'Ran out of memory loading this model. Try a smaller/faster tier or close other tabs.';
+    if (/no available backend|wasm|webgpu/i.test(msg))
+        return 'Could not start the model backend on this device. Reload and try again.';
+    return msg;
 }
 
 /** Horizontal score bars for classification-style results. items:[{label,score}] */
