@@ -196,7 +196,7 @@ export async function isCached(spec) {
     const device = _webgpuBlocklist.has(spec.model) ? 'wasm' : resolveDevice(spec, probed);
     const dtype = resolveDtype(spec.dtype, device);
     return _cache.has(`pipe:${spec.task}:${spec.model}:${device}:${dtype}`)
-        || _cache.has(`auto:${spec.model}:${device}:${dtype}`);
+        || _cache.has(`auto:${spec.modelClass || 'AutoModel'}:${spec.model}:${device}:${dtype}`);
 }
 
 // How long the silent post-download compile may run on WebGPU before we give up
@@ -314,9 +314,12 @@ export async function loadPipeline(spec, onProgress) {
 }
 
 /**
- * Load a raw AutoModel + AutoProcessor pair for tasks that have no
- * standard pipeline (e.g. RMBG background removal). Same WebGPU→WASM fallback.
- * spec: { model, processor?, dtype?, device?, modelOptions? }
+ * Load a raw model + AutoProcessor pair for tasks that have no standard
+ * pipeline (e.g. RMBG background removal, pyannote speaker diarization).
+ * Same WebGPU→WASM fallback.
+ * spec: { model, processor?, dtype?, device?, modelOptions?, modelClass? }
+ *   modelClass — name of the transformers.js class to load with (e.g.
+ *     'AutoModelForAudioFrameClassification'); defaults to 'AutoModel'.
  * Returns { model, processor, device }.
  */
 export async function loadAutoModel(spec, onProgress) {
@@ -324,15 +327,18 @@ export async function loadAutoModel(spec, onProgress) {
     const forceWasm = _webgpuBlocklist.has(spec.model);
     const device = forceWasm ? 'wasm' : resolveDevice(spec, probed);
     const dtype = resolveDtype(spec.dtype, device);
-    const key = `auto:${spec.model}:${device}:${dtype}`;
+    const key = `auto:${spec.modelClass || 'AutoModel'}:${spec.model}:${device}:${dtype}`;
     if (_cache.has(key)) {
         onProgress?.({ status: 'ready', pct: 100, cached: true });
         return _cache.get(key);
     }
-    const { AutoModel, AutoProcessor } = await loadLib();
+    const lib = await loadLib();
+    const ModelClass = lib[spec.modelClass || 'AutoModel'];
+    if (!ModelClass) throw new Error(`Unknown model class: ${spec.modelClass}`);
+    const { AutoProcessor } = lib;
     const make = (dev, pc) => (async () => {
         const [model, processor] = await Promise.all([
-            AutoModel.from_pretrained(spec.model, { dtype: resolveDtype(spec.dtype, dev), device: dev, progress_callback: pc, ...(spec.modelOptions || {}) }),
+            ModelClass.from_pretrained(spec.model, { dtype: resolveDtype(spec.dtype, dev), device: dev, progress_callback: pc, ...(spec.modelOptions || {}) }),
             AutoProcessor.from_pretrained(spec.processor || spec.model, { progress_callback: pc }),
         ]);
         return { model, processor, device: dev };

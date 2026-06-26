@@ -321,6 +321,11 @@ select:focus-visible,
 .sx-input::placeholder, .sx-textarea::placeholder { color: var(--text-3); }
 .sx-select { appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%238d9cbb' stroke-width='2' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 38px; }
 
+/* Toggle row (checkbox + label), e.g. "Identify speakers" */
+.sx-toggle-row { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 11px 14px; border-radius: var(--radius-md); border: 1px solid var(--line-1); background: var(--bg-1); font-size: 0.92rem; color: var(--text-0); transition: border 0.18s; }
+.sx-toggle-row:hover { border-color: var(--line-2); }
+.sx-checkbox { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent); cursor: pointer; margin: 0; }
+
 .sx-segmented { display: inline-flex; gap: 4px; padding: 4px; background: var(--bg-1); border: 1px solid var(--line-1); border-radius: var(--radius-md); flex-wrap: wrap; }
 .sx-seg { font-family: var(--font-ui); font-size: 0.86rem; font-weight: 600; color: var(--text-2); background: none; border: none; padding: 8px 14px; border-radius: 9px; cursor: pointer; transition: background 0.16s, color 0.16s; }
 .sx-seg:hover { color: var(--text-0); }

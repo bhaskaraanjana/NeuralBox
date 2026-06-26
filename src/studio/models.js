@@ -41,6 +41,9 @@ export const M = {
     asrBaseMulti: { task: 'automatic-speech-recognition', model: 'onnx-community/whisper-base', dtype: d('fp16', 'q8'), size: '~145 MB' },
     ttsKokoro: { model: 'onnx-community/Kokoro-82M-v1.0-ONNX', size: '~86 MB' }, // kokoro-js
     audAst: { task: 'audio-classification', model: 'Xenova/ast-finetuned-audioset-10-10-0.4593', dtype: d('fp32', 'q8'), size: '~120 MB' },
+    // Speaker diarization (who-spoke-when). AutoModelForAudioFrameClassification
+    // + processor.post_process_speaker_diarization(). fp32 only (tiny model).
+    diarPyannote: { model: 'onnx-community/pyannote-segmentation-3.0', modelClass: 'AutoModelForAudioFrameClassification', dtype: d('fp32', 'fp32'), size: '~6 MB' },
 
     // ---- Language ----
     txtSentiment: { task: 'text-classification', model: 'Xenova/distilbert-base-uncased-finetuned-sst-2-english', dtype: d('fp16', 'q8'), size: '~67 MB' },
