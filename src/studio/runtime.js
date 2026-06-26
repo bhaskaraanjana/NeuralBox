@@ -104,7 +104,6 @@ function makeProgress(onProgress) {
     if (typeof onProgress !== 'function') return undefined;
     const files = new Map(); // file -> { loaded, total, done }
     let sawReady = false;
-    let dlFloor = 0; // monotonic floor, only within a continuous determinate run
 
     const emit = (status, file) => {
         let loaded = 0, total = 0;
@@ -123,18 +122,25 @@ function makeProgress(onProgress) {
         else phase = 'downloading';
 
         // Percentage + whether it's trustworthy enough to render as a number.
-        // Determinate only while actively downloading a weight-sized payload with
-        // a known total. Everything else animates indeterminately.
+        // Determinate ONLY while a weight-sized payload with a known total is
+        // genuinely still in flight (loaded < total). Two reasons for the strict
+        // gate, both real bugs we hit:
+        //   - loaded === total means the known files just finished a wave; the
+        //     next (bigger) wave isn't announced yet, so a "100%" here is false.
+        //     Going indeterminate avoids a premature 99 that then sticks.
+        //   - No monotonic floor: bytes downloaded only grow, so loaded/total is
+        //     already monotonic *within* a denominator. The denominator itself
+        //     grows as later files are announced (2.6 → 25 → 76 MB), and a floor
+        //     would freeze the bar at the first wave's % for the whole download.
+        // The byte readout (loaded/total MB) carries the detail when we're
+        // indeterminate, so the user always sees real movement.
         let pct = 0;
         let determinate = false;
         if (phase === 'ready') {
             pct = 100;
-        } else if (phase === 'downloading' && total >= MEANINGFUL_BYTES && !allDone) {
-            pct = Math.min(99, Math.round((loaded / total) * 100));
-            if (pct < dlFloor) pct = dlFloor; else dlFloor = pct; // stable denom → only rises
+        } else if (phase === 'downloading' && total >= MEANINGFUL_BYTES && loaded < total) {
+            pct = Math.max(0, Math.min(99, Math.round((loaded / total) * 100)));
             determinate = true;
-        } else {
-            dlFloor = 0; // reset so a later determinate run starts honest
         }
 
         onProgress({ status, phase, pct, determinate, loaded, total, file: file || '' });
