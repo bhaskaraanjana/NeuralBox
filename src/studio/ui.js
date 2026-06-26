@@ -134,17 +134,27 @@ export function loader(title = 'Loading model') {
         pctEl,
     );
 
-    // Stall watchdog: if neither the % nor the phase changes for a while,
-    // the load is likely wedged (blocked fetch, COEP, offline, dead CDN).
-    // We surface that instead of spinning forever with no signal.
-    let lastPct = -1, lastPhase = '', lastActivityKey = '', lastChange = Date.now(), stalled = false, done = false;
-    const STALL_MS = 12000;
+    // Stall watchdog — phase-aware, because "no events for a while" means very
+    // different things at different stages, and phones make the difference stark:
+    //   • connecting / downloading: silence = likely wedged (blocked fetch, COEP,
+    //     offline, dead CDN). Warn with how to recover.
+    //   • preparing: the library compiles the model with NO events, and on a phone
+    //     (WASM, no WebGPU) that can legitimately run 30–60s. Warning "you're
+    //     stuck, reload" here is a FALSE alarm that throws away a healthy load —
+    //     so we stay patient and only add a calm "still working" reassurance.
+    let lastPhase = '', lastActivityKey = '', lastChange = Date.now(), stalled = false, done = false;
     const stallTimer = setInterval(() => {
-        if (done) return;
-        if (Date.now() - lastChange > STALL_MS && !stalled) {
+        if (done || stalled) return;
+        const preparing = lastPhase === 'preparing';
+        const limit = preparing ? 75000 : 15000; // phones compile slowly; be patient
+        if (Date.now() - lastChange <= limit) return;
+        if (preparing) {
+            // Not an error state — just reassure, keep the calm animation.
+            status.textContent = 'Still preparing… large models take a moment on phones.';
+        } else {
             stalled = true;
             root.classList.add('sx-loader-stalled');
-            status.innerHTML = 'Still working… if this is stuck, check your connection, '
+            status.innerHTML = 'Still working… if this seems stuck, check your connection, '
                 + 'disable ad/script blockers for this site, or reload.';
         }
     }, 2000);
@@ -172,7 +182,7 @@ export function loader(title = 'Loading model') {
             const activityKey = measuring ? `m${pct}` : `${phase}:${p?.loaded || 0}`;
             if (activityKey !== lastActivityKey) bumpActivity();
             lastActivityKey = activityKey;
-            lastPct = pct; lastPhase = phase;
+            lastPhase = phase;
 
             setIndeterminate(!measuring && !ready);
             fill.style.width = ready ? '100%' : (measuring ? `${pct}%` : '');

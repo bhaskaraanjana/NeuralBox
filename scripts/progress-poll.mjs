@@ -33,8 +33,21 @@ let browser;
 try {
   await waitForServer(baseUrl);
   browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ ignoreHTTPSErrors: true });
+  // PHONE=1 emulates a mobile device: narrow viewport, touch, mobile UA. Phones
+  // have no usable WebGPU in most browsers, so this also exercises the WASM path.
+  const phone = process.env.PHONE === '1';
+  const context = await browser.newContext({
+    ignoreHTTPSErrors: true,
+    ...(phone ? {
+      viewport: { width: 390, height: 844 }, // iPhone 14-ish
+      deviceScaleFactor: 3,
+      isMobile: true,
+      hasTouch: true,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    } : {}),
+  });
   const page = await context.newPage();
+  if (phone) console.log('  (emulating phone: 390×844, touch, mobile UA, WASM path)');
   // Clear the transformers cache so we always see a real download.
   await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(async () => {
@@ -78,6 +91,16 @@ try {
     await sleep(150);
   }
 
+  // On phones, verify nothing overflows the viewport horizontally (a classic
+  // mobile bug: a wide loader/pane forcing a horizontal scrollbar).
+  let overflow = null;
+  if (phone) {
+    overflow = await page.evaluate(() => ({
+      docWidth: document.documentElement.scrollWidth,
+      winWidth: window.innerWidth,
+    })).catch(() => null);
+  }
+
   console.log(`\n## ${STUDIO} — loader trail (cold cache)`);
   for (const l of trail) console.log('  ' + l);
 
@@ -95,6 +118,11 @@ try {
     ['ended ready (loader removed)', trail.some((l) => l.includes('DONE'))],
     ['no error/stall', !trail.some((l) => /ERROR|STALL/.test(l))],
   ];
+  if (phone && overflow) {
+    const fits = overflow.docWidth <= overflow.winWidth + 1; // allow sub-pixel rounding
+    console.log(`  layout: doc ${overflow.docWidth}px vs viewport ${overflow.winWidth}px`);
+    checks.push([`no horizontal overflow on phone`, fits]);
+  }
   let ok = true;
   for (const [label, pass] of checks) { console.log(`  ${pass ? '✅' : '❌'} ${label}`); if (!pass) ok = false; }
   console.log(ok ? '\nPASS' : '\nFAIL');
