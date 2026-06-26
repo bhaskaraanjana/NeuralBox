@@ -165,11 +165,28 @@ export function loader(title = 'Loading model') {
 
     const setIndeterminate = (on) => root.classList.toggle('sx-loader-indeterminate', on);
 
+    // Set once the runtime falls back WebGPU→WASM, so the status stays honest
+    // ("Switched to compatibility mode…") through the fresh WASM download/compile.
+    let fellBack = false;
+
     return {
         el: root,
         progress(p) {
             const pct = typeof p === 'number' ? p : (p?.pct ?? 0);
             const phase = p?.phase || '';
+
+            // The runtime gave up on WebGPU and is retrying on WASM. Reset the
+            // bar (a new download is starting) and remember so the message stays
+            // truthful for the rest of the load.
+            if (p?.status === 'fallback') {
+                fellBack = true;
+                lastActivityKey = ''; bumpActivity();
+                setIndeterminate(true);
+                fill.style.width = ''; pctEl.textContent = '';
+                status.textContent = 'GPU mode failed — switching to compatibility mode…';
+                return;
+            }
+
             // The runtime tells us whether the % is trustworthy to render as a
             // number; anything else animates indeterminately (never a fake/frozen
             // number). A bare numeric arg (legacy callers) is treated as measured.
@@ -188,11 +205,12 @@ export function loader(title = 'Loading model') {
             fill.style.width = ready ? '100%' : (measuring ? `${pct}%` : '');
             pctEl.textContent = measuring ? `${pct}%` : '';
 
+            const cm = fellBack ? ' (compatibility mode)' : '';
             if (cached) status.textContent = 'Loaded from cache';
             else if (ready) status.textContent = 'Warming up…';
-            else if (phase === 'preparing') status.textContent = 'Preparing model (compiling)…';
+            else if (phase === 'preparing') status.textContent = 'Preparing model (compiling)…' + cm;
             else if (phase === 'connecting' || (!measuring && (p?.loaded || 0) <= 0)) status.textContent = 'Connecting…';
-            else status.textContent = 'Downloading model… ' + bytesNote(p);
+            else status.textContent = 'Downloading model… ' + bytesNote(p) + cm;
         },
         status(text) { if (!stalled) status.textContent = text; },
         fail(err) {

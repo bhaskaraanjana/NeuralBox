@@ -180,21 +180,89 @@ export function aggregateProgress(onProgress) {
 
 const _cache = new Map();
 
+// Models whose WebGPU load failed (errored or stalled in the silent compile
+// step) once this session. We don't retry WebGPU for them — go straight to
+// WASM, which is reliable. Keyed by model id. This is the missing half of the
+// "works on any device" promise: pickDevice() only probes the ADAPTER, but a
+// WebGPU load can still fail AFTER the adapter is acquired, during onnxruntime
+// session creation (verified: Whisper hangs/throws on WebGPU here, loads in
+// ~6s on WASM). Without this, the loader faithfully reports a backend that
+// never finishes — the "stuck at compiling" report.
+const _webgpuBlocklist = new Set();
+
 /** True if this exact spec is already resident (no download needed). */
 export async function isCached(spec) {
-    const device = resolveDevice(spec, await pickDevice());
+    const probed = await pickDevice();
+    const device = _webgpuBlocklist.has(spec.model) ? 'wasm' : resolveDevice(spec, probed);
     const dtype = resolveDtype(spec.dtype, device);
     return _cache.has(`pipe:${spec.task}:${spec.model}:${device}:${dtype}`)
         || _cache.has(`auto:${spec.model}:${device}:${dtype}`);
+}
+
+// How long the silent post-download compile may run on WebGPU before we give up
+// and fall back to WASM. The compile fires NO events, so a genuine hang is
+// indistinguishable from slow work except by time. WebGPU compiles that succeed
+// are fast (sub-10s here); a stall means the session is wedged. WASM is exempt —
+// there's nothing to fall back TO, and a slow phone CPU compile is legitimate.
+const WEBGPU_COMPILE_BUDGET_MS = 25000;
+
+/**
+ * Run one load attempt on a specific device, racing the silent WebGPU compile
+ * phase against a stall budget. `start(onProg)` kicks off the underlying load
+ * and returns its promise; we watch the normalized progress to know when the
+ * download is done and the (event-less) compile has begun.
+ * Resolves to the loaded value, or rejects with a tagged error so the caller
+ * can decide whether to fall back.
+ */
+function attemptLoad(device, start, onProgress) {
+    let onCompile = null;
+    let compileTimer = null;
+    const armBudget = () => {
+        if (device !== 'webgpu' || compileTimer) return;
+        compileTimer = setTimeout(() => {
+            const e = new Error('WebGPU compile exceeded budget');
+            e.code = 'WEBGPU_STALL';
+            onCompile?.(e);
+        }, WEBGPU_COMPILE_BUDGET_MS);
+        if (typeof compileTimer?.unref === 'function') compileTimer.unref();
+    };
+    const pc = makeProgress((p) => {
+        // 'preparing' = downloads done, compile started → start the stall clock.
+        if (p.phase === 'preparing') armBudget();
+        onProgress?.(p);
+    });
+    const loadP = start(pc);
+    if (device !== 'webgpu') return loadP;
+    // Race the actual load against the compile-stall signal.
+    const stallP = new Promise((_, reject) => { onCompile = reject; });
+    // If the stall budget wins the race, the underlying WebGPU load promise is
+    // abandoned but stays pending — and may later reject (e.g. the wedged
+    // session finally throws). Swallow that so it can't surface as an unhandled
+    // rejection after we've already fallen back to WASM.
+    loadP.catch(() => {});
+    return Promise.race([loadP, stallP]).finally(() => { if (compileTimer) clearTimeout(compileTimer); });
+}
+
+/** Heuristic: is this a WebGPU-backend failure worth retrying on WASM? */
+function isWebgpuFailure(err) {
+    if (err?.code === 'WEBGPU_STALL') return true;
+    const m = String(err?.message || err || '');
+    // onnxruntime/WebGPU session-creation failures: opaque numeric pointers,
+    // device-lost, allocation, backend/provider errors.
+    return /^\d+$/.test(m.trim())
+        || /webgpu|device lost|gpu|adapter|gpubuffer|out of memory|allocation|no available backend|execution provider|session/i.test(m);
 }
 
 /**
  * Load (and cache) a transformers.js pipeline.
  * spec: { task, model, dtype?: string|{webgpu,wasm}, device?: 'auto'|'webgpu'|'wasm', options? }
  * Returns the ready pipeline. Concurrent calls for the same spec share one load.
+ * Falls back WebGPU→WASM if the WebGPU session fails or stalls compiling.
  */
 export async function loadPipeline(spec, onProgress) {
-    const device = resolveDevice(spec, await pickDevice());
+    const probed = await pickDevice();
+    const forceWasm = _webgpuBlocklist.has(spec.model);
+    const device = forceWasm ? 'wasm' : resolveDevice(spec, probed);
     const dtype = resolveDtype(spec.dtype, device);
     const key = `pipe:${spec.task}:${spec.model}:${device}:${dtype}`;
     if (_cache.has(key)) {
@@ -205,29 +273,40 @@ export async function loadPipeline(spec, onProgress) {
     // setup window (which fires no file events of its own).
     onProgress?.({ status: 'connecting', phase: 'connecting', pct: 0 });
     const { pipeline } = await loadLib();
-    const p = pipeline(spec.task, spec.model, {
-        dtype,
-        device,
-        progress_callback: makeProgress(onProgress),
-        ...(spec.options || {}),
-    });
+
+    const p = attemptLoad(device,
+        (pc) => pipeline(spec.task, spec.model, { dtype, device, progress_callback: pc, ...(spec.options || {}) }),
+        onProgress);
     _cache.set(key, p);
     try {
         return await p;
     } catch (err) {
         _cache.delete(key);
+        if (device === 'webgpu' && isWebgpuFailure(err)) {
+            _webgpuBlocklist.add(spec.model);
+            const wasmDtype = resolveDtype(spec.dtype, 'wasm');
+            const wasmKey = `pipe:${spec.task}:${spec.model}:wasm:${wasmDtype}`;
+            onProgress?.({ status: 'fallback', phase: 'connecting', pct: 0, fallback: 'wasm' });
+            const wp = attemptLoad('wasm',
+                (pc) => pipeline(spec.task, spec.model, { dtype: wasmDtype, device: 'wasm', progress_callback: pc, ...(spec.options || {}) }),
+                onProgress);
+            _cache.set(wasmKey, wp);
+            try { return await wp; } catch (err2) { _cache.delete(wasmKey); throw err2; }
+        }
         throw err;
     }
 }
 
 /**
  * Load a raw AutoModel + AutoProcessor pair for tasks that have no
- * standard pipeline (e.g. RMBG background removal).
+ * standard pipeline (e.g. RMBG background removal). Same WebGPU→WASM fallback.
  * spec: { model, processor?, dtype?, device?, modelOptions? }
  * Returns { model, processor, device }.
  */
 export async function loadAutoModel(spec, onProgress) {
-    const device = resolveDevice(spec, await pickDevice());
+    const probed = await pickDevice();
+    const forceWasm = _webgpuBlocklist.has(spec.model);
+    const device = forceWasm ? 'wasm' : resolveDevice(spec, probed);
     const dtype = resolveDtype(spec.dtype, device);
     const key = `auto:${spec.model}:${device}:${dtype}`;
     if (_cache.has(key)) {
@@ -236,19 +315,30 @@ export async function loadAutoModel(spec, onProgress) {
     }
     onProgress?.({ status: 'connecting', phase: 'connecting', pct: 0 });
     const { AutoModel, AutoProcessor } = await loadLib();
-    const pc = makeProgress(onProgress);
-    const res = (async () => {
+
+    const build = (dev, dt) => attemptLoad(dev, (pc) => (async () => {
         const [model, processor] = await Promise.all([
-            AutoModel.from_pretrained(spec.model, { dtype, device, progress_callback: pc, ...(spec.modelOptions || {}) }),
+            AutoModel.from_pretrained(spec.model, { dtype: dt, device: dev, progress_callback: pc, ...(spec.modelOptions || {}) }),
             AutoProcessor.from_pretrained(spec.processor || spec.model, { progress_callback: pc }),
         ]);
-        return { model, processor, device };
-    })();
+        return { model, processor, device: dev };
+    })(), onProgress);
+
+    const res = build(device, dtype);
     _cache.set(key, res);
     try {
         return await res;
     } catch (err) {
         _cache.delete(key);
+        if (device === 'webgpu' && isWebgpuFailure(err)) {
+            _webgpuBlocklist.add(spec.model);
+            const wasmDtype = resolveDtype(spec.dtype, 'wasm');
+            const wasmKey = `auto:${spec.model}:wasm:${wasmDtype}`;
+            onProgress?.({ status: 'fallback', phase: 'connecting', pct: 0, fallback: 'wasm' });
+            const wres = build('wasm', wasmDtype);
+            _cache.set(wasmKey, wres);
+            try { return await wres; } catch (err2) { _cache.delete(wasmKey); throw err2; }
+        }
         throw err;
     }
 }
