@@ -5,6 +5,7 @@
 import { el, clear, button, field, textarea, segmented, badge, loader, copyButton, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 // One model per style tier; runtime picks device + dtype from the {webgpu,wasm} object.
 const STYLES = {
@@ -60,6 +61,30 @@ export default function mount(host, ctx) {
         if (input.value.trim()) run();
     });
 
+    const batch = batchPanel({
+        kind: 'text',
+        combinedName: 'summaries',
+        process: async (item) => {
+            const summarizer = await ensureModel();
+            const out = await summarizer(item.text, { max_new_tokens: maxTokens });
+            return (out?.[0]?.summary_text || '').trim();
+        },
+        renderResult: (summary, item) => {
+            const wrap = el('div', {});
+            wrap.append(el('div', { class: 'sx-result' }, summary || '(no summary produced)'));
+            const inWords = countWords(item.text || '');
+            const outWords = countWords(summary);
+            const pct = inWords ? Math.round((1 - outWords / inWords) * 100) : 0;
+            wrap.append(el('div', { class: 'sx-muted', style: { marginTop: '10px' } },
+                `${inWords} words → ${outWords} words` + (pct > 0 ? ` · ${pct}% shorter` : '')));
+            return wrap;
+        },
+        exportItem: (summary, item) => ({
+            name: (item.name || 'item') + '.txt',
+            data: summary || '',
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📰 Source text'),
         field('', input, 'Runs entirely in your browser — text never leaves your device.'),
@@ -68,6 +93,7 @@ export default function mount(host, ctx) {
         el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
         loaderSlot,
+        batch.el,
     );
 
     const placeholder = el('div', { class: 'sx-placeholder' },
@@ -144,4 +170,6 @@ export default function mount(host, ctx) {
     // Warm the currently-selected model on mount so the first run is instant.
     // The loader surfaces progress/errors; the pipeline cache dedupes with a later run.
     ensureModel().catch(() => {});
+
+    return () => { batch.destroy?.(); };
 }

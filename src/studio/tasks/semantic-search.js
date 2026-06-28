@@ -67,9 +67,39 @@ export default function mount(host, ctx) {
         ...SAMPLE_QUERIES.map((q) => chip(q, () => { queryInput.value = q; run(); })),
     );
 
+    // Multi-file corpus loader: append each uploaded text file's contents as
+    // documents. A blank line in a file separates documents; otherwise the whole
+    // file is one document. Appends to whatever is already in the textarea.
+    const corpusFileInput = el('input', { type: 'file', accept: '.txt,.csv,.md,.json,text/*', multiple: true, style: { display: 'none' } });
+    corpusFileInput.addEventListener('change', async () => {
+        const files = Array.from(corpusFileInput.files || []);
+        corpusFileInput.value = '';
+        if (!files.length) return;
+        let added = 0;
+        for (const f of files) {
+            try {
+                const raw = (await f.text()).trim();
+                if (!raw) continue;
+                // Split on blank lines into documents; fall back to one doc per file.
+                const docs = raw.includes('\n\n')
+                    ? raw.split(/\n\s*\n/).map((d) => d.replace(/\s+/g, ' ').trim()).filter(Boolean)
+                    : [raw.replace(/\s+/g, ' ').trim()];
+                const existing = docsInput.value.trim();
+                docsInput.value = (existing ? existing + '\n' : '') + docs.join('\n');
+                added += docs.length;
+            } catch (_) { /* skip unreadable file */ }
+        }
+        if (added) toast(`Added ${added} document${added === 1 ? '' : 's'} from ${files.length} file${files.length === 1 ? '' : 's'}`, 'success');
+    });
+    const corpusRow = el('div', { class: 'sx-row', style: { marginTop: '8px' } },
+        button('Load text files into corpus', { variant: 'ghost', onClick: () => corpusFileInput.click() }),
+        corpusFileInput,
+    );
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📚 Corpus'),
         field('Documents (one per line)', docsInput),
+        corpusRow,
         field('Query', queryInput),
         queryRow,
         field('Quality', qualityToggle, 'BGE uses a retrieval prompt on the query; GTE and MiniLM are lighter'),

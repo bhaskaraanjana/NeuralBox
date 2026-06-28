@@ -4,6 +4,7 @@
 import { el, clear, button, field, textarea, loader, scoreBars, chip, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const MODEL = M.txtEmotion;
 
@@ -35,6 +36,32 @@ export default function mount(host, ctx) {
         el('div', {}, 'The emotional tone will appear here'),
     );
 
+    const batch = batchPanel({
+        kind: 'text',
+        combinedName: 'emotions',
+        process: async (item) => {
+            await ensureModel();
+            return await classifier(item.text, { top_k: null }); // [{label,score}] all 7
+        },
+        renderResult: (all, item) => {
+            const sorted = all.slice().sort((a, b) => b.score - a.score);
+            const wrap = el('div', {});
+            const preview = String(item.text || '').replace(/\s+/g, ' ').trim();
+            wrap.append(el('div', { class: 'sx-muted', style: { marginBottom: '10px' } },
+                preview.length > 120 ? preview.slice(0, 120) + '…' : preview));
+            wrap.append(scoreBars(sorted.map((e) => ({ label: `${EMOJI[e.label] || ''} ${e.label}`, score: e.score }))));
+            return wrap;
+        },
+        exportItem: (all, item) => {
+            const sorted = all.slice().sort((a, b) => b.score - a.score);
+            const lines = sorted.map((e) => `${e.label}\t${(e.score * 100).toFixed(1)}%`).join('\n');
+            return {
+                name: (item.name || 'item') + '.txt',
+                data: `${sorted[0].label}\n${lines}`,
+            };
+        },
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '✍️ Text'),
         field('', input),
@@ -42,6 +69,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '12px' } }),
         runBtn,
         loaderSlot,
+        batch.el,
     );
     const output = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '🎭 Emotion'),
@@ -91,4 +119,6 @@ export default function mount(host, ctx) {
 
     // Warm the model on mount so it downloads while the user prepares input.
     ensureModel().catch(() => {});
+
+    return () => { batch.destroy?.(); };
 }

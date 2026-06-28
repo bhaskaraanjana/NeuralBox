@@ -6,6 +6,7 @@
 import { el, clear, button, field, textarea, select, loader, copyButton, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 // Each direction maps to a separate Xenova opus-mt repo (direction baked in).
 const DIRECTIONS = [
@@ -57,6 +58,27 @@ export default function mount(host, ctx) {
         ensurePipe(currentDir()).catch(() => {});
     });
 
+    const batch = batchPanel({
+        kind: 'text',
+        combinedName: 'translations',
+        process: async (item) => {
+            const dir = currentDir();
+            const t = await ensurePipe(dir);
+            const out = await t(item.text);
+            return out?.[0]?.translation_text || '';
+        },
+        renderResult: (translation, item) => {
+            const wrap = el('div', {});
+            wrap.append(el('div', { class: 'sx-muted', style: { fontSize: '0.85rem', marginBottom: '8px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, title: item.text }, item.text));
+            wrap.append(el('div', { class: 'sx-result' }, translation || '—'));
+            return wrap;
+        },
+        exportItem: (translation, item) => ({
+            name: (item.name || 'item') + '.txt',
+            data: translation,
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '🗣️ Source'),
         field('Direction', dirSelect, 'Each direction is a dedicated Helsinki OPUS-MT model.'),
@@ -64,6 +86,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '12px' } }),
         runBtn,
         loaderSlot,
+        batch.el,
     );
 
     const output = el('div', { class: 'sx-pane' },
@@ -133,4 +156,6 @@ export default function mount(host, ctx) {
     // Warm the currently-selected direction's model on mount so the model
     // downloads while the user prepares input and the first run is instant.
     ensurePipe(currentDir()).catch(() => {});
+
+    return () => { batch.destroy?.(); };
 }

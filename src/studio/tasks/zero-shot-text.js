@@ -6,6 +6,7 @@
 import { el, clear, button, field, textarea, textInput, segmented, loader, scoreBars, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const SPECS = {
     fast: {
@@ -54,6 +55,29 @@ export default function mount(host, ctx) {
     const loaderSlot = el('div');
     const runBtn = button('Classify text', { variant: 'primary', full: true, onClick: run });
 
+    const batch = batchPanel({
+        kind: 'text',
+        combinedName: 'classified',
+        process: async (item) => {
+            const labels = parseLabels();
+            if (labels.length < 2) throw new Error('Add at least two candidate labels first');
+            const classifier = await ensureModel();
+            return await classifier(item.text, labels, { multi_label: multiLabel });
+        },
+        renderResult: (out, item) => {
+            const wrap = el('div', {});
+            const input = String(item.text || '');
+            const shown = input.length > 160 ? input.slice(0, 160) + '…' : input;
+            wrap.append(el('div', { class: 'sx-muted', style: { fontSize: '0.85rem', marginBottom: '8px' } }, shown));
+            wrap.append(scoreBars(out.labels.map((label, i) => ({ label, score: out.scores[i] }))));
+            return wrap;
+        },
+        exportItem: (out, item) => ({
+            name: (item.name || 'item') + '.txt',
+            data: String(item.text || '') + '\n' + out.labels.map((label, i) => `${label}\t${(out.scores[i] * 100).toFixed(1)}%`).join('\n'),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '✍️ Text'),
         field('', input),
@@ -64,6 +88,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '12px' } }),
         runBtn,
         loaderSlot,
+        batch.el,
     );
 
     // ---- Output ----
@@ -145,5 +170,5 @@ export default function mount(host, ctx) {
     // Warm the currently-selected model on mount so the first run is instant.
     ensureModel().catch(() => {});
 
-    return () => { /* nothing to tear down */ };
+    return () => { batch.destroy?.(); };
 }

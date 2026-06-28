@@ -6,6 +6,7 @@
 import { el, clear, button, field, textarea, textInput, loader, chip, badge, segmented, toast, escapeHtml } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const SPECS = {
     fast: {
@@ -57,6 +58,37 @@ export default function mount(host, ctx) {
         el('div', {}, 'The answer will appear here, highlighted in the text'),
     );
 
+    // Batch: ask the SAME question (from the question input above) over many
+    // files/lines — each item is a separate context passage.
+    const batch = batchPanel({
+        kind: 'text',
+        combinedName: 'answers',
+        label: 'Batch — answer this question over many files',
+        process: async (item) => {
+            const q = question.value.trim();
+            if (!q) throw new Error('Enter a question first');
+            const qa = await ensureModel();
+            const out = await qa(q, item.text); // { answer, score, start?, end? }
+            return out;
+        },
+        renderResult: (out, item) => {
+            const wrap = el('div', {});
+            const hasAnswer = !!(out.answer && out.answer.trim());
+            const box = el('div', { class: 'sx-result-big', style: { fontSize: '1.1rem' } },
+                el('span', {}, hasAnswer ? out.answer : '(no answer found in the text)'),
+                el('span', { class: 'sx-muted', style: { fontSize: '0.85rem', marginLeft: '10px' } }, `${Math.round((out.score || 0) * 100)}% confident`),
+            );
+            wrap.append(box);
+            const snippet = String(item.text || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+            wrap.append(el('div', { class: 'sx-muted', style: { marginTop: '8px', fontSize: '0.85rem' } }, `${item.name} — ${snippet}${snippet.length >= 160 ? '…' : ''}`));
+            return wrap;
+        },
+        exportItem: (out, item) => ({
+            name: (item.name || 'item') + '.txt',
+            data: `Q: ${question.value.trim()}\nA: ${out.answer || '(no answer)'} (${Math.round((out.score || 0) * 100)}%)`,
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📄 Context'),
         field('', context),
@@ -66,6 +98,7 @@ export default function mount(host, ctx) {
         el('div', { class: 'sx-row', style: { margin: '12px 0' } }, el('span', { class: 'sx-muted' }, 'Model:'), modelBadge),
         runBtn,
         loaderSlot,
+        batch.el,
     );
 
     const output = el('div', { class: 'sx-pane' },
@@ -142,4 +175,6 @@ export default function mount(host, ctx) {
     // Warm the currently-selected model on mount so it downloads while the user
     // prepares input and the first run is instant (loader surfaces any error).
     ensureModel().catch(() => {});
+
+    return () => { batch.destroy?.(); };
 }

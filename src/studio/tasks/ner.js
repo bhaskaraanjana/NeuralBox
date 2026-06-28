@@ -6,6 +6,7 @@
 import { el, clear, button, field, textarea, loader, badge, toast, escapeHtml } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const MODEL = M.ner;
 
@@ -70,6 +71,55 @@ function highlightSentence(text, spans) {
     });
 }
 
+// Build the grouped entity chips (People / Organizations / …) from spans.
+// Shared by the single-run output and the batch row so both render identically.
+// Returns an array of per-type group elements (empty if no entities).
+function buildGroupChips(spans) {
+    const byType = {};
+    for (const s of spans) (byType[s.type] ||= []).push(s);
+    const out = [];
+    for (const type of TYPE_ORDER) {
+        const items = byType[type];
+        if (!items?.length) continue;
+        const c = TYPE_COLOR[type];
+        const chips = items.map((s) => el('span', {
+            class: 'sx-badge',
+            title: `${Math.round(s.score * 100)}% confident`,
+            style: { borderColor: `${c}66`, color: c, background: `${c}14`, textTransform: 'none' },
+        }, s.text));
+        out.push(el('div', {},
+            el('div', { class: 'sx-mono sx-muted', style: { marginBottom: '6px' } }, `${TYPE_LABEL[type]} · ${items.length}`),
+            el('div', { class: 'sx-row' }, ...chips),
+        ));
+    }
+    return out;
+}
+
+// Render a self-contained result element (highlighted sentence + counts + grouped
+// chips) from raw sub-token output. Used by the batch runner's renderResult.
+function renderEntities(text, out) {
+    const spans = mergeSpans(out);
+    const wrap = el('div', {});
+    const sentence = el('div', { class: 'sx-result' });
+    sentence.innerHTML = highlightSentence(text, spans);
+    wrap.append(sentence);
+    if (!spans.length) {
+        wrap.append(el('div', { class: 'sx-muted', style: { marginTop: '14px' } }, 'No named entities found in this text.'));
+        return wrap;
+    }
+    const total = spans.length;
+    wrap.append(
+        el('div', { class: 'sx-muted', style: { marginTop: '14px' } }, `Found ${total} entit${total === 1 ? 'y' : 'ies'}.`),
+        el('div', { class: 'sx-stack', style: { marginTop: '16px' } }, ...buildGroupChips(spans)),
+    );
+    return wrap;
+}
+
+// Flatten grouped spans into "TYPE: word" lines for plain-text export.
+function spansToText(spans) {
+    return spans.map((s) => `${s.type}: ${s.text}`).join('\n');
+}
+
 export default function mount(host, ctx) {
     let pipe = null;
 
@@ -97,6 +147,22 @@ export default function mount(host, ctx) {
         el('div', {}, 'Entities will be highlighted here'),
     );
 
+    // Multi-file batch: process many text files (one item per file) or pasted
+    // lines. Reuses the same grouping/highlight render as the single-run path.
+    const batch = batchPanel({
+        kind: 'text',
+        combinedName: 'entities',
+        process: async (item) => {
+            await ensureModel();
+            return await pipe(item.text); // raw per-sub-token output
+        },
+        renderResult: (out, item) => renderEntities(item.text, out),
+        exportItem: (out, item) => ({
+            name: (item.name || 'item') + '.txt',
+            data: spansToText(mergeSpans(out)),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '✍️ Text'),
         field('', input),
@@ -105,6 +171,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '12px' } }),
         runBtn,
         loaderSlot,
+        batch.el,
     );
 
     const output = el('div', { class: 'sx-pane' },
@@ -125,22 +192,7 @@ export default function mount(host, ctx) {
 
     function renderGroups(spans) {
         clear(groups);
-        const byType = {};
-        for (const s of spans) (byType[s.type] ||= []).push(s);
-        for (const type of TYPE_ORDER) {
-            const items = byType[type];
-            if (!items?.length) continue;
-            const c = TYPE_COLOR[type];
-            const chips = items.map((s) => el('span', {
-                class: 'sx-badge',
-                title: `${Math.round(s.score * 100)}% confident`,
-                style: { borderColor: `${c}66`, color: c, background: `${c}14`, textTransform: 'none' },
-            }, s.text));
-            groups.append(el('div', {},
-                el('div', { class: 'sx-mono sx-muted', style: { marginBottom: '6px' } }, `${TYPE_LABEL[type]} · ${items.length}`),
-                el('div', { class: 'sx-row' }, ...chips),
-            ));
-        }
+        groups.append(...buildGroupChips(spans));
     }
 
     async function run() {
@@ -182,4 +234,6 @@ export default function mount(host, ctx) {
     // and the first run is instant. The loader surfaces progress/errors; the
     // pipeline cache dedupes so warming + a later run won't double-download.
     ensureModel().catch(() => {});
+
+    return () => { batch.destroy?.(); };
 }

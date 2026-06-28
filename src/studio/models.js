@@ -56,9 +56,11 @@ export const M = {
     zstDeberta: { task: 'zero-shot-classification', model: 'Xenova/nli-deberta-v3-small', dtype: d('fp16', 'q8'), size: '~172 MB' },
     qaDistilbert: { task: 'question-answering', model: 'Xenova/distilbert-base-cased-distilled-squad', dtype: d('fp16', 'q8'), size: '~67 MB' },
     qaRoberta: { task: 'question-answering', model: 'onnx-community/roberta-base-squad2-ONNX', dtype: d('fp16', 'q8'), size: '~125 MB' },
-    sumCnn66: { task: 'summarization', model: 'Xenova/distilbart-cnn-6-6', dtype: d('fp16', 'q8'), size: '~145 MB' },
-    sumCnn126: { task: 'summarization', model: 'Xenova/distilbart-cnn-12-6', dtype: d('fp16', 'q8'), size: '~360 MB' },
-    sumXsum126: { task: 'summarization', model: 'Xenova/distilbart-xsum-12-6', dtype: d('fp16', 'q8'), size: '~360 MB' },
+    // distilBART aborts on WebGPU inference (opaque onnxruntime error) — pin to
+    // WASM, which is reliable. See [[webgpu-inference-aborts]].
+    sumCnn66: { task: 'summarization', model: 'Xenova/distilbart-cnn-6-6', dtype: d('fp16', 'q8'), size: '~145 MB', device: 'wasm' },
+    sumCnn126: { task: 'summarization', model: 'Xenova/distilbart-cnn-12-6', dtype: d('fp16', 'q8'), size: '~360 MB', device: 'wasm' },
+    sumXsum126: { task: 'summarization', model: 'Xenova/distilbart-xsum-12-6', dtype: d('fp16', 'q8'), size: '~360 MB', device: 'wasm' },
     embBge: { task: 'feature-extraction', model: 'Xenova/bge-small-en-v1.5', dtype: d('fp32', 'q8'), size: '~34 MB', queryPrefix: 'Represent this sentence for searching relevant passages: ' },
     embGte: { task: 'feature-extraction', model: 'Xenova/gte-small', dtype: d('fp32', 'q8'), size: '~34 MB' },
     embMini: { task: 'feature-extraction', model: 'Xenova/all-MiniLM-L6-v2', dtype: d('fp32', 'q8'), size: '~23 MB' },

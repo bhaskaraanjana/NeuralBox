@@ -6,6 +6,7 @@
 import { el, clear, button, field, textInput, loader, scoreBars, chip, badge, toast } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const MODEL = M.fillMask;
 const MASK = '[MASK]';
@@ -36,6 +37,32 @@ export default function mount(host, ctx) {
     const loaderSlot = el('div');
     const runBtn = button('Fill the blank', { variant: 'primary', full: true, onClick: run });
 
+    const batch = batchPanel({
+        kind: 'text',
+        combinedName: 'fill-mask',
+        process: async (item) => {
+            await ensureModel();
+            const text = String(item.text || '');
+            // Single-run uses the literal [MASK] token; mirror that here.
+            if (!text.includes(MASK)) throw new Error('No [MASK] token');
+            return await unmasker(text, { top_k: 5 });
+        },
+        renderResult: (preds, item) => {
+            const wrap = el('div', {});
+            wrap.append(el('div', { class: 'sx-muted', style: { marginBottom: '8px' } }, String(item.text || '')));
+            wrap.append(scoreBars(preds.map((p) => ({
+                label: (p.token_str || '').trim() || '∅',
+                score: p.score,
+            }))));
+            return wrap;
+        },
+        exportItem: (preds, item) => ({
+            name: (item.name || 'item') + '.txt',
+            data: String(item.text || '') + '\n' +
+                preds.map((p) => `${(p.token_str || '').trim() || '∅'}\t${(p.score * 100).toFixed(1)}%`).join('\n'),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '✍️ Sentence'),
         field('', input, 'Write the blank exactly as [MASK] — uppercase, in brackets.'),
@@ -44,6 +71,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '12px' } }),
         runBtn,
         loaderSlot,
+        batch.el,
     );
 
     // ---- Output ----
@@ -152,5 +180,5 @@ export default function mount(host, ctx) {
     // the loader surfaces progress/errors; a later run reuses the cached pipeline.
     ensureModel().catch(() => {});
 
-    return () => { /* nothing to tear down */ };
+    return () => { batch.destroy?.(); };
 }
