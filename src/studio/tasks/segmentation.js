@@ -5,6 +5,7 @@
 import { el, clear, button, field, loader, segmented, imageInput, badge, labelColor, toast } from '../ui.js';
 import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const SPECS = {
     fast: {
@@ -91,6 +92,14 @@ export default function mount(host, ctx) {
         onImage: (url) => setImage(url),
     });
 
+    const batch = batchPanel({
+        kind: 'image',
+        combinedName: 'segments',
+        process,
+        renderResult,
+        exportItem,
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
@@ -101,6 +110,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '10px' } }),
         liveBtn,
         loaderSlot,
+        batch.el,
     );
 
     const output = el('div', { class: 'sx-pane' },
@@ -179,9 +189,9 @@ export default function mount(host, ctx) {
         cx.putImageData(out, 0, 0);
     }
 
-    function renderList(segments) {
-        clear(list);
-        if (!segments.length) { list.append(el('div', { class: 'sx-muted' }, 'No segments detected.')); return; }
+    // Build the colored class-label chip row (shared by the single-run list
+    // and the batch result rows).
+    function segmentChips(segments) {
         const sorted = [...segments].sort((a, b) => (b.score || 0) - (a.score || 0));
         const chips = sorted.map((s) => {
             const pct = typeof s.score === 'number' ? ` ${Math.round(s.score * 100)}%` : '';
@@ -190,7 +200,13 @@ export default function mount(host, ctx) {
                 style: { borderColor: labelColor(s.label, 0.6), color: labelColor(s.label) },
             }, `${s.label}${pct}`);
         });
-        list.append(el('div', { class: 'sx-row' }, ...chips));
+        return el('div', { class: 'sx-row' }, ...chips);
+    }
+
+    function renderList(segments) {
+        clear(list);
+        if (!segments.length) { list.append(el('div', { class: 'sx-muted' }, 'No segments detected.')); return; }
+        list.append(segmentChips(segments));
     }
 
     async function runOnce() {
@@ -210,6 +226,95 @@ export default function mount(host, ctx) {
             busy = false;
             runBtn.disabled = false;
         }
+    }
+
+    // ---- Batch (multi-file) ----
+    // Decode an object URL into an HTMLImageElement so a batch item can both
+    // run the segmenter AND composite a self-contained mask canvas.
+    function loadImage(url) {
+        return new Promise((resolve, reject) => {
+            const im = new Image();
+            im.crossOrigin = 'anonymous';
+            im.onload = () => resolve(im);
+            im.onerror = () => reject(new Error('Could not decode image'));
+            im.src = url;
+        });
+    }
+
+    // Composite the source image with the colored segment mask onto a fresh,
+    // self-contained canvas (the single-run `paint` targets the shared overlay,
+    // so the batch needs its own). Mirrors paint's argmax-by-occupancy logic.
+    function composite(image, segments) {
+        const canvas = el('canvas');
+        canvas.width = image.naturalWidth || image.width;
+        canvas.height = image.naturalHeight || image.height;
+        const cx = canvas.getContext('2d');
+        cx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        if (segments.length) {
+            const w = segments[0].mask.width;
+            const h = segments[0].mask.height;
+            const mc = el('canvas');
+            mc.width = w; mc.height = h;
+            const mx = mc.getContext('2d');
+            const out = mx.createImageData(w, h);
+            const data = out.data;
+            const best = new Uint8Array(w * h);
+            const a = Math.round(Math.max(0, Math.min(1, opacity)) * 255);
+            for (const seg of segments) {
+                const [r, g, b] = seg._rgb || (seg._rgb = colorRGB(seg.label));
+                const m = seg.mask.data;
+                const n = Math.min(m.length, w * h);
+                for (let i = 0; i < n; i++) {
+                    const v = m[i];
+                    if (v > 127 && v >= best[i]) {
+                        best[i] = v;
+                        const j = i * 4;
+                        data[j] = r; data[j + 1] = g; data[j + 2] = b; data[j + 3] = a;
+                    }
+                }
+            }
+            mx.putImageData(out, 0, 0);
+            cx.imageSmoothingEnabled = false;
+            cx.drawImage(mc, 0, 0, canvas.width, canvas.height);
+        }
+        return canvas;
+    }
+
+    async function process(item) {
+        const segmenter = await ensureModel();
+        const url = URL.createObjectURL(item.file);
+        try {
+            const image = await loadImage(url);
+            const segments = await segmenter(url); // [{score, label, mask:RawImage}]
+            const canvas = composite(image, segments);
+            // Pre-bake the PNG blob now (exportItem is called synchronously by the runner).
+            const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+            return { segments, canvas, blob };
+        } finally {
+            setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }
+    }
+
+    function renderResult(result, item) {
+        const wrap = el('div', {});
+        result.canvas.style.maxWidth = '100%';
+        result.canvas.style.borderRadius = '8px';
+        result.canvas.style.display = 'block';
+        result.canvas.style.marginBottom = '10px';
+        wrap.append(result.canvas);
+        if (result.segments.length) {
+            wrap.append(segmentChips(result.segments));
+        } else {
+            wrap.append(el('div', { class: 'sx-muted' }, 'No segments detected.'));
+        }
+        return wrap;
+    }
+
+    function exportItem(result, item) {
+        return {
+            name: item.name.replace(/\.[^.]+$/, '') + '-segments.png',
+            data: result.blob,
+        };
     }
 
     // ---- Live camera ----
@@ -267,5 +372,5 @@ export default function mount(host, ctx) {
     // (the loader surfaces progress/errors; deduped via the runtime cache).
     ensureModel().catch(() => {});
 
-    return () => { stopLive(); picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); batch.destroy?.(); };
 }

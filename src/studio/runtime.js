@@ -288,6 +288,13 @@ function loadWithFallback(device, make, model, onProgress) {
  * spec: { task, model, dtype?: string|{webgpu,wasm}, device?: 'auto'|'webgpu'|'wasm', options? }
  * Returns the ready pipeline. Concurrent calls for the same spec share one load.
  * Falls back WebGPU→WASM if the WebGPU session fails or stalls compiling.
+ *
+ * NOTE: some architectures LOAD fine on WebGPU then ABORT during inference with
+ * an opaque onnxruntime error (verified: OWL-ViT, SegFormer). That can't be
+ * rescued in-page — the abort poisons the shared onnxruntime WASM module, so a
+ * later same-page reload on WASM fails too; only a fresh page with WASM-from-the-
+ * start works. So those models are pinned to `device: 'wasm'` in the catalog,
+ * which routes them here straight to the WASM path. See models.js.
  */
 export async function loadPipeline(spec, onProgress) {
     const probed = await pickDevice();

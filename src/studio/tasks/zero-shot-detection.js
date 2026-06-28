@@ -5,6 +5,7 @@
 import { el, clear, button, field, textInput, loader, segmented, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const SPECS = {
     fast: {
@@ -68,6 +69,31 @@ export default function mount(host, ctx) {
     fileInput.addEventListener('change', () => { if (fileInput.files?.length) setImage(URL.createObjectURL(fileInput.files[0])); fileInput.value = ''; });
     const uploadBtn = button('Upload image', { variant: 'ghost', onClick: () => fileInput.click() });
 
+    const batch = batchPanel({
+        kind: 'image',
+        combinedName: 'detections',
+        process: async (item) => {
+            const detector = await ensureModel();
+            const labels = labelsInput.value.split(',').map((s) => s.trim()).filter(Boolean);
+            const url = URL.createObjectURL(item.file);
+            try { return await detector(url, labels, { topk: 12, threshold: 0.1 }); }
+            finally { setTimeout(() => URL.revokeObjectURL(url), 2000); }
+        },
+        renderResult: (out, item) => {
+            const wrap = el('div', {});
+            wrap.append(el('img', { src: URL.createObjectURL(item.file), style: { maxWidth: '100%', borderRadius: '8px', marginBottom: '10px' } }));
+            wrap.append(el('div', { class: 'sx-muted', style: { marginBottom: '8px' } }, `Found ${out.length} match${out.length === 1 ? '' : 'es'}.`));
+            const chips = el('div', { class: 'sx-row', style: { flexWrap: 'wrap', gap: '6px' } });
+            for (const d of out) chips.append(badge(`${d.label} ${Math.round(d.score * 100)}%`, 'accent'));
+            wrap.append(chips);
+            return wrap;
+        },
+        exportItem: (out, item) => ({
+            name: item.name.replace(/\.[^.]+$/, '') + '.txt',
+            data: out.map((d) => `${d.label}\t${Math.round(d.score * 100)}%`).join('\n'),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         sampleRow,
@@ -78,6 +104,7 @@ export default function mount(host, ctx) {
         el('div', { class: 'sx-row', style: { marginBottom: '12px' } }, modelBadge, el('span', { class: 'sx-muted' }, 'first run ~150 MB')),
         runBtn,
         loaderSlot,
+        batch.el,
     );
 
     const downloadBtn = button('Download result', {
@@ -182,4 +209,6 @@ export default function mount(host, ctx) {
     // Warm the currently-selected model on mount so the first run is instant
     // (the loader surfaces progress/errors; the pipeline cache dedupes a later run).
     ensureModel().catch(() => {});
+
+    return () => { batch.destroy?.(); };
 }

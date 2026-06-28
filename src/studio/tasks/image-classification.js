@@ -7,6 +7,7 @@ import { el, clear, button, badge, scoreBars, imageInput, toast } from '../ui.js
 import { toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
 import { createTierPicker } from '../studio-kit.js';
+import { batchPanel } from '../batch.js';
 
 const TIERS = {
     fast: { label: 'ResNet-50', spec: M.clsResnet50 },
@@ -46,6 +47,29 @@ export default function mount(host, ctx) {
     const liveBtn = button('Live camera', { variant: 'ghost', onClick: () => toggleLive() });
     const picker = imageInput({ samples: ['cats', 'tiger', 'bread', 'portrait'], allowCamera: true, onImage: (url) => setImage(url) });
 
+    const batch = batchPanel({
+        kind: 'image',
+        combinedName: 'labels',
+        process: async (item) => {
+            const classifier = await tiers.ensure();
+            const url = URL.createObjectURL(item.file);
+            try { return await classifier(url, { topk: 5 }); }
+            finally { setTimeout(() => URL.revokeObjectURL(url), 2000); }
+        },
+        renderResult: (out, item) => {
+            const wrap = el('div', {});
+            const url = URL.createObjectURL(item.file);
+            wrap.append(el('img', { src: url, style: { maxWidth: '100%', borderRadius: '8px', marginBottom: '10px' } }));
+            wrap.append(el('div', { class: 'sx-result-big', style: { fontSize: '1.1rem', marginBottom: '8px' } }, prettyLabel(out[0].label) + ` · ${Math.round(out[0].score * 100)}%`));
+            wrap.append(scoreBars(out.map((o) => ({ label: prettyLabel(o.label), score: o.score }))));
+            return wrap;
+        },
+        exportItem: (out, item) => ({
+            name: item.name.replace(/\.[^.]+$/, '') + '.txt',
+            data: out.map((o) => `${prettyLabel(o.label)}\t${(o.score * 100).toFixed(1)}%`).join('\n'),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
@@ -55,6 +79,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '10px' } }),
         liveBtn,
         loaderSlot,
+        batch.el,
     );
 
     const output = el('div', { class: 'sx-pane' },
@@ -161,5 +186,5 @@ export default function mount(host, ctx) {
 
     const _h = ctx.takeHandoff("image"); if (_h && _h.data) setImage(_h.data);
 
-    return () => { stopLive(); picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); batch.destroy?.(); };
 }

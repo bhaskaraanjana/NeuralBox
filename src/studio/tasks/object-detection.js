@@ -5,6 +5,7 @@
 import { el, clear, button, field, loader, segmented, imageInput, badge, labelColor, toast, drawBoxesToCanvas, downloadBlob } from '../ui.js';
 import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const SPECS = {
     fast: {
@@ -80,6 +81,32 @@ export default function mount(host, ctx) {
         },
     );
 
+    const batch = batchPanel({
+        kind: 'image',
+        combinedName: 'detections',
+        process: async (item) => {
+            const detector = await ensureModel();
+            const url = URL.createObjectURL(item.file);
+            try { return await detector(url, { threshold, percentage: true }); }
+            finally { setTimeout(() => URL.revokeObjectURL(url), 2000); }
+        },
+        renderResult: (out, item) => {
+            const wrap = el('div', {});
+            wrap.append(el('img', { src: URL.createObjectURL(item.file), style: { maxWidth: '100%', borderRadius: '8px', marginBottom: '10px' } }));
+            wrap.append(el('div', { class: 'sx-muted', style: { marginBottom: '8px' } }, `Found ${out.length} object${out.length === 1 ? '' : 's'}`));
+            const counts = {};
+            out.forEach((d) => { counts[d.label] = (counts[d.label] || 0) + 1; });
+            const chips = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([lbl, n]) =>
+                el('span', { class: 'sx-badge', style: { borderColor: labelColor(lbl, 0.6), color: labelColor(lbl) } }, n > 1 ? `${lbl} ×${n}` : lbl));
+            if (chips.length) wrap.append(el('div', { class: 'sx-row' }, ...chips));
+            return wrap;
+        },
+        exportItem: (out, item) => ({
+            name: item.name.replace(/\.[^.]+$/, '') + '.txt',
+            data: out.map((d) => `${d.label}\t${Math.round(d.score * 100)}%`).join('\n'),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
@@ -90,6 +117,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '10px' } }),
         liveBtn,
         loaderSlot,
+        batch.el,
     );
 
     const downloadBtn = button('Download result', {
@@ -260,5 +288,5 @@ export default function mount(host, ctx) {
     // Warm the currently-selected model on mount so the first run is instant (loader surfaces errors).
     ensureModel().catch(() => {});
 
-    return () => { stopLive(); picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); batch.destroy?.(); };
 }

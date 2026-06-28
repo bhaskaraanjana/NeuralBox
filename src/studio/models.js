@@ -15,8 +15,10 @@ export const M = {
     detYolosTiny: { task: 'object-detection', model: 'Xenova/yolos-tiny', dtype: d('fp16', 'q8'), size: '~26 MB' },
     detYolosSmall: { task: 'object-detection', model: 'Xenova/yolos-small', dtype: d('fp16', 'q8'), size: '~62 MB' },
     detDetr: { task: 'object-detection', model: 'Xenova/detr-resnet-50', dtype: d('fp16', 'q8'), size: '~84 MB' },
-    zsdOwlvit: { task: 'zero-shot-object-detection', model: 'Xenova/owlvit-base-patch32', dtype: d('q4f16', 'q8'), size: '~150 MB' },
-    zsdOwlv2: { task: 'zero-shot-object-detection', model: 'Xenova/owlv2-base-patch16-ensemble', dtype: d('q4f16', 'q8'), size: '~155 MB' },
+    // OWL-ViT aborts on WebGPU inference (opaque onnxruntime error) — pin to WASM,
+    // which is reliable. See [[webgpu-inference-aborts]] / runtime.loadPipeline.
+    zsdOwlvit: { task: 'zero-shot-object-detection', model: 'Xenova/owlvit-base-patch32', dtype: d('q4f16', 'q8'), size: '~150 MB', device: 'wasm' },
+    zsdOwlv2: { task: 'zero-shot-object-detection', model: 'Xenova/owlv2-base-patch16-ensemble', dtype: d('q4f16', 'q8'), size: '~155 MB', device: 'wasm' },
 
     // ---- Vision: classification ----
     clsResnet50: { task: 'image-classification', model: 'Xenova/resnet-50', dtype: d('fp16', 'q8'), size: '~25 MB' },
@@ -25,9 +27,11 @@ export const M = {
     zsiClip16: { task: 'zero-shot-image-classification', model: 'Xenova/clip-vit-base-patch16', dtype: d('fp16', 'q8'), size: '~300 MB' },
 
     // ---- Vision: dense ----
-    segB0: { task: 'image-segmentation', model: 'Xenova/segformer-b0-finetuned-ade-512-512', dtype: d('fp16', 'q8'), size: '~15 MB' },
-    segB2: { task: 'image-segmentation', model: 'Xenova/segformer-b2-finetuned-ade-512-512', dtype: d('fp16', 'q8'), size: '~56 MB' },
-    segB5: { task: 'image-segmentation', model: 'Xenova/segformer-b5-finetuned-ade-640-640', dtype: d('fp16', 'q8'), size: '~172 MB' },
+    // SegFormer aborts on WebGPU inference (opaque onnxruntime error) — pin to
+    // WASM, which is reliable. See [[webgpu-inference-aborts]].
+    segB0: { task: 'image-segmentation', model: 'Xenova/segformer-b0-finetuned-ade-512-512', dtype: d('fp16', 'q8'), size: '~15 MB', device: 'wasm' },
+    segB2: { task: 'image-segmentation', model: 'Xenova/segformer-b2-finetuned-ade-512-512', dtype: d('fp16', 'q8'), size: '~56 MB', device: 'wasm' },
+    segB5: { task: 'image-segmentation', model: 'Xenova/segformer-b5-finetuned-ade-640-640', dtype: d('fp16', 'q8'), size: '~172 MB', device: 'wasm' },
     depthSmall: { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-small', dtype: d('fp16', 'q8'), size: '~30 MB' },
     depthBase: { task: 'depth-estimation', model: 'onnx-community/depth-anything-v2-base', dtype: d('fp16', 'q8'), size: '~102 MB' },
     bgRmbg: { model: 'briaai/RMBG-1.4', dtype: d('fp16', 'q8'), size: '~44 MB' }, // AutoModel (no pipeline task)

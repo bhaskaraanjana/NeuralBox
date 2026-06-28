@@ -5,6 +5,7 @@
 import { el, clear, button, field, textInput, loader, scoreBars, segmented, imageInput, badge, toast } from '../ui.js';
 import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const SPECS = {
     fast: {
@@ -65,6 +66,31 @@ export default function mount(host, ctx) {
         onImage: (url) => setImage(url),
     });
 
+    const batch = batchPanel({
+        kind: 'image',
+        combinedName: 'scores',
+        process: async (item) => {
+            const classifier = await ensureModel();
+            const url = URL.createObjectURL(item.file);
+            try {
+                const out = await classifier(url, parseLabels());
+                return out.slice().sort((a, b) => b.score - a.score);
+            } finally {
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+            }
+        },
+        renderResult: (out, item) => {
+            const wrap = el('div', {});
+            wrap.append(el('img', { src: URL.createObjectURL(item.file), style: { maxWidth: '100%', borderRadius: '8px', marginBottom: '10px' } }));
+            wrap.append(scoreBars(out.map((o) => ({ label: o.label, score: o.score }))));
+            return wrap;
+        },
+        exportItem: (out, item) => ({
+            name: item.name.replace(/\.[^.]+$/, '') + '.txt',
+            data: out.map((o) => `${o.label}\t${(o.score * 100).toFixed(1)}%`).join('\n'),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '🖼️ Input'),
         picker.el,
@@ -75,6 +101,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '10px' } }),
         liveBtn,
         loaderSlot,
+        batch.el,
     );
 
     // ---- Output ----
@@ -208,5 +235,5 @@ export default function mount(host, ctx) {
     // user prepares input — the loader surfaces progress/errors, the run dedupes.
     ensureModel().catch(() => {});
 
-    return () => { stopLive(); picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); batch.destroy?.(); };
 }

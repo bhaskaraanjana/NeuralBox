@@ -376,6 +376,27 @@ select:focus-visible,
 .sx-loader-error .sx-loader-status { color: var(--err); }
 .sx-loader-error .sx-loader-fill { animation: none; background: var(--err); width: 100% !important; opacity: 0.5; }
 
+/* Multi-file batch runner */
+.sx-batch { display: flex; flex-direction: column; gap: 12px; }
+.sx-batch-list { display: flex; flex-direction: column; gap: 8px; }
+.sx-batch-row { border: 1px solid var(--line-1); border-radius: var(--radius-md); background: var(--bg-1); overflow: hidden; }
+.sx-batch-summary { display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer; user-select: none; transition: background 0.15s; }
+.sx-batch-summary:hover { background: var(--bg-2); }
+.sx-batch-summary.open { border-bottom: 1px solid var(--line-1); }
+.sx-batch-summary.active { background: color-mix(in srgb, var(--accent) 8%, var(--bg-1)); }
+.sx-batch-idx { font-family: var(--font-mono); font-size: 0.74rem; color: var(--text-3); min-width: 1.4em; text-align: right; flex: 0 0 auto; }
+.sx-batch-name { flex: 1 1 auto; min-width: 0; font-size: 0.88rem; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-batch-caret { flex: 0 0 auto; color: var(--text-3); font-size: 0.8rem; }
+.sx-batch-body { padding: 14px 12px; border-top: 0; }
+.sx-batch-err { color: var(--err); font-size: 0.84rem; line-height: 1.5; }
+
+/* Batch panel (collapsible "process multiple files" section in each studio) */
+.sx-batch-panel { margin-top: 12px; border: 1px solid var(--line-1); border-radius: var(--radius-md); overflow: hidden; background: var(--bg-1); }
+.sx-batch-toggle { width: 100%; display: flex; align-items: center; gap: 8px; padding: 11px 14px; background: none; border: none; cursor: pointer; color: var(--text-1); font-family: var(--font-ui); font-size: 0.9rem; font-weight: 600; text-align: left; }
+.sx-batch-toggle:hover { background: color-mix(in srgb, var(--accent) 7%, var(--bg-1)); }
+.sx-batch-toggle-caret { flex: 0 0 auto; color: var(--text-3); font-size: 0.8rem; }
+.sx-batch-panel-body { padding: 0 14px 14px; }
+
 /* Score bars */
 .sx-bars { display: flex; flex-direction: column; gap: 10px; }
 .sx-bar-row { display: grid; grid-template-columns: minmax(80px, 1.1fr) 2fr auto; gap: 12px; align-items: center; }

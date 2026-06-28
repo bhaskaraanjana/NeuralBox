@@ -5,6 +5,7 @@
 import { el, clear, button, field, loader, imageInput, badge, segmented, downloadBlob, toast } from '../ui.js';
 import { loadPipeline, toRawImage, startCamera, stopStream, grabFrame } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const SPECS = {
     fast: {
@@ -70,6 +71,39 @@ export default function mount(host, ctx) {
         onImage: (url) => setImage(url),
     });
 
+    const batch = batchPanel({
+        kind: 'image',
+        combinedName: 'depth-maps',
+        process: async (item) => {
+            const estimator = await ensureModel();
+            const url = URL.createObjectURL(item.file);
+            try {
+                const { depth } = await estimator(url);
+                // Fresh canvas per item — never reuse the single-view depthCanvas.
+                const canvas = el('canvas');
+                colorizeTo(canvas, depth);
+                // Pre-bake the PNG blob now (exportItem is called synchronously by the runner).
+                const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
+                return { canvas, blob };
+            } finally {
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+            }
+        },
+        renderResult: (result, item) => {
+            const wrap = el('div', {});
+            const url = URL.createObjectURL(item.file);
+            wrap.append(el('img', { src: url, style: { maxWidth: '100%', borderRadius: '8px', marginBottom: '10px' } }));
+            result.canvas.style.maxWidth = '100%';
+            result.canvas.style.borderRadius = '8px';
+            wrap.append(result.canvas);
+            return wrap;
+        },
+        exportItem: (result, item) => ({
+            name: item.name.replace(/\.[^.]+$/, '') + '-depth.png',
+            data: result.blob,
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '📷 Input'),
         picker.el,
@@ -79,6 +113,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '10px' } }),
         liveBtn,
         loaderSlot,
+        batch.el,
     );
 
     const output = el('div', { class: 'sx-pane' },
@@ -127,11 +162,11 @@ export default function mount(host, ctx) {
 
     function clamp01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
 
-    function colorize(depth) {
+    function colorizeTo(canvas, depth) {
         const { width: w, height: h, data } = depth;
-        depthCanvas.width = w;
-        depthCanvas.height = h;
-        const dctx = depthCanvas.getContext('2d');
+        canvas.width = w;
+        canvas.height = h;
+        const dctx = canvas.getContext('2d');
         const img = dctx.createImageData(w, h);
         const out = img.data;
         for (let i = 0; i < w * h; i++) {
@@ -143,6 +178,10 @@ export default function mount(host, ctx) {
             out[o] = r; out[o + 1] = g; out[o + 2] = b; out[o + 3] = 255;
         }
         dctx.putImageData(img, 0, 0);
+    }
+
+    function colorize(depth) {
+        colorizeTo(depthCanvas, depth);
     }
 
     function offerDownload() {
@@ -234,5 +273,5 @@ export default function mount(host, ctx) {
     // The loader surfaces progress/errors; the pipeline cache dedupes a later run.
     ensureModel().catch(() => {});
 
-    return () => { stopLive(); picker.destroy?.(); };
+    return () => { stopLive(); picker.destroy?.(); batch.destroy?.(); };
 }
