@@ -45,10 +45,18 @@ function makeFiles() {
     return paths;
   }
   if (KIND === 'text') {
+    // Sentences that contain a [MASK] token (so fill-mask works) while still
+    // reading as classifiable/answerable/translatable text for every other
+    // text studio. Long enough that summarize/QA have something to chew on.
     const files = [];
-    for (let i = 0; i < 3; i++) {
+    const texts = [
+      'Paris is the capital of France and a [MASK] city. Millions of tourists visit the Eiffel Tower every year, and the museums are world famous.',
+      'The new phone was a [MASK] disappointment. The battery drained fast, the screen cracked easily, and support was slow to respond.',
+      'Our team delivered the project on time and the client was [MASK] pleased with the results, praising the design and the attention to detail.',
+    ];
+    for (let i = 0; i < texts.length; i++) {
       const p = join(tmpdir(), `nb-batch-text-${i}.txt`);
-      writeFileSync(p, ['I absolutely loved this, best ever!', 'This was terrible and slow.', 'It was perfectly fine and ok.'][i]);
+      writeFileSync(p, texts[i]);
       files.push(p);
     }
     return files;
