@@ -14,6 +14,30 @@
 import { el, clear, button, field, segmented, select, loader, dropZone, copyButton, downloadBlob, badge, toast } from '../ui.js';
 import { loadPipeline, loadAutoModel, decodeAudioTo16k } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
+
+/** Render speaker turns into a fresh element (shared by single-run + batch rows). */
+function turnsToElement(turns, hasSpeakers) {
+    const wrap = el('div', {});
+    for (const t of turns) {
+        const head = el('div', { class: 'sx-row', style: { alignItems: 'center', gap: '10px', marginBottom: '4px' } });
+        if (hasSpeakers && t.speaker != null) {
+            head.append(el('span', {
+                style: {
+                    fontSize: '0.78rem', fontWeight: '600', color: '#0b0f16',
+                    background: speakerColor(t.speaker), padding: '2px 9px', borderRadius: '999px',
+                },
+            }, speakerLabel(t.speaker)));
+        }
+        head.append(el('span', { class: 'sx-mono', style: { color: 'var(--text-3)', fontSize: '0.78rem' } }, fmtTime(t.start)));
+        wrap.append(el('div', {
+            style: hasSpeakers && t.speaker != null
+                ? { borderLeft: `3px solid ${speakerColor(t.speaker)}`, paddingLeft: '12px', marginBottom: '10px' }
+                : { marginBottom: '10px' },
+        }, head, el('div', { style: { color: 'var(--text-1)', lineHeight: '1.6' } }, t.text)));
+    }
+    return wrap;
+}
 
 const SAMPLE_RATE = 16000;
 // Whisper processes 30s at a time; only enable chunking past this so short
@@ -174,6 +198,25 @@ export default function mount(host, ctx) {
 
     const loaderSlot = el('div');
 
+    // Batch: transcribe many audio files, each → its own speaker-segmented
+    // transcript. Reuses the same audioToTurns core and turnsToElement render.
+    const batch = batchPanel({
+        kind: 'audio',
+        combinedName: 'transcripts',
+        process: async (item) => {
+            const float32 = await decodeAudioTo16k(item.file);
+            const { turns, hasSpeakers } = await audioToTurns(float32, { speakers: identifySpeakers });
+            return { turns, hasSpeakers };
+        },
+        renderResult: ({ turns, hasSpeakers }) => turns.length
+            ? turnsToElement(turns, hasSpeakers)
+            : el('div', { class: 'sx-muted' }, 'No speech detected.'),
+        exportItem: ({ turns, hasSpeakers }, item) => ({
+            name: item.name.replace(/\.[^.]+$/, '') + '.txt',
+            data: turnsToText(turns, hasSpeakers),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '🎙️ Audio'),
         recBtn,
@@ -188,6 +231,7 @@ export default function mount(host, ctx) {
         langField,
         field('Speakers', speakerField, 'Label who is speaking, grouped into turns'),
         loaderSlot,
+        batch.el,
     );
 
     const placeholder = el('div', { class: 'sx-placeholder' },
@@ -300,7 +344,48 @@ export default function mount(host, ctx) {
         stream = null; recorder = null;
     }
 
-    // ---- Transcription ----
+    // ---- Transcription core ----
+    // float32 (16kHz) → { turns, hasSpeakers }. Shared by single-run and batch.
+    // onStatus(text) reports progress; speakers controls whether we diarize.
+    async function audioToTurns(float32, { onStatus = () => {}, speakers = true } = {}) {
+        if (!float32 || !float32.length) throw new Error('Empty or unreadable audio');
+        const asr = await ensureModel();
+        const secs = Math.round(float32.length / SAMPLE_RATE);
+        const longHint = secs > 120 ? ' (long audio — WebGPU is much faster)' : '';
+
+        // Try speaker identification first (best-effort): its time spans drive
+        // the segmentation. If it fails or is off, we fall back to a single
+        // whole-audio transcription shown as one block.
+        let diar = null;
+        if (speakers) {
+            onStatus('Identifying speakers…');
+            try { diar = remapSpeakers(await diarize(float32)); }
+            catch (_) { toast('Speaker ID unavailable — showing transcript only', 'info'); diar = null; }
+        }
+
+        let turns;
+        if (diar && diar.length) {
+            // Transcribe each contiguous speaker turn from its own audio slice.
+            const merged = mergeTurns(diar);
+            turns = [];
+            for (let i = 0; i < merged.length; i++) {
+                if (destroyed) throw new Error('cancelled');
+                const m = merged[i];
+                onStatus(`Transcribing turn ${i + 1} / ${merged.length}…${longHint}`);
+                const text = await transcribe(asr, sliceAudio(float32, m.start, m.end));
+                if (text) turns.push({ speaker: m.speaker, start: m.start, end: m.end, text });
+            }
+            turns = mergeConsecutive(turns);
+        } else {
+            // No speakers: one whole-audio transcription as a single block.
+            onStatus(`Transcribing ${secs > 90 ? Math.round(secs / 60) + ' min' : secs + 's'}…${longHint}`);
+            const text = await transcribe(asr, float32);
+            turns = text ? [{ speaker: null, start: 0, end: secs, text }] : [];
+        }
+        return { turns, hasSpeakers: !!(diar && diar.length) };
+    }
+
+    // ---- Single-run transcription ----
     async function transcribeBlob(blob) {
         if (busy || destroyed) return;
         if (recording) stopRecording();
@@ -308,45 +393,13 @@ export default function mount(host, ctx) {
         status.textContent = 'Decoding audio…';
         try {
             const float32 = await decodeAudioTo16k(blob);
-            if (!float32 || !float32.length) throw new Error('Empty or unreadable audio');
-            const asr = await ensureModel();
-            const secs = Math.round(float32.length / SAMPLE_RATE);
-            const longHint = secs > 120 ? ' (long audio — WebGPU is much faster)' : '';
-
-            // Try speaker identification first (best-effort): its time spans drive
-            // the segmentation. If it fails or is off, we fall back to a single
-            // whole-audio transcription shown as one block.
-            let diar = null;
-            if (identifySpeakers) {
-                status.textContent = 'Identifying speakers…';
-                try { diar = remapSpeakers(await diarize(float32)); }
-                catch (_) { toast('Speaker ID unavailable — showing transcript only', 'info'); diar = null; }
-                if (destroyed) return;
-            }
-
-            let turns;
-            if (diar && diar.length) {
-                // Transcribe each contiguous speaker turn from its own audio slice.
-                const merged = mergeTurns(diar);
-                turns = [];
-                for (let i = 0; i < merged.length; i++) {
-                    if (destroyed) return;
-                    const m = merged[i];
-                    status.textContent = `Transcribing turn ${i + 1} / ${merged.length}…${longHint}`;
-                    const text = await transcribe(asr, sliceAudio(float32, m.start, m.end));
-                    if (text) turns.push({ speaker: m.speaker, start: m.start, end: m.end, text });
-                }
-                turns = mergeConsecutive(turns);
-            } else {
-                // No speakers: one whole-audio transcription as a single block.
-                status.textContent = `Transcribing ${secs > 90 ? Math.round(secs / 60) + ' min' : secs + 's'}…${longHint}`;
-                const text = await transcribe(asr, float32);
-                turns = text ? [{ speaker: null, start: 0, end: secs, text }] : [];
-            }
+            const { turns, hasSpeakers } = await audioToTurns(float32, {
+                onStatus: (t) => { status.textContent = t; },
+                speakers: identifySpeakers,
+            });
             if (destroyed) return;
-
             lastTurns = turns;
-            renderTranscript(turns, !!(diar && diar.length));
+            renderTranscript(turns, hasSpeakers);
             status.textContent = 'Done.';
         } catch (err) {
             status.textContent = '';
@@ -373,41 +426,20 @@ export default function mount(host, ctx) {
         ctx.saveHistory({ studio: 'speech-to-text', title: text.slice(0, 60), text: plain });
 
         // One block per speaker turn: a colored speaker chip + timestamp header,
-        // then the spoken text. This is the only output view.
+        // then the spoken text. This is the only output view (shared with batch rows).
         const speakerCount = hasSpeakers ? new Set(turns.map((t) => t.speaker)).size : 0;
-        const rows = turns.map((t) => {
-            const head = el('div', { class: 'sx-row', style: { alignItems: 'center', gap: '10px', marginBottom: '4px' } });
-            if (hasSpeakers && t.speaker != null) {
-                head.append(el('span', {
-                    style: {
-                        fontSize: '0.78rem', fontWeight: '600', color: '#0b0f16',
-                        background: speakerColor(t.speaker), padding: '2px 9px', borderRadius: '999px',
-                    },
-                }, speakerLabel(t.speaker)));
-            }
-            head.append(el('span', { class: 'sx-mono', style: { color: 'var(--text-3)', fontSize: '0.78rem' } }, fmtTime(t.start)));
-            return el('div', {
-                style: hasSpeakers && t.speaker != null
-                    ? { borderLeft: `3px solid ${speakerColor(t.speaker)}`, paddingLeft: '12px' }
-                    : {},
-            },
-                head,
-                el('div', { style: { color: 'var(--text-1)', lineHeight: '1.6' } }, t.text),
-            );
-        });
-
         const title = hasSpeakers
             ? `Transcript · ${speakerCount} speaker${speakerCount === 1 ? '' : 's'} · ${turns.length} turns`
             : `Transcript · ${turns.length} segments`;
 
         outBody.append(el('div', {}, actions,
             el('p', { class: 'sx-pane-title', style: { margin: '4px 0 14px' } }, title),
-            el('div', { class: 'sx-stack' }, ...rows),
+            turnsToElement(turns, hasSpeakers),
         ));
     }
 
     // Warm the currently-selected model on mount so the first run is instant.
     ensureModel().catch(() => {});
 
-    return () => { destroyed = true; stopRecording(); releaseStream(); };
+    return () => { destroyed = true; stopRecording(); releaseStream(); batch.destroy?.(); };
 }

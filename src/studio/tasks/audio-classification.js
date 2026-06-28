@@ -7,6 +7,7 @@
 import { el, clear, button, field, loader, scoreBars, dropZone, badge, toast } from '../ui.js';
 import { loadPipeline, decodeAudioTo16k } from '../runtime.js';
 import { M } from '../models.js';
+import { batchPanel } from '../batch.js';
 
 const MODEL = M.audAst;
 
@@ -43,6 +44,29 @@ export default function mount(host, ctx) {
     const runBtn = button('Identify sound', { variant: 'primary', full: true, onClick: () => run() });
     runBtn.disabled = true;
 
+    const batch = batchPanel({
+        kind: 'audio',
+        combinedName: 'sounds',
+        process: async (item) => {
+            await ensureModel();
+            const pcm = await decodeAudioTo16k(item.file);
+            if (!pcm.length) throw new Error('Empty or unreadable audio');
+            return await classifier(pcm, { top_k: 6 });
+        },
+        renderResult: (out, item) => {
+            const wrap = el('div', {});
+            wrap.append(el('audio', { src: URL.createObjectURL(item.file), controls: true, style: { width: '100%', marginBottom: '10px' } }));
+            const top = out[0] || { label: 'Unknown', score: 0 };
+            wrap.append(el('div', { class: 'sx-result-big', style: { fontSize: '1.1rem', marginBottom: '8px' } }, `🔊 ${top.label} · ${Math.round(top.score * 100)}%`));
+            wrap.append(scoreBars(out));
+            return wrap;
+        },
+        exportItem: (out, item) => ({
+            name: item.name.replace(/\.[^.]+$/, '') + '.txt',
+            data: out.map((o) => `${o.label}\t${(o.score * 100).toFixed(1)}%`).join('\n'),
+        }),
+    });
+
     const controls = el('div', { class: 'sx-pane' },
         el('p', { class: 'sx-pane-title' }, '🎙️ Audio'),
         recBtn,
@@ -55,6 +79,7 @@ export default function mount(host, ctx) {
         el('div', { style: { height: '14px' } }),
         runBtn,
         loaderSlot,
+        batch.el,
         el('p', { class: 'sx-muted', style: { marginTop: '14px', lineHeight: '1.5' } },
             'Heads up — this AST model is large (~120MB on first load) and runs best with WebGPU.'),
     );
@@ -188,5 +213,6 @@ export default function mount(host, ctx) {
         stopRecord();
         releaseMic();
         if (lastURL) URL.revokeObjectURL(lastURL);
+        batch.destroy?.();
     };
 }
