@@ -11,17 +11,9 @@
 
 NeuralBox is a local-first web application for in-browser machine learning and conversational AI. Every model runs **100% on-device** using **WebGPU** when available and transparently falling back to **WASM** when it isn't. It brings the power of state-of-the-art models straight to your hardware while ensuring 100% privacy.
 
-**Try it now:** [neuralbox.infinitemind.space](https://neuralbox.infinitemind.space) — studios at `/`, Pro Chat at [`/chat.html`](https://neuralbox.infinitemind.space/chat.html).
-
-<p align="center">
-  <a href="https://neuralbox.infinitemind.space">
-    <img src="docs/assets/desktop-studios-home.png" alt="NeuralBox studios home — run any AI model in your browser" width="900" />
-  </a>
-</p>
-
 ---
 
-## 📸 Screenshots & demo
+## 📸 Screenshots
 
 Captured from the live app at [neuralbox.infinitemind.space](https://neuralbox.infinitemind.space). Media lives in [`docs/assets/`](docs/assets/).
 
@@ -46,23 +38,6 @@ Captured from the live app at [neuralbox.infinitemind.space](https://neuralbox.i
 | Desktop | Mobile |
 |:-------:|:------:|
 | ![Pro Chat desktop](docs/assets/desktop-pro-chat.png) | ![Pro Chat mobile](docs/assets/mobile-pro-chat.png) |
-
-### Walkthrough clip
-
-Short real-app tour (home → studios → Pro Chat):
-
-**[▶️ Watch demo walkthrough](docs/assets/demo-walkthrough.webm)** (`docs/assets/demo-walkthrough.webm`)
-
-<details>
-<summary>Regenerate screenshots / clip</summary>
-
-```bash
-npm run docs:shots
-npm run docs:video
-# or: BASE_URL=http://127.0.0.1:4173 npm run docs:shots
-```
-
-</details>
 
 ---
 

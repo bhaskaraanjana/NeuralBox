@@ -16,7 +16,7 @@ It loads an MLC WebLLM model into browser GPU memory and runs inference locally 
 |:----------------:|:--------:|
 | ![Object Detection](../docs/assets/desktop-object-detection.png) | ![Pro Chat](../docs/assets/desktop-pro-chat.png) |
 
-More captures and a walkthrough clip: [`docs/assets/`](../docs/assets/).
+More captures: [`docs/assets/`](../docs/assets/).
 
 Core design goals:
 

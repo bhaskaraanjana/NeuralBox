@@ -7,20 +7,18 @@ This folder contains implementation-level documentation for the current NeuralBo
 - **Production URL:** [https://neuralbox.infinitemind.space](https://neuralbox.infinitemind.space)
 - **Pro Chat:** [https://neuralbox.infinitemind.space/chat.html](https://neuralbox.infinitemind.space/chat.html)
 
-## Screenshots & demo media
+## Screenshots
 
 Real-app captures used in the root `README.md` are stored under [`../docs/assets/`](../docs/assets/):
 
 - Studio gallery (desktop + mobile)
 - Object Detection, Image Captioner, Speech to Text, Sentiment
 - Pro Chat (desktop + mobile)
-- Short walkthrough clip: [`demo-walkthrough.webm`](../docs/assets/demo-walkthrough.webm)
 
 Regenerate from the live site:
 
 ```bash
-node scripts/capture-docs-screenshots.mjs
-node scripts/capture-docs-video.mjs
+npm run docs:shots
 ```
 
 ## Documentation Map

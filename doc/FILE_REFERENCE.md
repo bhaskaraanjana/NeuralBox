@@ -9,7 +9,7 @@ This section documents every tracked repository file.
 - `README.md`
   - End-user overview, live app URL (`https://neuralbox.infinitemind.space`), screenshots/demo media, and setup instructions.
 - `docs/assets/`
-  - Live-app screenshots and walkthrough clip used by the README (regenerate via `scripts/capture-docs-screenshots.mjs` and `scripts/capture-docs-video.mjs`).
+  - Live-app screenshots used by the README (regenerate via `npm run docs:shots` / `scripts/capture-docs-screenshots.mjs`).
 - `changelog.md`
   - Release notes from `1.0.0` through `1.6.0`.
 - `index.html`

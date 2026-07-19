@@ -36,8 +36,7 @@
     "test:browser:lifecycle": "node scripts/browser-lifecycle-smoke.mjs",
     "test:studio": "node scripts/studio-smoke.mjs",
     "doctor": "node scripts/model-doctor.mjs",
-    "docs:shots": "node scripts/capture-docs-screenshots.mjs",
-    "docs:video": "node scripts/capture-docs-video.mjs"
+    "docs:shots": "node scripts/capture-docs-screenshots.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
