@@ -2,6 +2,7 @@
   "name": "neuralbox",
   "version": "1.7.6",
   "description": "Run AI in your browser. No server. No sign-up. Private by design.",
+  "homepage": "https://neuralbox.infinitemind.space",
   "type": "module",
   "engines": {
     "node": ">=20 <26"
@@ -34,7 +35,9 @@
     "test:rag:web": "node scripts/rag-web-extensive-test.mjs",
     "test:browser:lifecycle": "node scripts/browser-lifecycle-smoke.mjs",
     "test:studio": "node scripts/studio-smoke.mjs",
-    "doctor": "node scripts/model-doctor.mjs"
+    "doctor": "node scripts/model-doctor.mjs",
+    "docs:shots": "node scripts/capture-docs-screenshots.mjs",
+    "docs:video": "node scripts/capture-docs-video.mjs"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",

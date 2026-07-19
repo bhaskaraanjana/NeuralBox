@@ -1,11 +1,68 @@
 <div align="center">
   <div style="font-size: 3em; font-weight: bold; margin-bottom: 0.25em;">NeuralBox</div>
   <p><em>Run AI models and a powerful chatbot entirely in your browser. No server, no sign-up, no data leaves your device.</em></p>
+  <p>
+    <strong>Live app:</strong>
+    <a href="https://neuralbox.infinitemind.space">https://neuralbox.infinitemind.space</a>
+  </p>
 </div>
 
 <br />
 
 NeuralBox is a local-first web application for in-browser machine learning and conversational AI. Every model runs **100% on-device** using **WebGPU** when available and transparently falling back to **WASM** when it isn't. It brings the power of state-of-the-art models straight to your hardware while ensuring 100% privacy.
+
+**Try it now:** [neuralbox.infinitemind.space](https://neuralbox.infinitemind.space) — studios at `/`, Pro Chat at [`/chat.html`](https://neuralbox.infinitemind.space/chat.html).
+
+<p align="center">
+  <a href="https://neuralbox.infinitemind.space">
+    <img src="docs/assets/desktop-studios-home.png" alt="NeuralBox studios home — run any AI model in your browser" width="900" />
+  </a>
+</p>
+
+---
+
+## 📸 Screenshots & demo
+
+Captured from the live app at [neuralbox.infinitemind.space](https://neuralbox.infinitemind.space). Media lives in [`docs/assets/`](docs/assets/).
+
+### Studio gallery
+
+| Desktop | Mobile |
+|:-------:|:------:|
+| ![Studios home](docs/assets/desktop-studios-home.png) | ![Mobile studios](docs/assets/mobile-studios-home.png) |
+
+### Vision, audio & language studios
+
+| Object Detection | Image Captioner |
+|:----------------:|:---------------:|
+| ![Object Detection](docs/assets/desktop-object-detection.png) | ![Image Captioner](docs/assets/desktop-image-captioner.png) |
+
+| Speech to Text | Sentiment |
+|:--------------:|:---------:|
+| ![Speech to Text](docs/assets/desktop-speech-to-text.png) | ![Sentiment](docs/assets/desktop-sentiment.png) |
+
+### Pro Chat
+
+| Desktop | Mobile |
+|:-------:|:------:|
+| ![Pro Chat desktop](docs/assets/desktop-pro-chat.png) | ![Pro Chat mobile](docs/assets/mobile-pro-chat.png) |
+
+### Walkthrough clip
+
+Short real-app tour (home → studios → Pro Chat):
+
+**[▶️ Watch demo walkthrough](docs/assets/demo-walkthrough.webm)** (`docs/assets/demo-walkthrough.webm`)
+
+<details>
+<summary>Regenerate screenshots / clip</summary>
+
+```bash
+npm run docs:shots
+npm run docs:video
+# or: BASE_URL=http://127.0.0.1:4173 npm run docs:shots
+```
+
+</details>
 
 ---
 
@@ -92,6 +149,15 @@ Open the gallery and pick a model. Each studio downloads its model once, caches 
 ---
 
 ## 🚀 Getting Started
+
+### Live deployment
+
+The production app is available at:
+
+- **Studios:** [https://neuralbox.infinitemind.space](https://neuralbox.infinitemind.space)
+- **Pro Chat:** [https://neuralbox.infinitemind.space/chat.html](https://neuralbox.infinitemind.space/chat.html)
+
+Cross-origin isolation headers (`COOP` / `COEP`) are required for WebGPU and multi-threaded WASM. Production hosting should serve the headers defined in `vercel.json`.
 
 ### 1. Install Dependencies
 ```bash

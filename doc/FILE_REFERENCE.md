@@ -7,15 +7,19 @@ This section documents every tracked repository file.
 - `.gitignore`
   - Ignores `node_modules/`, `dist/`, `.cache/`, and `*.log`.
 - `README.md`
-  - End-user overview and setup instructions.
+  - End-user overview, live app URL (`https://neuralbox.infinitemind.space`), screenshots/demo media, and setup instructions.
+- `docs/assets/`
+  - Live-app screenshots and walkthrough clip used by the README (regenerate via `scripts/capture-docs-screenshots.mjs` and `scripts/capture-docs-video.mjs`).
 - `changelog.md`
   - Release notes from `1.0.0` through `1.6.0`.
 - `index.html`
   - Full static UI markup (loading screen, chat UI, settings panel, voice overlay).
 - `package.json`
-  - Project metadata, scripts, direct dependencies.
+  - Project metadata (including `homepage`), scripts, direct dependencies.
 - `package-lock.json`
   - npm lockfile (lockfileVersion 3), fully resolved dependency graph.
+- `vercel.json`
+  - Production hosting headers (`COOP`/`COEP`) and SPA rewrite rules for the live deployment.
 - `vite.config.js`
   - Vite config, COOP/COEP headers, build target, dependency optimization behavior.
 - `rules.md`

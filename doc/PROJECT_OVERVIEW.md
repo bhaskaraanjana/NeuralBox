@@ -5,6 +5,19 @@
 NeuralBox is a browser-only AI chat app built with Vite + vanilla JavaScript/CSS.  
 It loads an MLC WebLLM model into browser GPU memory and runs inference locally (no app backend).
 
+**Live app:** [https://neuralbox.infinitemind.space](https://neuralbox.infinitemind.space)  
+**Pro Chat:** [https://neuralbox.infinitemind.space/chat.html](https://neuralbox.infinitemind.space/chat.html)
+
+### Product screenshots
+
+![Studios home](../docs/assets/desktop-studios-home.png)
+
+| Object Detection | Pro Chat |
+|:----------------:|:--------:|
+| ![Object Detection](../docs/assets/desktop-object-detection.png) | ![Pro Chat](../docs/assets/desktop-pro-chat.png) |
+
+More captures and a walkthrough clip: [`docs/assets/`](../docs/assets/).
+
 Core design goals:
 
 - Local-first inference with WebGPU.

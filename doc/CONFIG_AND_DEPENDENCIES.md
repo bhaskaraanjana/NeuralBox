@@ -38,6 +38,12 @@
 }
 ```
 
+## Live deployment
+
+- **Production URL:** [https://neuralbox.infinitemind.space](https://neuralbox.infinitemind.space)
+- **Pro Chat:** [https://neuralbox.infinitemind.space/chat.html](https://neuralbox.infinitemind.space/chat.html)
+- Hosting headers and SPA rewrite rules live in `vercel.json` (`COOP: same-origin`, `COEP: require-corp`).
+
 ## npm scripts
 
 - `npm run env:check`

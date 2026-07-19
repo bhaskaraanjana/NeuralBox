@@ -1,5 +1,14 @@
 # Environment Setup
 
+## Live App
+
+Production deployment:
+
+- **Studios:** [https://neuralbox.infinitemind.space](https://neuralbox.infinitemind.space)
+- **Pro Chat:** [https://neuralbox.infinitemind.space/chat.html](https://neuralbox.infinitemind.space/chat.html)
+
+Use the live URL for demos and browser checks when you do not need a local build. Local setup below is for development and test scripts.
+
 ## Runtime Requirements
 
 - Node.js `>=20 <26`

@@ -9,7 +9,7 @@ This folder contains ready-to-upload documents for a live NeuralBox RAG demo.
 - `docs/customer_success_faq.txt`
 
 ## Quick Use
-1. Open NeuralBox.
+1. Open NeuralBox (live: [https://neuralbox.infinitemind.space/chat.html](https://neuralbox.infinitemind.space/chat.html), or run `npm run dev` locally).
 2. Go to `Settings -> Regular -> Local RAG`.
 3. Click `Clear All`.
 4. Add all files from `demo/rag/docs`.

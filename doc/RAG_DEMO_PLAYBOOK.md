@@ -11,16 +11,17 @@ Use files in:
 - `C:\DEV\NeuralBox\demo\rag\docs\customer_success_faq.txt`
 
 ## Pre-Demo Setup (3-5 min)
-1. Start app: `npm run dev -- --port 5174`
-2. Open `http://localhost:5174`
-3. Load model:
+1. Open NeuralBox:
+   - **Live (preferred for demos):** [https://neuralbox.infinitemind.space/chat.html](https://neuralbox.infinitemind.space/chat.html)
+   - **Local:** `npm run dev -- --port 5174` then open `http://localhost:5174` (or the HTTPS URL Vite prints)
+2. Load model:
    - Preferred: `Qwen 3 - 4B`
    - Backup: `Qwen 3 - 1.7B`
-4. Open `Settings -> Regular`
-5. In `Local RAG`:
+3. Open `Settings -> Regular`
+4. In `Local RAG`:
    - Click `Clear All`
    - Add all files from `demo/rag/docs`
-6. Open `Settings -> Advanced` and enable:
+5. Open `Settings -> Advanced` and enable:
    - `Workbench Panel`
    - `Trust Layer in Messages`
 
